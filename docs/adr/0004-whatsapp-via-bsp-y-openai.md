@@ -1,6 +1,6 @@
 # ADR 0004 — WhatsApp vía BSP y OpenAI como único proveedor de IA
 
-**Estado:** aceptado · **Fecha:** 2026-10-19
+**Estado:** aceptado (punto 2 modificado por ADR 0008) · **Fecha:** 2026-10-19
 
 ## Contexto
 Usar Meta Cloud API directamente para dar servicio a terceros exige ser Tech Provider verificado por Meta (empresa verificada, Business Manager, revisión de app). No disponemos de esa estructura. Además, el coste por token de otros proveedores de IA no encaja con un plan de 99 USD/mes.

@@ -35,7 +35,8 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 **Objetivo:** la IA responde solo con fuentes y propone acciones auditables.
 
 - `packages/knowledge`: importación de CSV de productos, PDF y FAQ; chunking, embeddings en pgvector, versionado de fuentes, detección de conflictos de precio entre documentos.
-- `packages/ai`: `LLMProvider` sobre OpenAI (Structured Outputs), routing modelo barato/potente, BYOK cifrado por tenant, extractor de campos de contacto con confianza, transcripción con Whisper, embeddings `text-embedding-3-small`.
+- `packages/ai`: `LLMProvider` para cualquier proveedor compatible con la API de OpenAI (OpenAI, OpenRouter, DeepSeek o personalizado por `baseUrl`; ver ADR 0008), routing modelo barato/potente, BYOK cifrado por tenant, extractor de campos de contacto con confianza, transcripción y embeddings cuando el proveedor los ofrezca.
+- Pantalla **Configuración → IA**: guía de dónde comprar la key y cómo crearla, campo de key cifrada, botón *Probar conexión*, elección de modelos y límite de gasto mensual.
 - Policy engine con tabla de acciones y tests de casos negativos.
 - `ai_actions`, `action_approvals`, `agent_configs`, `usage_ledger`.
 - UI: configuración del agente, revisión de acciones pendientes, ficha de contacto con campos "por confirmar", botón de tomar/devolver control a la IA.
