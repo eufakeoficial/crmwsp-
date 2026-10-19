@@ -16,7 +16,7 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 
 **Salida:** `pnpm dev` levanta web + api + worker; CI en verde; test de aislamiento de tenants pasa.
 
-## Fase 1 — MVP 0: fundamentos operativos
+## Fase 1 — MVP 0: fundamentos operativos ✅ (completada 2026-10-19)
 
 **Objetivo:** mensajes reales entran y salen sin mezclarse ni duplicarse.
 
