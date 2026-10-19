@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Database, Transaction } from "./client";
+import type { Database, Transaction } from "./client.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

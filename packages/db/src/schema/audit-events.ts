@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { index, inet, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants";
+import { tenants } from "./tenants.js";
 
 export const auditActorType = pgEnum("audit_actor_type", ["user", "ai", "system"]);
 

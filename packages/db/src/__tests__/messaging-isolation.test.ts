@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDb, type DbHandle } from "../client";
-import { runMigrations } from "../migrate";
+import { createDb, type DbHandle } from "../client.js";
+import { runMigrations } from "../migrate.js";
 import {
   attachments,
   auditEvents,
@@ -14,8 +14,8 @@ import {
   messages,
   tenants,
   users,
-} from "../schema/index";
-import { dangerouslyWithoutTenant, withTenant } from "../with-tenant";
+} from "../schema/index.js";
+import { dangerouslyWithoutTenant, withTenant } from "../with-tenant.js";
 
 const MIGRATOR_URL = process.env.DATABASE_URL_MIGRATOR;
 const APP_URL = process.env.DATABASE_URL;

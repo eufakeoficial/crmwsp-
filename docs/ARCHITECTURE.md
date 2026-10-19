@@ -24,7 +24,7 @@ Documento de diseño del sistema. Deriva de `docs/STRATEGY.md` (tesis de product
 | Búsqueda vectorial | pgvector | Evita un servicio más; suficiente para conocimiento por tenant |
 | Cache / colas | Redis 7 | BullMQ, rate limiting, locks de conversación |
 | Archivos | S3-compatible (Cloudflare R2 o AWS S3), bucket por entorno, prefijo por tenant, URLs firmadas | Privacidad y retención por tenant |
-| Auth | Auth.js o Clerk para usuarios; API keys por tenant para integraciones | Evitar construir auth desde cero |
+| Auth | Propia en la API: email + contraseña (scrypt) y sesiones opacas en cookie, ver [ADR 0006](adr/0006-auth-sesiones-api.md); API keys por tenant para integraciones (pendiente) | Sin coste por usuario y con la identidad en nuestra base, alineada con RLS |
 | Pagos SaaS | Stripe Billing | Suscripciones, límites, suspensión segura |
 | Pagos del cliente final | Stripe Payment Links / Checkout (primer PSP), interfaz `PaymentProvider` para añadir Redsys/Bizum/MercadoPago | Verificación por webhook firmado |
 | WhatsApp | Gupshup (BSP principal) tras adaptador `WhatsAppProvider`. No se usa Meta Cloud API directo: requiere ser Tech Provider verificado por Meta y no disponemos de esa estructura empresarial. El BSP gestiona alta de números, WABA, plantillas y facturación de Meta; nosotros consumimos su API y webhooks. | Adaptador evita acoplarse a un BSP concreto; cambiar de proveedor no toca el dominio |

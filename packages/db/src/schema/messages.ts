@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
 import { bigint, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { conversations } from "./conversations";
-import { tenants } from "./tenants";
-import { users } from "./users";
+import { conversations } from "./conversations.js";
+import { tenants } from "./tenants.js";
+import { users } from "./users.js";
 
 export const messageDirection = pgEnum("message_direction", ["inbound", "outbound"]);
 export const messageType = pgEnum("message_type", [

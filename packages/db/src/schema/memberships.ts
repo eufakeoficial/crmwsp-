@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, pgEnum, pgTable, timestamp, unique, uuid } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants";
-import { users } from "./users";
+import { tenants } from "./tenants.js";
+import { users } from "./users.js";
 
 export const membershipRole = pgEnum("membership_role", ["owner", "admin", "agent", "viewer"]);
 

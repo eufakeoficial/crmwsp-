@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
 import { index, integer, pgEnum, pgTable, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { channelConnections } from "./channel-connections";
-import { contacts } from "./contacts";
-import { tenants } from "./tenants";
-import { users } from "./users";
+import { channelConnections } from "./channel-connections.js";
+import { contacts } from "./contacts.js";
+import { tenants } from "./tenants.js";
+import { users } from "./users.js";
 
 export const conversationStatus = pgEnum("conversation_status", ["open", "pending", "resolved"]);
 export const aiMode = pgEnum("ai_mode", ["auto", "assist", "off"]);

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { customType, index, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
-import { tenants } from "./tenants";
+import { tenants } from "./tenants.js";
 
 /** Raw binary column (postgres.js returns Buffer). */
 export const bytea = customType<{ data: Buffer; driverData: Buffer }>({

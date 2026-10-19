@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
-import { channelConnections, channelProvider } from "./channel-connections";
-import { tenants } from "./tenants";
+import { channelConnections, channelProvider } from "./channel-connections.js";
+import { tenants } from "./tenants.js";
 
 /**
  * Raw webhook events. tenant_id is nullable because the tenant is resolved

@@ -1,5 +1,8 @@
-export * from "./schema/index";
-export { createDb } from "./client";
-export type { CreateDbOptions, Database, DbHandle, Schema, Transaction } from "./client";
-export { dangerouslyWithoutTenant, isUuid, withTenant } from "./with-tenant";
-export type { WithTenantOptions } from "./with-tenant";
+export * from "./schema/index.js";
+export { createDb } from "./client.js";
+export type { CreateDbOptions, Database, DbHandle, Schema, Transaction } from "./client.js";
+export { dangerouslyWithoutTenant, isUuid, withTenant } from "./with-tenant.js";
+export type { WithTenantOptions } from "./with-tenant.js";
+// Query operators re-exported so consumers (e.g. the CJS API) share this
+// package's drizzle-orm instance and types instead of resolving their own.
+export { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
