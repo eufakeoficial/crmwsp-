@@ -27,7 +27,7 @@ Documento de diseño del sistema. Deriva de `docs/STRATEGY.md` (tesis de product
 | Auth | Auth.js o Clerk para usuarios; API keys por tenant para integraciones | Evitar construir auth desde cero |
 | Pagos SaaS | Stripe Billing | Suscripciones, límites, suspensión segura |
 | Pagos del cliente final | Stripe Payment Links / Checkout (primer PSP), interfaz `PaymentProvider` para añadir Redsys/Bizum/MercadoPago | Verificación por webhook firmado |
-| WhatsApp | BSP (360dialog, Gupshup o Twilio) tras adaptador `WhatsAppProvider`. No se usa Meta Cloud API directo: requiere ser Tech Provider verificado por Meta y no disponemos de esa estructura empresarial. El BSP gestiona alta de números, WABA, plantillas y facturación de Meta; nosotros consumimos su API y webhooks. | Adaptador evita acoplarse a un BSP concreto; cambiar de proveedor no toca el dominio |
+| WhatsApp | Gupshup (BSP principal) tras adaptador `WhatsAppProvider`. No se usa Meta Cloud API directo: requiere ser Tech Provider verificado por Meta y no disponemos de esa estructura empresarial. El BSP gestiona alta de números, WABA, plantillas y facturación de Meta; nosotros consumimos su API y webhooks. | Adaptador evita acoplarse a un BSP concreto; cambiar de proveedor no toca el dominio |
 | IA | OpenAI como único proveedor: interfaz `LLMProvider` con una sola implementación. Routing entre modelo barato (`gpt-4o-mini` o equivalente vigente) para clasificación/extracción y modelo potente solo para turnos complejos. BYOK por tenant (clave OpenAI propia del cliente) o créditos del SaaS con límite. Embeddings `text-embedding-3-small`; audio con Whisper. | Coste bajo y previsible; un solo SDK que mantener |
 | Observabilidad | OpenTelemetry → Grafana Cloud o Datadog; Sentry para errores; logs estructurados (pino) | Trazas por conversación e invocación de IA |
 | Infra | Docker; despliegue inicial en Railway/Fly.io o Hetzner + Docker Compose; migrar a Kubernetes cuando haga falta | Coste bajo al inicio, sin reescritura después |
@@ -45,7 +45,7 @@ crmwsp/
 │   ├── db/           # Esquema Drizzle, migraciones, políticas RLS, seeds
 │   ├── domain/       # Entidades, reglas de negocio puras, máquinas de estado (sin IO)
 │   ├── contracts/    # Zod schemas y tipos compartidos (DTOs, eventos, acciones IA)
-│   ├── whatsapp/     # Adaptador WhatsAppProvider: implementación BSP (360dialog/Gupshup), firma de webhooks
+│   ├── whatsapp/     # Adaptador WhatsAppProvider: implementación Gupshup; 360dialog en Escala 1, firma de webhooks
 │   ├── payments/     # Adaptador PaymentProvider: Stripe y futuros
 │   ├── ai/           # LLMProvider, prompts versionados, extractores, policy engine, evaluación
 │   ├── knowledge/    # Ingesta de catálogos/FAQ/PDF, chunking, embeddings, versionado
@@ -69,7 +69,7 @@ Todas las tablas de negocio llevan `tenant_id uuid NOT NULL` con índice compues
 - `api_keys` — por tenant, hash, scopes, último uso.
 
 ### Canal
-- `channel_connections` — `provider` (`360dialog`, `gupshup`, `twilio`), número, identificador de canal del BSP, API key del BSP cifrada (envelope encryption), estado, calidad del número reportada por el BSP.
+- `channel_connections` — `provider` (`gupshup`; `360dialog` más adelante), número, identificador de canal del BSP, API key del BSP cifrada (envelope encryption), estado, calidad del número reportada por el BSP.
 - `message_templates` — plantillas aprobadas por Meta, categoría, idioma, estado, variables.
 
 ### Contactos y conversaciones

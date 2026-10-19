@@ -21,7 +21,7 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 **Objetivo:** mensajes reales entran y salen sin mezclarse ni duplicarse.
 
 - Auth (Auth.js) con registro, creación de tenant y roles.
-- `packages/whatsapp`: adaptador BSP (primera implementación: 360dialog o Gupshup, a decidir en ADR 0004) con verificación de firma del webhook, envío de texto/medios/plantillas, estados de entrega y descarga de medios.
+- `packages/whatsapp`: adaptador BSP (implementación Gupshup Partner API, ver ADR 0004) con verificación de firma del webhook, envío de texto/medios/plantillas, estados de entrega y descarga de medios.
 - Tablas `channel_connections`, `contacts`, `conversations`, `messages`, `attachments`, `inbound_events`, `audit_events`.
 - Pipeline de ingestión idempotente (flujo 5.1 de arquitectura).
 - Inbox en `apps/web`: lista de conversaciones, hilo, envío, asignación, estados, tiempo real por WebSocket.
@@ -72,7 +72,7 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 ## Fase 5 — Escala 1: SaaS automático
 
 - Stripe Billing: planes Business/Growth, límites por plan, suspensión segura, bolsa de mensajes y exceso.
-- Onboarding self-service completo; segundo BSP tras el adaptador para no depender de uno solo.
+- Onboarding self-service completo; segundo BSP (360dialog) tras el adaptador para tenants de alto volumen y para no depender de uno solo.
 - Observabilidad completa (OTel, Sentry, alertas), runbooks, backups probados, pruebas de carga.
 - Exportación/borrado RGPD, DPA, retención configurable.
 - Hardening: pentest básico, rotación de secretos, revisión de RLS.
