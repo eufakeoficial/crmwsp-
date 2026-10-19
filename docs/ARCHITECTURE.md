@@ -45,7 +45,7 @@ crmwsp/
 │   ├── db/           # Esquema Drizzle, migraciones, políticas RLS, seeds
 │   ├── domain/       # Entidades, reglas de negocio puras, máquinas de estado (sin IO)
 │   ├── contracts/    # Zod schemas y tipos compartidos (DTOs, eventos, acciones IA)
-│   ├── whatsapp/     # Adaptador WhatsAppProvider: implementación Gupshup; 360dialog en Escala 1, firma de webhooks
+│   ├── whatsapp/     # Adaptador WhatsAppProvider: implementación Gupshup; 360dialog en Escala 1; token de webhook en tiempo constante
 │   ├── payments/     # Adaptador PaymentProvider: Stripe y futuros
 │   ├── ai/           # LLMProvider, prompts versionados, extractores, policy engine, evaluación
 │   ├── knowledge/    # Ingesta de catálogos/FAQ/PDF, chunking, embeddings, versionado
@@ -105,14 +105,14 @@ Todas las tablas de negocio llevan `tenant_id uuid NOT NULL` con índice compues
 ### Económico y auditoría
 - `usage_ledger` — tenant, tipo (`wa_message`, `llm_tokens`, `storage`, `psp_fee`), cantidad, coste estimado, referencia.
 - `subscriptions` — espejo de Stripe, plan, límites, estado.
-- `inbound_events` — todo webhook crudo: proveedor, `dedupe_key` único, payload, firma verificada, `processed_at`.
+- `inbound_events` — todo webhook crudo: proveedor, `dedupe_key` único, payload, `signature_valid` (autenticidad: token de URL válido; firma si el BSP la ofrece), `processed_at`.
 - `audit_events` — actor (user/ai/system), entidad, acción, diff, IP, motivo.
 - `execution_logs` — trazas de workers por job.
 
 ## 5. Flujos críticos
 
 ### 5.1 Mensaje entrante
-1. `POST /webhooks/whatsapp/:connectionId` verifica firma HMAC, responde 200 en < 1 s.
+1. `POST /webhooks/gupshup/:webhookToken` resuelve la conexión por token (función `ingest_inbound_event` de la BD, comparación en tiempo constante; Gupshup no firma sus callbacks) y valida el payload con Zod; IP allowlist opcional si Gupshup publica rangos. Token desconocido → 401 y registro. Responde 200 en < 1 s.
 2. Inserta en `inbound_events` con `dedupe_key = wa_message_id`; si existe, termina.
 3. Encola `ingest-message` (BullMQ, cola `inbound`, prioridad alta).
 4. Worker: resuelve tenant y canal; upsert de contacto; abre o recupera conversación bajo lock Redis `conv:<id>`; inserta mensaje; actualiza `last_inbound_at`; publica evento `message.received` (WebSocket al inbox y a automatizaciones).
@@ -143,7 +143,7 @@ Job diario `plan-follow-ups` por tenant: busca quotes `sent` sin respuesta > N d
 ## 6. Seguridad y cumplimiento
 
 - API keys del BSP y claves OpenAI BYOK cifradas con envelope encryption (clave maestra en KMS del proveedor cloud); nunca en logs ni en respuestas de API.
-- Verificación de firma en todos los webhooks; rechazo con 401 y registro.
+- Autenticación de todos los webhooks: firma cuando el proveedor la ofrece (Stripe), token secreto de URL en tiempo constante cuando no (Gupshup); rechazo con 401 y registro.
 - RLS + tests automáticos de aislamiento (`packages/db/test/tenant-isolation.test.ts`).
 - Rate limiting por tenant y por API key.
 - RGPD: endpoints de exportación y borrado por contacto y por tenant; retención configurable de adjuntos y transcripciones; registro de encargado de tratamiento; región de datos UE por defecto.

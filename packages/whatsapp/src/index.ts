@@ -1,2 +1,5 @@
-// Placeholder export; real implementation lives in a later ticket.
-export const packageName = "@crmwsp/whatsapp" as const;
+export * from "./types.js";
+export * from "./provider.js";
+export * from "./webhook-token.js";
+export { GupshupProvider, GupshupProviderError } from "./gupshup/provider.js";
+export type { GupshupProviderOptions } from "./gupshup/provider.js";
