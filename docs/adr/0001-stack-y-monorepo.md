@@ -9,7 +9,7 @@ Producto SaaS multi-tenant con webhooks de alta frecuencia, trabajos asíncronos
 - TypeScript en todo el repo; monorepo pnpm + Turborepo.
 - `apps/web` Next.js; `apps/api` NestJS/Fastify; `apps/worker` BullMQ.
 - PostgreSQL + Drizzle + RLS; Redis; pgvector para conocimiento; S3-compatible para archivos.
-- Integraciones externas (WhatsApp, pagos, LLM) detrás de interfaces en `packages/*`.
+- Integraciones externas (WhatsApp vía BSP, pagos, LLM vía OpenAI) detrás de interfaces en `packages/*`.
 
 ## Alternativas descartadas
 - Supabase todo-en-uno: rápido al inicio, pero los workers, la idempotencia de webhooks y el control fino de RLS/colas se vuelven incómodos; preferimos controlar API y workers.

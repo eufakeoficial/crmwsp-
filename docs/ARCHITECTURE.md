@@ -27,8 +27,8 @@ Documento de diseño del sistema. Deriva de `docs/STRATEGY.md` (tesis de product
 | Auth | Auth.js o Clerk para usuarios; API keys por tenant para integraciones | Evitar construir auth desde cero |
 | Pagos SaaS | Stripe Billing | Suscripciones, límites, suspensión segura |
 | Pagos del cliente final | Stripe Payment Links / Checkout (primer PSP), interfaz `PaymentProvider` para añadir Redsys/Bizum/MercadoPago | Verificación por webhook firmado |
-| WhatsApp | Meta Cloud API directo tras adaptador `WhatsAppProvider`; BSP (Gupshup/360dialog) como segunda implementación | Adaptador evita acoplarse a un proveedor |
-| IA | Interfaz `LLMProvider` con implementaciones Anthropic (por defecto) y OpenAI; BYOK por tenant; routing barato/potente | Según F8 de estrategia |
+| WhatsApp | BSP (360dialog, Gupshup o Twilio) tras adaptador `WhatsAppProvider`. No se usa Meta Cloud API directo: requiere ser Tech Provider verificado por Meta y no disponemos de esa estructura empresarial. El BSP gestiona alta de números, WABA, plantillas y facturación de Meta; nosotros consumimos su API y webhooks. | Adaptador evita acoplarse a un BSP concreto; cambiar de proveedor no toca el dominio |
+| IA | OpenAI como único proveedor: interfaz `LLMProvider` con una sola implementación. Routing entre modelo barato (`gpt-4o-mini` o equivalente vigente) para clasificación/extracción y modelo potente solo para turnos complejos. BYOK por tenant (clave OpenAI propia del cliente) o créditos del SaaS con límite. Embeddings `text-embedding-3-small`; audio con Whisper. | Coste bajo y previsible; un solo SDK que mantener |
 | Observabilidad | OpenTelemetry → Grafana Cloud o Datadog; Sentry para errores; logs estructurados (pino) | Trazas por conversación e invocación de IA |
 | Infra | Docker; despliegue inicial en Railway/Fly.io o Hetzner + Docker Compose; migrar a Kubernetes cuando haga falta | Coste bajo al inicio, sin reescritura después |
 | CI/CD | GitHub Actions: lint, typecheck, tests, migraciones en seco, build de imágenes | |
@@ -45,7 +45,7 @@ crmwsp/
 │   ├── db/           # Esquema Drizzle, migraciones, políticas RLS, seeds
 │   ├── domain/       # Entidades, reglas de negocio puras, máquinas de estado (sin IO)
 │   ├── contracts/    # Zod schemas y tipos compartidos (DTOs, eventos, acciones IA)
-│   ├── whatsapp/     # Adaptador WhatsAppProvider: Meta Cloud API, BSPs, firma de webhooks
+│   ├── whatsapp/     # Adaptador WhatsAppProvider: implementación BSP (360dialog/Gupshup), firma de webhooks
 │   ├── payments/     # Adaptador PaymentProvider: Stripe y futuros
 │   ├── ai/           # LLMProvider, prompts versionados, extractores, policy engine, evaluación
 │   ├── knowledge/    # Ingesta de catálogos/FAQ/PDF, chunking, embeddings, versionado
@@ -69,7 +69,7 @@ Todas las tablas de negocio llevan `tenant_id uuid NOT NULL` con índice compues
 - `api_keys` — por tenant, hash, scopes, último uso.
 
 ### Canal
-- `channel_connections` — tipo (`whatsapp_cloud`, `whatsapp_bsp`), número, `phone_number_id`, `waba_id`, credenciales cifradas (KMS/envelope encryption), estado, calidad.
+- `channel_connections` — `provider` (`360dialog`, `gupshup`, `twilio`), número, identificador de canal del BSP, API key del BSP cifrada (envelope encryption), estado, calidad del número reportada por el BSP.
 - `message_templates` — plantillas aprobadas por Meta, categoría, idioma, estado, variables.
 
 ### Contactos y conversaciones
@@ -122,13 +122,13 @@ Todas las tablas de negocio llevan `tenant_id uuid NOT NULL` con índice compues
 ### 5.2 Turno de IA
 1. Carga `agent_config`, historial reciente, ficha de contacto, oportunidad abierta.
 2. Retrieval sobre `knowledge_chunks` del tenant (versión activa).
-3. Llama a `LLMProvider` con salida estructurada: `{ reply?, actions[], citations[], confidence, needs_human: boolean, reason }`.
+3. Llama a OpenAI (Structured Outputs con JSON Schema) con salida estructurada: `{ reply?, actions[], citations[], confidence, needs_human: boolean, reason }`.
 4. Policy engine clasifica cada acción:
    - `auto`: actualizar campo de contacto con confianza ≥ umbral, crear tarea, mover etapa inicial.
    - `approve`: enviar presupuesto > umbral, aplicar descuento, enviar plantilla proactiva, cualquier acción económica.
    - `deny`: afirmar precio sin cita válida, prometer plazo sin fuente.
 5. `reply` se envía solo si todas sus afirmaciones tienen citas o es conversacional sin datos; en caso contrario `needs_human = true` y se asigna a un agente.
-6. Todo queda en `ai_actions` + `usage_ledger` (tokens, modelo, coste).
+6. Todo queda en `ai_actions` + `usage_ledger` (tokens de entrada/salida, modelo, coste calculado con la tarifa vigente de OpenAI).
 
 ### 5.3 Presupuesto y cobro
 1. Oportunidad → `quote` en `draft` con items referenciando `products` (precio copiado + `product_version`).
@@ -142,7 +142,7 @@ Job diario `plan-follow-ups` por tenant: busca quotes `sent` sin respuesta > N d
 
 ## 6. Seguridad y cumplimiento
 
-- Secretos de canal y BYOK cifrados con envelope encryption (clave maestra en KMS del proveedor cloud); nunca en logs ni en respuestas de API.
+- API keys del BSP y claves OpenAI BYOK cifradas con envelope encryption (clave maestra en KMS del proveedor cloud); nunca en logs ni en respuestas de API.
 - Verificación de firma en todos los webhooks; rechazo con 401 y registro.
 - RLS + tests automáticos de aislamiento (`packages/db/test/tenant-isolation.test.ts`).
 - Rate limiting por tenant y por API key.

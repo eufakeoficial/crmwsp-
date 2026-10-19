@@ -21,11 +21,11 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 **Objetivo:** mensajes reales entran y salen sin mezclarse ni duplicarse.
 
 - Auth (Auth.js) con registro, creación de tenant y roles.
-- `packages/whatsapp`: adaptador Meta Cloud API (webhook verify, firma, envío de texto/medios, estados de entrega).
+- `packages/whatsapp`: adaptador BSP (primera implementación: 360dialog o Gupshup, a decidir en ADR 0004) con verificación de firma del webhook, envío de texto/medios/plantillas, estados de entrega y descarga de medios.
 - Tablas `channel_connections`, `contacts`, `conversations`, `messages`, `attachments`, `inbound_events`, `audit_events`.
 - Pipeline de ingestión idempotente (flujo 5.1 de arquitectura).
 - Inbox en `apps/web`: lista de conversaciones, hilo, envío, asignación, estados, tiempo real por WebSocket.
-- Onboarding de número vía Embedded Signup de Meta (o alta manual de credenciales en staging).
+- Onboarding de número: el tenant pega la API key que le entrega el BSP (o usa el enlace de alta del BSP); el sistema registra el webhook automáticamente.
 - Storage de adjuntos con URLs firmadas.
 
 **Salida:** dos tenants con dos números en staging; 1.000 webhooks con duplicados inyectados producen exactamente los mensajes esperados; un usuario del tenant A no puede leer nada del B (test automatizado).
@@ -35,7 +35,7 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 **Objetivo:** la IA responde solo con fuentes y propone acciones auditables.
 
 - `packages/knowledge`: importación de CSV de productos, PDF y FAQ; chunking, embeddings en pgvector, versionado de fuentes, detección de conflictos de precio entre documentos.
-- `packages/ai`: `LLMProvider` (Anthropic por defecto, OpenAI), BYOK cifrado por tenant, salida estructurada, extractor de campos de contacto con confianza, transcripción de audio.
+- `packages/ai`: `LLMProvider` sobre OpenAI (Structured Outputs), routing modelo barato/potente, BYOK cifrado por tenant, extractor de campos de contacto con confianza, transcripción con Whisper, embeddings `text-embedding-3-small`.
 - Policy engine con tabla de acciones y tests de casos negativos.
 - `ai_actions`, `action_approvals`, `agent_configs`, `usage_ledger`.
 - UI: configuración del agente, revisión de acciones pendientes, ficha de contacto con campos "por confirmar", botón de tomar/devolver control a la IA.
@@ -72,7 +72,7 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 ## Fase 5 — Escala 1: SaaS automático
 
 - Stripe Billing: planes Business/Growth, límites por plan, suspensión segura, bolsa de mensajes y exceso.
-- Onboarding self-service completo; segundo proveedor WhatsApp (BSP) tras el adaptador.
+- Onboarding self-service completo; segundo BSP tras el adaptador para no depender de uno solo.
 - Observabilidad completa (OTel, Sentry, alertas), runbooks, backups probados, pruebas de carga.
 - Exportación/borrado RGPD, DPA, retención configurable.
 - Hardening: pentest básico, rotación de secretos, revisión de RLS.
@@ -97,9 +97,10 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 
 | Riesgo | Mitigación |
 |---|---|
-| Aprobación de Meta / límites de calidad del número | Cuenta de pruebas desde Fase 1; adaptador BSP como alternativa |
+| Dependencia del BSP (precios, caídas, cambios de API) | Adaptador desacoplado; segundo BSP en Escala 1; contrato ISV por escrito |
+| Calidad del número bajada por Meta | Seguimientos solo con consentimiento y plantillas; alertas de calidad desde el BSP |
 | Alucinaciones de precio | Policy engine + citas obligatorias + suite adversarial en CI |
-| Coste de IA fuera de control | `usage_ledger` desde Fase 2, límites por tenant, routing a modelo barato |
+| Coste de IA fuera de control | `usage_ledger` desde Fase 2, límites por tenant, modelo barato por defecto, caché de prompts de OpenAI |
 | Fuga entre tenants | RLS + helper obligatorio + test de aislamiento en cada PR |
 | Pagos falsificados | Solo webhook/conciliación; comprobantes son pista, nunca prueba |
 | Complejidad de monorepo para un equipo pequeño | Turborepo con tareas cacheadas; un único `pnpm dev` |
