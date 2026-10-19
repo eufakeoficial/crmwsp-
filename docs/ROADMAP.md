@@ -2,7 +2,7 @@
 
 Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y criterio de salida verificable. Sin fechas: cada hito termina cuando su criterio se cumple en staging.
 
-## Fase 0 — Fundación del repositorio
+## Fase 0 — Fundación del repositorio ✅ (completada 2026-10-19)
 
 **Objetivo:** que cualquier persona clone, levante el entorno y despliegue con CI.
 

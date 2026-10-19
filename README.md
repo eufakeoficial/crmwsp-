@@ -11,4 +11,4 @@ CRM WhatsApp-first con IA para negocios de servicios con presupuestos (España y
 
 ## Estado
 
-Fase 0 (fundación del repositorio) pendiente de iniciar. Ver `docs/ROADMAP.md`.
+Fase 0 (fundación del repositorio) completada. Siguiente: Fase 1 (MVP 0). Ver `docs/ROADMAP.md`.
