@@ -6,3 +6,6 @@ dist
 .env.*.local
 *.tsbuildinfo
 coverage
+
+# Local Redis snapshots
+dump.rdb
