@@ -1,10 +1,5 @@
-import { EmptyState, PageHeader } from "@/components/app/EmptyState";
+import { InboxView } from "@/components/inbox/InboxView";
 
 export default function InboxPage() {
-  return (
-    <>
-      <PageHeader title="Inbox" subtitle="Tus conversaciones de WhatsApp." />
-      <EmptyState title="Próximamente" soon>Aquí verás tus conversaciones de WhatsApp.</EmptyState>
-    </>
-  );
+  return <InboxView />;
 }

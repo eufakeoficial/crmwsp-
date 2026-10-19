@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { AppShell } from "@/components/app/AppShell";
+import { PanelShell } from "@/components/app/PanelShell";
 
 export default function PanelLayout({ children }: { children: ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+  return <PanelShell>{children}</PanelShell>;
 }

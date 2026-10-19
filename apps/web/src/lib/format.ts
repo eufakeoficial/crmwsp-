@@ -29,3 +29,18 @@ export function formatRelative(date: Date | string | number, now: Date = new Dat
   if (h < 24) return `hace ${h} h`;
   return `hace ${Math.floor(h / 24)} d`;
 }
+
+/** "14:05" in the viewer's time zone. */
+export function formatTime(date: Date | string | number, locale = LOCALE): string {
+  return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(new Date(date));
+}
+
+/** Day label for chat separators: "Hoy", "Ayer" or a short date. */
+export function formatDayLabel(date: Date | string | number, now: Date = new Date(), locale = LOCALE): string {
+  const d = new Date(date);
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86_400_000);
+  if (diff === 0) return "Hoy";
+  if (diff === 1) return "Ayer";
+  return new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" }).format(d);
+}

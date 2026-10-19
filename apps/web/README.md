@@ -30,3 +30,20 @@ pnpm --filter @crmwsp/web test
 - `middleware.ts` solo comprueba que exista la cookie de sesión en `/app/*`; la validación real es `GET /auth/me`.
 - El tenant activo se guarda en `localStorage` (con fallback en memoria) y se valida contra `me.tenants` en cada carga.
 - `@crmwsp/contracts` exporta TypeScript: `transpilePackages` y un `extensionAlias` de webpack resuelven sus imports `.js`.
+
+## Tiempo real (SSE)
+
+`useTenantEvents` (`src/lib/hooks/use-tenant-events.ts`) abre un único `EventSource` por pestaña sobre
+`/api/events?tenantId=<activo>` (ADR 0007), compartido por el contador del sidebar y el Inbox mediante
+`TenantEventsProvider`. Se cierra al cambiar de tenant o desmontar, reconecta con backoff (1 s … 30 s) y refresca
+por REST tras cada reconexión (los eventos son best effort). `EventSource` no expone el código HTTP, así que tras un
+error se sondea la URL con `fetch`: con **429** (tope de 5 streams por usuario) no se reintenta y el Inbox avisa.
+
+**¿El rewrite de Next bufferiza SSE?** No. Verificado con `next dev` y `next start`, con `Accept-Encoding: gzip`:
+`retry:` y `: connected` llegan al instante y los eventos aparecen en el Inbox sin recargar. La API responde con
+`cache-control: no-cache, no-transform` (Next no comprime la respuesta) y `x-accel-buffering: no`. Se mantiene el
+rewrite (la opción más simple, sin código extra ni route handler que reenvíe cookies). En producción, cualquier
+proxy delante de la web debe desactivar el buffering para `/api/events` (nginx lo respeta con `x-accel-buffering: no`;
+en otros balanceadores, desactivar buffering/compresión de `text/event-stream` y un timeout de lectura > 25 s, que es
+el intervalo del heartbeat). Si algún día un proxy lo impide, la alternativa es un route handler de streaming en
+`app/api/events/route.ts` que reenvíe la cookie.

@@ -73,6 +73,11 @@ describe("api client", () => {
     await expect(api.me()).rejects.toMatchObject({ code: "INTERNAL_ERROR", status: 502 });
   });
 
+  it("falls back by status when the error code is unknown", async () => {
+    fetchMock.mockResolvedValue(json(401, { code: "SOMETHING_NEW", message: "x" }));
+    await expect(api.me()).rejects.toMatchObject({ code: "UNAUTHORIZED", status: 401 });
+  });
+
   it("rejects responses that do not match the schema", async () => {
     fetchMock.mockResolvedValue(json(200, { user: {} }));
     await expect(api.me()).rejects.toMatchObject({ code: "INVALID_RESPONSE" });

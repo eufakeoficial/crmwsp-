@@ -3,10 +3,10 @@
 import { X } from "lucide-react";
 import { useRef } from "react";
 import { useDialogBehavior } from "@/lib/hooks/use-dialog";
-import { NavLinks } from "./AppSidebar";
+import { type NavCounts, NavLinks } from "./AppSidebar";
 
 /** Mobile menu: bottom sheet with every section. Escape closes it and focus is trapped. */
-export function AppMenuSheet({ onClose }: { onClose: () => void }) {
+export function AppMenuSheet({ onClose, counts }: { onClose: () => void; counts?: NavCounts }) {
   const ref = useRef<HTMLDivElement>(null);
   useDialogBehavior(ref, onClose);
   return (
@@ -28,7 +28,7 @@ export function AppMenuSheet({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <nav aria-label="Principal" className="flex flex-col gap-1">
-          <NavLinks onNavigate={onClose} />
+          <NavLinks onNavigate={onClose} {...(counts ? { counts } : {})} />
         </nav>
       </div>
     </>
