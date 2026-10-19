@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792448838789,
+      "tag": "0000_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792448843634,
+      "tag": "0001_rls_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792449057003,
+      "tag": "0002_tenants_no_app_insert_delete",
+      "breakpoints": true
+    }
+  ]
+}
