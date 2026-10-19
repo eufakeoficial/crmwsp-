@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
+import { errorResponseSchema } from "@crmwsp/contracts";
 import { createDb, inArray, tenants, users } from "@crmwsp/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../app.module.js";
@@ -41,6 +42,8 @@ describe.skipIf(!hasEnv)("channels without master keys", () => {
       payload: { phoneE164: "+34600000555", appName: "Demo", apiKey: "never-stored-123" },
     });
     expect(res.statusCode).toBe(503);
+    const parsed = errorResponseSchema.parse(res.json());
+    expect(parsed.code).toBe("ENCRYPTION_NOT_CONFIGURED");
     expect(res.json()).toMatchObject({ message: expect.stringMatching(/master keys are not configured/) });
     expect(res.body).not.toContain("never-stored-123");
     const list = await app.inject({ method: "GET", url: "/channels", headers: { cookie, "x-tenant-id": tenant } });

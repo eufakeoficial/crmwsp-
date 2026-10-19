@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   ErrorCode,
+  EncryptionNotConfiguredError,
   ExternalProviderError,
+  OutsideServiceWindowError,
   NotFoundError,
   TenantContextMissingError,
   errorResponseSchema,
@@ -53,5 +55,20 @@ describe("toErrorResponse leak guards", () => {
   it("does not add details/requestId keys when absent", () => {
     const res = toErrorResponse(new NotFoundError());
     expect(Object.keys(res).sort()).toEqual(["code", "message"]);
+  });
+});
+
+describe("errorResponseSchema", () => {
+  it("accepts every ErrorCode, including the 422 and 503 ones", () => {
+    for (const code of Object.values(ErrorCode)) {
+      expect(errorResponseSchema.safeParse({ code, message: "x" }).success).toBe(true);
+    }
+    for (const [err, status, code] of [
+      [new OutsideServiceWindowError(), 422, "OUTSIDE_SERVICE_WINDOW"],
+      [new EncryptionNotConfiguredError(), 503, "ENCRYPTION_NOT_CONFIGURED"],
+    ] as const) {
+      expect(err.httpStatus).toBe(status);
+      expect(errorResponseSchema.parse(toErrorResponse(err)).code).toBe(code);
+    }
   });
 });

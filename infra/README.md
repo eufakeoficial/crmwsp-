@@ -49,3 +49,16 @@ docker compose -f infra/docker-compose.dev.yml down
 ```bash
 docker compose -f infra/docker-compose.dev.yml down -v
 ```
+
+## Imágenes de producción (API y worker)
+
+Dockerfiles multi-stage en `infra/docker/` (`Dockerfile.api`, `Dockerfile.worker`). Etapa de build: `pnpm install --frozen-lockfile` y bundle con esbuild (los paquetes `@crmwsp/*` van dentro de `dist`); imagen final `node:22-slim` solo con `dist` y las dependencias de producción (`pnpm deploy --prod --legacy`). El contexto es la raíz del repo:
+
+```bash
+docker build -f infra/docker/Dockerfile.api -t crmwsp-api .
+docker build -f infra/docker/Dockerfile.worker -t crmwsp-worker .
+```
+
+Cada Dockerfile tiene su `.dockerignore` junto a él (BuildKit). Estas imágenes no se han construido todavía (sin daemon de Docker en el entorno de desarrollo del ticket F1-J). Variables del worker: `DATABASE_URL`, `REDIS_URL`, `ENCRYPTION_MASTER_KEY`, `ENCRYPTION_MASTER_KEY_ID` (entero 1-255). Sin master keys el worker arranca pero el envío saliente queda deshabilitado.
+
+Pendiente de verificar con daemon (gate F1-J): `docker build` real de ambas imágenes y el `HEALTHCHECK` de la API dentro del contenedor. Verificado sin Docker: `pnpm install --frozen-lockfile`, `pnpm --filter <app> --prod deploy --legacy` + `dist` arrancan (`/health` OK) con el `node_modules` desplegado. La API sale con 143 tras SIGTERM (cierre ordenado con `enableShutdownHooks`, Nest re-emite la señal); el worker sale con 0. `pnpm` se obtiene vía corepack a partir de `packageManager` del `package.json` raíz.

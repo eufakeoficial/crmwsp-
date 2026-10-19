@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isoDateTimeSchema, uuidSchema } from "./common.js";
-import { AppError, type ErrorCode } from "./errors.js";
+import { ErrorCode } from "./errors.js";
 
 export const conversationStatusSchema = z.enum(["open", "pending", "resolved"]);
 export type ConversationStatus = z.infer<typeof conversationStatusSchema>;
@@ -27,17 +27,8 @@ export const messageAuthorSchema = z.enum(["contact", "user", "ai", "system"]);
 export const MESSAGE_PREVIEW_MAX = 120;
 
 /** Error code returned (422) when sending free text outside the 24 h customer service window. */
-export const OUTSIDE_SERVICE_WINDOW = "OUTSIDE_SERVICE_WINDOW";
-/**
- * 422: free-form messages are only allowed within 24 h of the contact's last inbound
- * message; outside it a template is required.
- * TODO: add OUTSIDE_SERVICE_WINDOW to ErrorCode in errors.ts (outside this ticket's surface).
- */
-export class OutsideServiceWindowError extends AppError {
-  constructor() {
-    super(OUTSIDE_SERVICE_WINDOW as unknown as ErrorCode, "Outside the 24 h service window; a template is required", 422);
-  }
-}
+export const OUTSIDE_SERVICE_WINDOW = ErrorCode.OutsideServiceWindow;
+export { OutsideServiceWindowError } from "./errors.js";
 
 /** WhatsApp customer service window. */
 export const SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -53,8 +44,24 @@ export const contactSummarySchema = z.object({
 });
 export type ContactSummary = z.infer<typeof contactSummarySchema>;
 
+/**
+ * One AI-extracted fact about a contact. The DB column is free-form jsonb, so unknown
+ * keys are kept (looseObject) and only `value` is required.
+ */
+export const extractedFieldSchema = z.looseObject({
+  value: z.unknown(),
+  confidence: z.number().min(0).max(1).optional(),
+  sourceMessageId: uuidSchema.optional(),
+});
+export type ExtractedField = z.infer<typeof extractedFieldSchema>;
+
+/** Extracted facts keyed by field name; tolerant of legacy/free-form entries. */
+export const contactExtractedSchema = z.record(z.string(), z.unknown());
+export type ContactExtracted = z.infer<typeof contactExtractedSchema>;
+
 export const contactSchema = contactSummarySchema.extend({
   tags: z.array(z.string()),
+  extracted: contactExtractedSchema,
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });

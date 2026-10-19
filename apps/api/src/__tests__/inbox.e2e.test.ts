@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { request as httpRequest, type IncomingMessage } from "node:http";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
+import { contactSchema, errorResponseSchema } from "@crmwsp/contracts";
 import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
 import {
   attachments,
@@ -296,6 +297,20 @@ describe.skipIf(!hasEnv)("channels, inbox, outbound and SSE (e2e, real Postgres 
       expect(m1).toBeDefined();
     });
 
+    it("contacts expose tags and extracted, validated by contactSchema", async () => {
+      const { conversationId, contactId } = await seedConversation(s.tenantA, s.channelA, "+34600777001", new Date());
+      const extracted = { city: { value: "Madrid", confidence: 0.9, sourceMessageId: randomUUID() } };
+      await migrator.db.update(contacts).set({ extracted, tags: ["vip"] }).where(eq(contacts.id, contactId));
+      const detail = contactSchema.parse((await asA("GET", `/contacts/${contactId}`)).json());
+      expect(detail.tags).toEqual(["vip"]);
+      expect(detail.extracted).toEqual(extracted);
+      const list = (await asA("GET", "/contacts?q=%2B34600777001")).json() as { items: unknown[] };
+      expect(list.items.map((i) => contactSchema.parse(i).extracted)).toEqual([extracted]);
+      // Remove the extra rows so other tests' counts for tenant A stay intact.
+      await migrator.db.delete(conversations).where(eq(conversations.id, conversationId));
+      await migrator.db.delete(contacts).where(eq(contacts.id, contactId));
+    });
+
     it("isolation: A never sees B's conversations, messages or contacts (404 by id)", async () => {
       const list = await asA("GET", "/conversations?limit=100");
       expect(list.statusCode).toBe(200);
@@ -415,7 +430,7 @@ describe.skipIf(!hasEnv)("channels, inbox, outbound and SSE (e2e, real Postgres 
       const { conversationId } = await seedConversation(s.tenantA, s.channelA, "+34600300000", old, old);
       const res = await asA("POST", `/conversations/${conversationId}/messages`, { text: "Hola", clientMessageId: randomUUID() });
       expect(res.statusCode).toBe(422);
-      expect((res.json() as { code: string }).code).toBe("OUTSIDE_SERVICE_WINDOW");
+      expect(errorResponseSchema.parse(res.json()).code).toBe("OUTSIDE_SERVICE_WINDOW");
       const rows = await migrator.db.select().from(messages).where(eq(messages.conversationId, conversationId));
       expect(rows).toHaveLength(0);
     });

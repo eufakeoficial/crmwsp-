@@ -3,6 +3,7 @@ import type { CipherBox } from "@crmwsp/crypto";
 import { redact } from "@crmwsp/crypto";
 import {
   ConflictError,
+  EncryptionNotConfiguredError,
   NotFoundError,
   createGupshupChannelRequestSchema,
   updateChannelRequestSchema,
@@ -17,7 +18,7 @@ import type { HttpRequest, RequestTenant } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { PG_UNIQUE_VIOLATION, pgCode, writeAudit } from "../inbox/audit.js";
-import { CIPHER_BOX, EncryptionUnavailableError, GUPSHUP_API_KEY_PURPOSE, webhookUrlFor } from "./channels.constants.js";
+import { CIPHER_BOX, GUPSHUP_API_KEY_PURPOSE, webhookUrlFor } from "./channels.constants.js";
 
 const ADMIN_ROLES = new Set(["owner", "admin"]);
 
@@ -53,7 +54,7 @@ export class ChannelsController {
   @Roles("owner", "admin")
   async createGupshup(@CurrentTenantDb() db: TenantDb, @Body() body: unknown, @Req() req: HttpRequest): Promise<Channel> {
     const input = parseOrThrow(createGupshupChannelRequestSchema, body);
-    if (!this.cipher) throw new EncryptionUnavailableError();
+    if (!this.cipher) throw new EncryptionNotConfiguredError();
     const credentials = this.cipher.encrypt(input.apiKey, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
     try {
       const row = await db.run(async (tx) => {

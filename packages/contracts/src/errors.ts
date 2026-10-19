@@ -9,6 +9,8 @@ export const ErrorCode = {
   RateLimited: "RATE_LIMITED",
   TenantContextMissing: "TENANT_CONTEXT_MISSING",
   ExternalProvider: "EXTERNAL_PROVIDER_ERROR",
+  OutsideServiceWindow: "OUTSIDE_SERVICE_WINDOW",
+  EncryptionNotConfigured: "ENCRYPTION_NOT_CONFIGURED",
   Internal: "INTERNAL_ERROR",
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -85,6 +87,26 @@ export class ExternalProviderError extends AppError {
   constructor(provider: ExternalProvider, message = "External provider error", options?: AppErrorOptions) {
     super(ErrorCode.ExternalProvider, message, 502, options);
     this.provider = provider;
+  }
+}
+
+/**
+ * 422: free-form messages are only allowed within 24 h of the contact's last inbound
+ * message; outside it a template is required.
+ */
+export class OutsideServiceWindowError extends AppError {
+  constructor(options?: AppErrorOptions) {
+    super(ErrorCode.OutsideServiceWindow, "Outside the 24 h service window; a template is required", 422, options);
+  }
+}
+
+/** 503: encryption master keys are not configured, so credentials cannot be handled. */
+export class EncryptionNotConfiguredError extends AppError {
+  constructor(
+    message = "Encryption master keys are not configured; channel credentials are unavailable",
+    options?: AppErrorOptions,
+  ) {
+    super(ErrorCode.EncryptionNotConfigured, message, 503, options);
   }
 }
 

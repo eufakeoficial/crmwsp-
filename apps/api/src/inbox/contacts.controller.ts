@@ -16,6 +16,7 @@ const toDto = (c: ContactRow): Contact => ({
   name: c.name,
   phoneE164: c.phoneE164,
   tags: c.tags,
+  extracted: c.extracted,
   createdAt: c.createdAt.toISOString(),
   updatedAt: c.updatedAt.toISOString(),
 });
