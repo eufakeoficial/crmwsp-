@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # ADR 0002: the runtime role is subject to RLS; only the migrator may bypass it.
+  # Mirrors infra/docker-compose.dev.yml. Tenant isolation tests are meaningless
+  # if DATABASE_URL points at a superuser (superusers bypass RLS).
+  DATABASE_URL: postgresql://crmwsp_app:crmwsp_app@localhost:5432/crmwsp
+  DATABASE_URL_MIGRATOR: postgresql://crmwsp:crmwsp@localhost:5432/crmwsp
+  REDIS_URL: redis://localhost:6379
+  TURBO_TELEMETRY_DISABLED: "1"
+  NODE_ENV: test
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: crmwsp
+          POSTGRES_PASSWORD: crmwsp
+          POSTGRES_DB: crmwsp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crmwsp -d crmwsp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Version is read from "packageManager" in the root package.json.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cache Turborepo
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Same bootstrap as the postgres-init service in infra/docker-compose.dev.yml:
+      # pgvector extension + RLS-bound runtime role (NOBYPASSRLS).
+      - name: Prepare database roles
+        env:
+          PGHOST: localhost
+          PGUSER: crmwsp
+          PGPASSWORD: crmwsp
+          PGDATABASE: crmwsp
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS vector;
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'crmwsp_app') THEN
+              CREATE ROLE crmwsp_app LOGIN PASSWORD 'crmwsp_app' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+            END IF;
+          END
+          $$;
+          GRANT CONNECT ON DATABASE crmwsp TO crmwsp_app;
+          GRANT USAGE ON SCHEMA public TO crmwsp_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE crmwsp IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO crmwsp_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE crmwsp IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO crmwsp_app;
+          SQL
+
+      # Must run before tests: tenant isolation tests need the tables and RLS
+      # policies. Fails if the script is missing on purpose.
+      - name: Migrate
+        run: pnpm db:migrate
+
+      - name: Test
+        run: pnpm test
