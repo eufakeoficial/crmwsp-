@@ -1,0 +1,138 @@
+# Entorno de desarrollo local de CRMWSP (Fase 0, ticket T2).
+# Levantar:  docker compose -f infra/docker-compose.dev.yml up -d
+# Ver infra/README.md para URLs, parada y limpieza.
+
+name: crmwsp-dev
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: crmwsp-postgres
+    environment:
+      POSTGRES_USER: crmwsp
+      POSTGRES_PASSWORD: crmwsp
+      POSTGRES_DB: crmwsp
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crmwsp -d crmwsp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Prepara la base: extensión pgvector y rol de aplicación SIN BYPASSRLS
+  # (ADR 0002: el rol de app es distinto del rol que ejecuta migraciones).
+  # - crmwsp      -> superusuario del contenedor; lo usa DATABASE_URL_MIGRATOR.
+  # - crmwsp_app  -> rol de runtime sujeto a RLS; lo usa DATABASE_URL.
+  # Es idempotente: se puede relanzar sin efectos secundarios.
+  postgres-init:
+    image: pgvector/pgvector:pg16
+    container_name: crmwsp-postgres-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: crmwsp
+      PGPASSWORD: crmwsp
+      PGDATABASE: crmwsp
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        psql -v ON_ERROR_STOP=1 <<'SQL'
+        CREATE EXTENSION IF NOT EXISTS vector;
+        DO $$$$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'crmwsp_app') THEN
+            CREATE ROLE crmwsp_app LOGIN PASSWORD 'crmwsp_app' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+          END IF;
+        END
+        $$$$;
+        GRANT CONNECT ON DATABASE crmwsp TO crmwsp_app;
+        GRANT USAGE ON SCHEMA public TO crmwsp_app;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO crmwsp_app;
+        GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO crmwsp_app;
+        ALTER DEFAULT PRIVILEGES FOR ROLE crmwsp IN SCHEMA public
+          GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO crmwsp_app;
+        ALTER DEFAULT PRIVILEGES FOR ROLE crmwsp IN SCHEMA public
+          GRANT USAGE, SELECT ON SEQUENCES TO crmwsp_app;
+        SQL
+    restart: "no"
+
+  redis:
+    image: redis:7-alpine
+    container_name: crmwsp-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Almacenamiento S3-compatible local (RustFS). Sustituye a MinIO: ver
+  # docs/adr/0005-s3-local-sin-minio.md. En prod: Cloudflare R2 o AWS S3.
+  s3:
+    image: rustfs/rustfs:1.0.1
+    container_name: crmwsp-s3
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Consola web
+    volumes:
+      - s3-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # Crea el bucket de desarrollo y termina. Idempotente (head-bucket primero).
+  s3-init:
+    image: amazon/aws-cli:2.37.5
+    container_name: crmwsp-s3-init
+    depends_on:
+      s3:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: rustfsadmin
+      AWS_SECRET_ACCESS_KEY: rustfsadmin
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://s3:9000
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        aws configure set default.s3.addressing_style path
+        if ! aws s3api head-bucket --bucket crmwsp-dev 2>/dev/null; then
+          aws s3 mb s3://crmwsp-dev
+        fi
+        echo "bucket crmwsp-dev listo"
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    container_name: crmwsp-mailpit
+    ports:
+      - "8025:8025"   # UI web
+      - "1025:1025"   # SMTP
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  s3-data:

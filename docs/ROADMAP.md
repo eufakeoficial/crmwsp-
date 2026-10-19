@@ -7,7 +7,7 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 **Objetivo:** que cualquier persona clone, levante el entorno y despliegue con CI.
 
 - Monorepo pnpm + Turborepo con `apps/web`, `apps/api`, `apps/worker` y `packages/*` vacíos pero compilando.
-- `infra/docker-compose.dev.yml`: PostgreSQL 16 + pgvector, Redis 7, MinIO (S3 local), Mailpit.
+- `infra/docker-compose.dev.yml`: PostgreSQL 16 + pgvector, Redis 7, RustFS (S3 local, ver ADR 0005), Mailpit.
 - `packages/db`: Drizzle configurado, primera migración con `tenants`, `users`, `memberships`, RLS activada, helper `withTenant(tenantId, fn)`.
 - `packages/contracts`: Zod base y tipado de errores.
 - GitHub Actions: lint, typecheck, test, migraciones en seco.
