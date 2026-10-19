@@ -7,6 +7,14 @@ export function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
 }
 
+export interface WithTenantOptions {
+  /**
+   * Acting user. Sets `app.user_id` (transaction-local), used by the `users`
+   * RLS policy so a user can only update its own row.
+   */
+  userId?: string;
+}
+
 /**
  * Runs `fn` inside a transaction scoped to `tenantId`. The tenant is set with
  * `set_config('app.tenant_id', $1, true)` (transaction-local), so RLS policies
@@ -16,12 +24,20 @@ export async function withTenant<T>(
   db: Database,
   tenantId: string,
   fn: (tx: Transaction) => Promise<T>,
+  options: WithTenantOptions = {},
 ): Promise<T> {
   if (!isUuid(tenantId)) {
     throw new TypeError("withTenant: tenantId must be a valid uuid");
   }
+  const { userId } = options;
+  if (userId !== undefined && !isUuid(userId)) {
+    throw new TypeError("withTenant: userId must be a valid uuid");
+  }
   return db.transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
+    if (userId !== undefined) {
+      await tx.execute(sql`select set_config('app.user_id', ${userId}, true)`);
+    }
     return fn(tx);
   });
 }

@@ -2,8 +2,9 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 /**
- * Global identity (no tenant_id). Not under RLS in Phase 0: application code
- * must only reach users through `memberships` of the current tenant.
+ * Global identity (no tenant_id). RLS (drizzle/0004_rls_users.sql): the app
+ * role only sees users with a membership in `app.tenant_id` and may only
+ * update its own row (`app.user_id`). No INSERT/DELETE for the app role.
  */
 export const users = pgTable(
   "users",
