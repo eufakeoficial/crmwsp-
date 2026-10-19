@@ -8,10 +8,14 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@crmwsp/db": "workspace:*",
+    "@crmwsp/whatsapp": "workspace:*",
     "bullmq": "6.3.17",
+    "drizzle-orm": "0.45.4",
     "ioredis": "6.0.0"
   },
   "devDependencies": {
