@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@crmwsp/contracts": "workspace:*",
+    "@crmwsp/crypto": "workspace:*",
     "@crmwsp/db": "workspace:*",
     "@crmwsp/whatsapp": "workspace:*",
     "@nestjs/common": "11.2.7",

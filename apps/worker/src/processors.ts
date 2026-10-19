@@ -33,7 +33,7 @@ export interface ProcessorDeps {
   logger?: Logger;
 }
 
-export type InboxEventType = "message.received" | "message.status";
+export type InboxEventType = "message.received" | "message.status" | "conversation.updated";
 
 export interface InboxEvent {
   type: InboxEventType;

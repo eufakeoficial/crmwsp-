@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@crmwsp/crypto": "workspace:*",
     "@crmwsp/db": "workspace:*",
     "@crmwsp/whatsapp": "workspace:*",
     "bullmq": "6.3.17",

@@ -20,3 +20,13 @@ export function createRedis(redisUrl: string): Redis {
 export function createInboundQueue(redisUrl: string, name: string = INBOUND_QUEUE_NAME): Queue {
   return new Queue(name, { connection: createRedis(redisUrl) });
 }
+
+/** Outbound sends (keep in sync with apps/api/src/inbox/outbound.constants.ts). */
+export const OUTBOUND_QUEUE_NAME = "outbound";
+export const SEND_MESSAGE_JOB = "send-message";
+export const SEND_MESSAGE_MAX_ATTEMPTS = 5;
+
+export interface SendMessageJobData {
+  tenantId: string;
+  messageId: string;
+}

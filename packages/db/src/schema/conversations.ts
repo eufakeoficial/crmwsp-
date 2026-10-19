@@ -26,6 +26,8 @@ export const conversations = pgTable(
     aiMode: aiMode("ai_mode").notNull().default("off"),
     lastInboundAt: timestamp("last_inbound_at", { withTimezone: true }),
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+    /** Last time an agent marked the conversation as read; inbound messages after it are unread. */
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }),
     lockVersion: integer("lock_version").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

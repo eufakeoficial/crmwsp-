@@ -36,6 +36,8 @@ export const messages = pgTable(
     status: messageStatus("status").notNull(),
     author: messageAuthor("author").notNull(),
     authorUserId: uuid("author_user_id").references(() => users.id, { onDelete: "set null" }),
+    /** Client-generated idempotency key for outbound messages sent from the inbox. */
+    clientMessageId: uuid("client_message_id"),
     error: jsonb("error").$type<Record<string, unknown>>(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -46,6 +48,9 @@ export const messages = pgTable(
     uniqueIndex("messages_tenant_external_id_unique")
       .on(t.tenantId, t.externalId)
       .where(sql`${t.externalId} IS NOT NULL`),
+    uniqueIndex("messages_tenant_client_message_id_unique")
+      .on(t.tenantId, t.clientMessageId)
+      .where(sql`${t.clientMessageId} IS NOT NULL`),
   ],
 );
 

@@ -1,0 +1,182 @@
+import type { CipherBox } from "@crmwsp/crypto";
+import {
+  channelConnections,
+  contacts,
+  conversations,
+  isUuid,
+  messages,
+  withTenant,
+  type Database,
+} from "@crmwsp/db";
+import type { WhatsAppProvider } from "@crmwsp/whatsapp";
+import { UnrecoverableError, Worker, type ConnectionOptions, type Job } from "bullmq";
+import { and, eq } from "drizzle-orm";
+import { tenantChannel, type EventPublisher, type InboxEvent, type Logger } from "./processors.js";
+import {
+  OUTBOUND_QUEUE_NAME,
+  SEND_MESSAGE_JOB,
+  SEND_MESSAGE_MAX_ATTEMPTS,
+  type SendMessageJobData,
+} from "./queue.js";
+
+/** AAD purpose of the encrypted Gupshup API key (same as apps/api channels). */
+export const GUPSHUP_API_KEY_PURPOSE = "gupshup_api_key";
+
+export interface SendDeps {
+  db: Database;
+  provider: WhatsAppProvider;
+  publisher: EventPublisher;
+  cipher: CipherBox;
+  logger?: Logger;
+}
+
+export interface SendAttempt {
+  /** Attempts already made before this one (BullMQ job.attemptsMade). */
+  attemptsMade: number;
+  maxAttempts: number;
+}
+
+export type SendMessageResult =
+  | { outcome: "sent"; externalId: string }
+  | { outcome: "skipped"; reason: "already-sent" | "not-queued" | "locked" }
+  | { outcome: "failed" };
+
+const silent: Logger = { info: () => {}, warn: () => {}, error: () => {} };
+
+function assertSendData(data: unknown): SendMessageJobData {
+  const d = data as Partial<SendMessageJobData> | null;
+  if (!d || !isUuid(d.tenantId) || !isUuid(d.messageId)) throw new UnrecoverableError("invalid job data");
+  return { tenantId: d.tenantId, messageId: d.messageId };
+}
+
+/** Provider errors expose `retryable`; anything else is treated as transient (DB, Redis). */
+function isRetryable(err: unknown): boolean {
+  const r = (err as { retryable?: unknown } | null)?.retryable;
+  if (typeof r === "boolean") return r;
+  if (err instanceof UnrecoverableError) return false;
+  if ((err as { name?: unknown } | null)?.name === "DecryptionError") return false;
+  return true;
+}
+
+/** Persistable error: provider messages are fixed strings without request data. */
+function sanitizeError(err: unknown): Record<string, unknown> {
+  const e = err as { name?: unknown; status?: unknown; message?: unknown; provider?: unknown } | null;
+  if (e && e.provider === "gupshup" && typeof e.message === "string") {
+    return { code: "provider_error", message: e.message.slice(0, 200), ...(typeof e.status === "number" ? { status: e.status } : {}) };
+  }
+  if (e?.name === "DecryptionError") return { code: "credentials_unavailable" };
+  if (err instanceof UnrecoverableError) return { code: "unrecoverable", message: err.message.slice(0, 200) };
+  return { code: "internal_error" };
+}
+
+async function publish(deps: SendDeps, tenantId: string, event: InboxEvent): Promise<void> {
+  try {
+    await deps.publisher.publish(tenantChannel(tenantId), JSON.stringify(event));
+  } catch (err) {
+    (deps.logger ?? silent).warn(`publish failed (${err instanceof Error ? err.name : "unknown"})`);
+  }
+}
+
+/**
+ * Sends one queued outbound message through the BSP. Idempotent: a message that
+ * already has an external_id (or is no longer queued) is never re-sent. The text
+ * and the API key are never logged.
+ */
+export async function processSendMessage(
+  deps: SendDeps,
+  data: unknown,
+  attempt: SendAttempt = { attemptsMade: 0, maxAttempts: SEND_MESSAGE_MAX_ATTEMPTS },
+): Promise<SendMessageResult> {
+  const { tenantId, messageId } = assertSendData(data);
+
+  // One transaction per attempt. The message row is locked with FOR UPDATE SKIP LOCKED
+  // for the whole send: a second worker processing the same job concurrently (e.g. a
+  // stalled-job re-run) skips it instead of calling the BSP again.
+  const result = await withTenant(deps.db, tenantId, async (tx) => {
+    const [loaded] = await tx
+      .select({
+        status: messages.status,
+        direction: messages.direction,
+        body: messages.body,
+        externalId: messages.externalId,
+        conversationId: messages.conversationId,
+        to: contacts.phoneE164,
+        connectionId: channelConnections.id,
+        sourcePhone: channelConnections.phoneE164,
+        appName: channelConnections.externalAppId,
+        connectionStatus: channelConnections.status,
+        credentials: channelConnections.credentialsEncrypted,
+      })
+      .from(messages)
+      .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+      .innerJoin(contacts, eq(contacts.id, conversations.contactId))
+      .innerJoin(channelConnections, eq(channelConnections.id, conversations.channelConnectionId))
+      .where(eq(messages.id, messageId))
+      .limit(1)
+      .for("update", { of: messages, skipLocked: true });
+    if (!loaded) {
+      // Either RLS hides it (forged tenantId) or another worker holds the lock.
+      const [exists] = await tx.select({ id: messages.id }).from(messages).where(eq(messages.id, messageId));
+      if (!exists) throw new UnrecoverableError("message not found");
+      return { res: { outcome: "skipped", reason: "locked" } as SendMessageResult };
+    }
+    if (loaded.externalId) return { res: { outcome: "skipped", reason: "already-sent" } as SendMessageResult };
+    if (loaded.status !== "queued" || loaded.direction !== "outbound") {
+      return { res: { outcome: "skipped", reason: "not-queued" } as SendMessageResult };
+    }
+
+    try {
+      if (!loaded.body) throw new UnrecoverableError("message has no text");
+      if (loaded.connectionStatus === "disabled") throw new UnrecoverableError("channel is disabled");
+      if (!loaded.credentials || !loaded.appName) throw new UnrecoverableError("channel has no credentials");
+      const apiKey = deps.cipher.decrypt(loaded.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
+      const { externalId } = await deps.provider.sendText(
+        { apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone },
+        loaded.to,
+        loaded.body,
+      );
+      await tx
+        .update(messages)
+        .set({ externalId, status: "sent", sentAt: new Date(), error: null })
+        .where(and(eq(messages.id, messageId), eq(messages.status, "queued")));
+      return { res: { outcome: "sent", externalId } as SendMessageResult, conversationId: loaded.conversationId };
+    } catch (err) {
+      const lastAttempt = attempt.attemptsMade + 1 >= attempt.maxAttempts;
+      if (isRetryable(err) && !lastAttempt) {
+        (deps.logger ?? silent).warn(`send-message ${messageId} transient failure (attempt ${attempt.attemptsMade + 1})`);
+        throw err; // rolls back; BullMQ retries
+      }
+      await tx
+        .update(messages)
+        .set({ status: "failed", error: sanitizeError(err) })
+        .where(and(eq(messages.id, messageId), eq(messages.status, "queued")));
+      (deps.logger ?? silent).warn(`send-message ${messageId} failed permanently`);
+      return { res: { outcome: "failed" } as SendMessageResult, conversationId: loaded.conversationId };
+    }
+  });
+  if (result.conversationId) {
+    await publish(deps, tenantId, { type: "message.status", conversationId: result.conversationId, messageId });
+  }
+  return result.res;
+}
+
+export interface OutboundWorkerOptions extends SendDeps {
+  connection: ConnectionOptions;
+  queueName?: string;
+  concurrency?: number;
+}
+
+export function createOutboundWorker(opts: OutboundWorkerOptions): Worker {
+  const { connection, queueName = OUTBOUND_QUEUE_NAME, concurrency = 5, ...deps } = opts;
+  return new Worker(
+    queueName,
+    async (job: Job) => {
+      if (job.name !== SEND_MESSAGE_JOB) throw new UnrecoverableError("unknown job name");
+      return processSendMessage(deps, job.data, {
+        attemptsMade: job.attemptsMade,
+        maxAttempts: job.opts.attempts ?? 1,
+      });
+    },
+    { connection, concurrency },
+  );
+}

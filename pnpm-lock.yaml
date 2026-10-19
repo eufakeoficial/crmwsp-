@@ -47,6 +47,9 @@ importers:
       '@crmwsp/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@crmwsp/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@crmwsp/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -130,6 +133,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@crmwsp/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@crmwsp/db':
         specifier: workspace:*
         version: link:../../packages/db
