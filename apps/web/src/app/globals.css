@@ -1,9 +1,110 @@
 @import "tailwindcss";
 
-:root {
-  color-scheme: light dark;
+/* Design tokens: semantic names, light theme only. Components use these classes (bg-ink, text-muted...). */
+@theme {
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+  /* Desktop breakpoint: 1100 px */
+  --breakpoint-desk: 68.75rem;
+
+  --color-ink: #121212;
+  --color-ink-2: #2a2a27;
+  --color-ink-3: #3d3d39;
+  --color-ink-4: #4a4a45;
+  --color-paper: #f2f2ef;
+  --color-paper-2: #f7f7f5;
+  --color-muted: #5c5c57;
+  --color-subtle: #cfcfc9;
+  --color-line: #e4e4df;
+  --color-line-2: #d6d6d0;
+  --color-lime: #d2f34c;
+  --color-lime-soft: #eef9c4;
+  --color-success: #14663a;
+  --color-success-soft: #e3f5ea;
+  --color-success-ink: #2e4a39;
+  --color-focus: #2457c5;
+  --color-whatsapp: #25d366;
+  --color-whatsapp-ink: #06301a;
+  --color-gold: #e1b53a;
+  --color-gold-soft: #fff6d6;
+  --color-amber-soft: #ffe8a3;
+  --color-amber-ink: #5a3d00;
+  --color-star: #e09a00;
+  --color-alert: #e5483d;
+  --color-danger: #b02a24;
+  --color-danger-soft: #fde7e5;
+  --color-warning: #8a4b00;
+  --color-warning-soft: #fff1d6;
+  --color-info: #1f4bb0;
+  --color-info-soft: #e6eefc;
+  --color-semaphore-yellow: #f2b705;
 }
 
-body {
-  @apply bg-zinc-50 text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Tailwind resets heading weight; restore it. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 700;
+  }
+
+  a {
+    text-underline-offset: 3px;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+}
+
+@utility container-page {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 1280px;
+  padding-inline: clamp(16px, 4vw, 40px);
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer base {
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

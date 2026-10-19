@@ -1,32 +1,40 @@
 import type { ButtonHTMLAttributes } from "react";
-import { cx } from "./cx";
+import { cn } from "@/lib/cn";
 
-type Variant = "primary" | "secondary" | "ghost";
+export type ButtonVariant = "primary" | "accent" | "outline" | "ghost" | "whatsapp";
+export type ButtonSize = "sm" | "md" | "lg";
 
-const variants: Record<Variant, string> = {
-  primary: "bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400",
-  secondary:
-    "border border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800",
-  ghost: "text-zinc-700 hover:bg-zinc-200 dark:text-zinc-300 dark:hover:bg-zinc-800",
+const VARIANTS: Record<ButtonVariant, string> = {
+  primary: "bg-ink text-white hover:bg-ink-2",
+  accent: "bg-lime font-extrabold text-ink hover:brightness-95",
+  outline: "border-[1.5px] border-ink bg-white text-ink hover:bg-paper",
+  ghost: "bg-transparent text-ink hover:bg-ink/8",
+  whatsapp: "bg-whatsapp text-whatsapp-ink hover:brightness-95",
 };
+
+const SIZES: Record<ButtonSize, string> = {
+  sm: "h-9 px-3 text-[13px]",
+  md: "h-11 px-5 text-[14px]",
+  lg: "h-14 px-6 text-[17px]",
+};
+
+/** Class string of a pill button; also used to style `<Link>`s as buttons. */
+export function buttonClasses(variant: ButtonVariant = "primary", className?: string, size: ButtonSize = "md"): string {
+  return cn(
+    "inline-flex cursor-pointer items-center justify-center gap-2 rounded-full font-bold whitespace-nowrap no-underline transition",
+    "disabled:cursor-not-allowed disabled:opacity-50",
+    VARIANTS[variant],
+    SIZES[size],
+    className,
+  );
+}
 
 export function Button({
   variant = "primary",
+  size = "md",
   className,
   type = "button",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
-  return (
-    <button
-      type={type}
-      className={cx(
-        "inline-flex min-h-10 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:focus-visible:outline-emerald-400",
-        "disabled:cursor-not-allowed disabled:opacity-60",
-        variants[variant],
-        className,
-      )}
-      {...props}
-    />
-  );
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize }) {
+  return <button type={type} className={buttonClasses(variant, className, size)} {...props} />;
 }

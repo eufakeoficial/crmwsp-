@@ -19,7 +19,7 @@ function TenantList() {
       {me.tenants.map((t) => (
         <li key={t.id}>
           <Button
-            variant="secondary"
+            variant="outline"
             className="w-full justify-between"
             onClick={() => {
               selectTenant(t.id);
@@ -27,7 +27,7 @@ function TenantList() {
             }}
           >
             <span>{t.name}</span>
-            <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">{ROLE_LABELS[t.role]}</span>
+            <span className="text-xs font-normal text-muted">{ROLE_LABELS[t.role]}</span>
           </Button>
         </li>
       ))}

@@ -49,7 +49,7 @@ export default function SignupPage() {
   }
 
   const invalid = (k: string) => (fieldErrors[k] ? true : undefined);
-  const hint = (k: string) => (fieldErrors[k] ? <p id={`${k}-error`} className="text-sm text-red-700 dark:text-red-300">{fieldErrors[k]}</p> : null);
+  const hint = (k: string) => (fieldErrors[k] ? <p id={`${k}-error`} className="text-sm font-semibold text-danger">{fieldErrors[k]}</p> : null);
 
   return (
     <AuthShell title="Crear cuenta" subtitle="Registra tu empresa y empieza en minutos.">
@@ -67,7 +67,7 @@ export default function SignupPage() {
         <div className="space-y-1">
           <Label htmlFor="password">Contraseña</Label>
           <Input id="password" name="password" type="password" autoComplete="new-password" minLength={10} required aria-invalid={invalid("password")} aria-describedby={fieldErrors["password"] ? "password-error" : "password-help"} />
-          <p id="password-help" className="text-xs text-zinc-500 dark:text-zinc-400">Mínimo 10 caracteres.</p>
+          <p id="password-help" className="text-xs text-muted">Mínimo 10 caracteres.</p>
           <div aria-live="polite">{hint("password")}</div>
         </div>
         <div className="space-y-1">
@@ -102,17 +102,17 @@ export default function SignupPage() {
               setSlug(e.target.value);
             }}
           />
-          <p id="slug-help" className="text-xs text-zinc-500 dark:text-zinc-400">Se genera a partir del nombre; puedes editarlo.</p>
+          <p id="slug-help" className="text-xs text-muted">Se genera a partir del nombre; puedes editarlo.</p>
           <div aria-live="polite">{hint("slug")}</div>
         </div>
         <Alert>{error}</Alert>
-        <Button type="submit" className="w-full" disabled={busy}>
+        <Button type="submit" variant="accent" size="lg" className="w-full" disabled={busy}>
           {busy ? "Creando cuenta…" : "Crear cuenta"}
         </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-6 text-center text-sm text-muted">
         ¿Ya tienes cuenta?{" "}
-        <Link href="/login" className="font-medium text-emerald-700 underline dark:text-emerald-400">
+        <Link href="/login" className="font-bold text-ink underline">
           Inicia sesión
         </Link>
       </p>

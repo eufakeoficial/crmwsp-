@@ -99,7 +99,7 @@ export function SessionProvider({ children, requireTenant = true }: { children: 
   if (!value) {
     return (
       <main className="flex min-h-screen items-center justify-center" aria-busy="true">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Cargando…</p>
+        <p className="text-sm text-muted">Cargando…</p>
       </main>
     );
   }

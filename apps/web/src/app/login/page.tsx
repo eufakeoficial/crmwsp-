@@ -40,13 +40,13 @@ export default function LoginPage() {
           <Input id="password" name="password" type="password" autoComplete="current-password" required />
         </div>
         <Alert>{error}</Alert>
-        <Button type="submit" className="w-full" disabled={busy}>
+        <Button type="submit" variant="accent" size="lg" className="w-full" disabled={busy}>
           {busy ? "Entrando…" : "Entrar"}
         </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-6 text-center text-sm text-muted">
         ¿No tienes cuenta?{" "}
-        <Link href="/signup" className="font-medium text-emerald-700 underline dark:text-emerald-400">
+        <Link href="/signup" className="font-bold text-ink underline">
           Regístrate
         </Link>
       </p>

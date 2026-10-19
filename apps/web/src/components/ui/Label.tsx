@@ -1,6 +1,6 @@
 import type { LabelHTMLAttributes } from "react";
-import { cx } from "./cx";
+import { cn } from "@/lib/cn";
 
 export function Label({ className, ...props }: LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label className={cx("block text-sm font-medium text-zinc-800 dark:text-zinc-200", className)} {...props} />;
+  return <label className={cn("block text-sm font-bold text-ink", className)} {...props} />;
 }

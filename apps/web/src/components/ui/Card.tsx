@@ -1,14 +1,6 @@
 import type { HTMLAttributes } from "react";
-import { cx } from "./cx";
+import { cn } from "@/lib/cn";
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cx(
-        "rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900",
-        className,
-      )}
-      {...props}
-    />
-  );
+  return <div className={cn("rounded-[22px] border border-line bg-white p-6 sm:p-8", className)} {...props} />;
 }

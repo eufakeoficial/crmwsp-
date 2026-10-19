@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { ROLE_LABELS } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
-import { Alert, Card } from "@/components/ui";
+import { Alert, Avatar, Badge, Card } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { errorMessage } from "@/lib/messages";
 
@@ -39,11 +39,11 @@ export default function TeamPage() {
 
   return (
     <>
-      <PageHeader title="Equipo" />
+      <PageHeader title="Equipo" subtitle="Las personas con acceso a tu empresa." />
       {!tenantId ? (
         <EmptyState title="Sin empresa activa">Elige una empresa para ver su equipo.</EmptyState>
       ) : state.status === "loading" ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400" aria-busy="true">Cargando equipo…</p>
+        <p className="text-sm text-muted" aria-busy="true">Cargando equipo…</p>
       ) : state.status === "forbidden" ? (
         <EmptyState title="Sin acceso al equipo">
           Solo los propietarios y administradores pueden ver la lista de miembros.
@@ -53,17 +53,18 @@ export default function TeamPage() {
       ) : state.members.length === 0 ? (
         <EmptyState title="Sin miembros" />
       ) : (
-        <Card className="p-0">
-          <ul className="divide-y divide-zinc-200 dark:divide-zinc-800" aria-label="Miembros del equipo">
+        <Card className="p-0 sm:p-0">
+          <ul className="divide-y divide-line" aria-label="Miembros del equipo">
             {state.members.map((m) => (
               <li key={m.userId} className="flex items-center justify-between gap-4 px-4 py-3" data-testid="member">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{m.name ?? m.email}</p>
-                  <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{m.email}</p>
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar name={m.name ?? m.email} round />
+                  <div className="min-w-0">
+                    <p className="m-0 truncate text-sm font-bold">{m.name ?? m.email}</p>
+                    <p className="m-0 truncate text-xs text-muted">{m.email}</p>
+                  </div>
                 </div>
-                <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium dark:bg-zinc-800">
-                  {ROLE_LABELS[m.role]}
-                </span>
+                <Badge>{ROLE_LABELS[m.role]}</Badge>
               </li>
             ))}
           </ul>

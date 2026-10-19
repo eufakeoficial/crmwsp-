@@ -1,1 +1,1 @@
-export const cx = (...parts: Array<string | false | null | undefined>): string => parts.filter(Boolean).join(" ");
+export { cn as cx, cn } from "@/lib/cn";
