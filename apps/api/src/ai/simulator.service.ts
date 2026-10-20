@@ -12,6 +12,7 @@ import {
 import type { CipherBox } from "@crmwsp/crypto";
 import {
   EncryptionNotConfiguredError,
+  PlanLimitExceededError,
   ValidationError,
   type AiTurnOutput,
   type SimulateRequest,
@@ -24,6 +25,7 @@ import {
   inArray,
   knowledgeSources,
   llmConnections,
+  readBudget,
   searchChunks,
   searchChunksText,
   tenants,
@@ -45,6 +47,16 @@ const DEFAULT_CONFIDENCE_THRESHOLD = 0.75;
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 /** Fixed simulated "now" source; the contact is a placeholder, never a real one. */
 const SIM_CONTACT = { name: "Cliente de prueba" };
+
+/**
+ * Monthly AI budget exhausted (same rule as the worker turn, `readBudget`). 402 like the plan
+ * limit; nothing is spent or booked.
+ */
+export class AiBudgetExceededError extends PlanLimitExceededError {
+  constructor() {
+    super("Monthly AI budget exhausted", { details: { key: "ai_budget", reason: "budget_exceeded" } });
+  }
+}
 
 interface ModelCall {
   model: string;
@@ -92,11 +104,14 @@ export class SimulatorService {
       const [conn] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)).limit(1);
       const [tenant] = await tx.select({ name: tenants.name }).from(tenants).limit(1);
       const [config] = await tx.select().from(agentConfigs).where(eq(agentConfigs.isActive, true)).limit(1);
-      return { conn, tenantName: tenant?.name ?? "", config };
+      const budget = conn ? await readBudget(tx, conn) : undefined;
+      return { conn, tenantName: tenant?.name ?? "", config, budgetExceeded: budget?.exceeded === true };
     });
     const conn = ctx.conn;
     if (!conn || !conn.apiKeyEncrypted) throw new ValidationError("Connect and test an AI provider before simulating");
     if (!this.cipher) throw new EncryptionNotConfiguredError();
+    // Budget before any provider call or counter write (ADR 0008), as in the worker prepare().
+    if (ctx.budgetExceeded) throw new AiBudgetExceededError();
 
     // Counts against the plan like a real AI message; refuses (402) at the cap before spending.
     await this.limits.consume(db.tenantId, "ai_messages", 1);

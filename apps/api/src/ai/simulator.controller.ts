@@ -21,7 +21,7 @@ import type { HttpRequest } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { writeAudit } from "../inbox/audit.js";
-import { SimulatorService } from "./simulator.service.js";
+import { AiBudgetExceededError, SimulatorService } from "./simulator.service.js";
 
 const MAX_SCENARIOS = 50;
 
@@ -38,6 +38,7 @@ function toDto(r: AiScenarioRow): AiScenario {
 }
 
 function failureOf(err: unknown): string {
+  if (err instanceof AiBudgetExceededError) return "budget_exceeded";
   if (err instanceof PlanLimitExceededError) return "plan_limit_reached";
   if (err instanceof AppError) return err.message.slice(0, 200);
   return "simulation_failed";
@@ -127,8 +128,14 @@ export class SimulatorController {
       return (req.scenarioIds ? q.where(inArray(aiScenarios.id, req.scenarioIds)) : q).orderBy(asc(aiScenarios.createdAt), asc(aiScenarios.id)).limit(MAX_SCENARIOS);
     });
     const results: ScenarioRunResult[] = [];
+    let budgetStop = false;
     for (const s of rows) {
       const expectations = s.expectations as AiScenarioExpectation[];
+      if (budgetStop) {
+        // Stopped at the first budget refusal: the rest is reported, not run (nothing spent).
+        results.push({ scenarioId: s.id, name: s.name, passed: false, checks: expectations.map((e) => ({ expectation: e, passed: false, detail: "no ejecutado" })), simulation: null, error: "not_run_budget_exceeded" });
+        continue;
+      }
       try {
         const simulation = await this.simulator.simulate(db, {
           messages: s.messages.map((text) => ({ author: "contact" as const, text })),
@@ -138,6 +145,7 @@ export class SimulatorController {
         results.push({ scenarioId: s.id, name: s.name, passed: checks.every((c) => c.passed), checks, simulation, error: null });
       } catch (err) {
         const error = failureOf(err);
+        if (err instanceof AiBudgetExceededError) budgetStop = true;
         results.push({
           scenarioId: s.id,
           name: s.name,

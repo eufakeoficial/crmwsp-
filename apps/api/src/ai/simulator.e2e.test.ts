@@ -296,4 +296,39 @@ describe.skipIf(!hasEnv)("AI simulator (e2e, real Postgres + Redis, mocked LLM)"
 
     expect((await asA("DELETE", `/ai/scenarios/${scn.id}`)).statusCode).toBe(204);
   });
+
+  it("budget at cap: simulate refused with 402, nothing spent; Run all stops at the first refusal", async () => {
+    const save = { provider: "openai", modelCheap: "gpt-5-mini", modelStrong: "gpt-5", monthlyBudgetMinor: 100, budgetCurrency: "USD" };
+    expect((await asA("PUT", "/ai/connection", save)).statusCode).toBe(200);
+    // 1 USD of real spend this month = 100 cents = the cap.
+    await migrator.db.insert(usageLedger).values({
+      tenantId: s.tenantA,
+      kind: "llm_tokens",
+      quantity: "1",
+      unit: "tokens",
+      costMinor: 100n * 1_000_000n,
+      currency: "USD",
+      meta: { unit: "usd_microcents" },
+    });
+    const ledgerCount = async () => (await migrator.db.select({ id: usageLedger.id }).from(usageLedger).where(eq(usageLedger.tenantId, s.tenantA))).length;
+    const ledgerBefore = await ledgerCount();
+    const usedBefore = await aiMessagesUsed(s.tenantA);
+    chatBodies = [];
+
+    const res = await asA("POST", "/ai/simulate", { messages: [{ author: "contact", text: "hola" }] });
+    expect(res.statusCode).toBe(402);
+    expect(res.body).toContain("budget_exceeded");
+    expect(chatBodies).toHaveLength(0);
+    expect(await ledgerCount()).toBe(ledgerBefore);
+    expect(await aiMessagesUsed(s.tenantA)).toBe(usedBefore);
+
+    const all = runScenariosResponseSchema.parse((await asA("POST", "/ai/scenarios/run", {})).json());
+    expect(all.results.length).toBeGreaterThan(1);
+    expect(all.results[0]!.error).toBe("budget_exceeded");
+    expect(all.results.slice(1).every((r) => r.error === "not_run_budget_exceeded" && r.simulation === null)).toBe(true);
+    expect(all.passed).toBe(0);
+    expect(chatBodies).toHaveLength(0);
+    expect(await ledgerCount()).toBe(ledgerBefore);
+    expect(await aiMessagesUsed(s.tenantA)).toBe(usedBefore);
+  });
 });

@@ -13,3 +13,4 @@ export { consumeUsage, readPlanUsage } from "./plan-usage.js";
 export type { CounterKey, PlanUsageSnapshot } from "./plan-usage.js";
 export { enqueueWebhookEvent } from "./webhook-events.js";
 export type { OutboundWebhookEventType } from "./webhook-events.js";
+export { readBudget, type BudgetState } from "./ai-budget.js";
