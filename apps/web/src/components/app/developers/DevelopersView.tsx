@@ -17,11 +17,13 @@ import { Alert, Button, Card, Input, Label } from "@/components/ui";
 import { developersApi } from "@/lib/developers-api";
 import { errorMessage } from "@/lib/messages";
 
-const SCOPE_LABELS: Record<ApiKeyScope, string> = {
+/** Scopes offered in the UI: only those with a public endpoint (`write:messages` has none yet). */
+type OfferedScope = Exclude<ApiKeyScope, "write:messages">;
+const SCOPE_LABELS: Record<OfferedScope, string> = {
   "read:orders": "Leer pedidos",
   "read:contacts": "Leer contactos",
-  "write:messages": "Enviar mensajes (próximamente)",
 };
+const OFFERED_SCOPES = apiKeyScopes.filter((s): s is OfferedScope => s !== "write:messages");
 
 const EVENT_LABELS: Record<WebhookEventType, string> = {
   "order.created": "Pedido creado",
@@ -132,7 +134,7 @@ function ApiKeysCard({ canEdit }: { canEdit: boolean }) {
           </div>
           <fieldset className="m-0 flex flex-wrap gap-4 border-0 p-0">
             <legend className="mb-1 text-sm">Permisos</legend>
-            {apiKeyScopes.map((s) => (
+            {OFFERED_SCOPES.map((s) => (
               <label key={s} className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={scopes.includes(s)} onChange={() => setScopes((v) => toggle(v, s))} />
                 {SCOPE_LABELS[s]}

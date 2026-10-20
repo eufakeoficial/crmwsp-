@@ -1,4 +1,4 @@
-import { Building2, ChartColumn, CreditCard, History, House, LifeBuoy, Plug, Receipt, Settings, UserCheck, Users, type LucideIcon } from "lucide-react";
+import { Building2, ChartColumn, CreditCard, History, House, Plug, Receipt, Settings, UserCheck, Users, type LucideIcon } from "lucide-react";
 
 export interface AdminNavItem {
   key: string;
@@ -16,7 +16,7 @@ export interface AdminNavGroup {
 
 export const ADMIN_BASE = "/app/admin";
 
-/** SaaS backoffice menu (ADR 0011). Routes without a page yet show an EmptyState. */
+/** SaaS backoffice menu (ADR 0011). Every item has a page; unknown routes are a real 404. */
 export const ADMIN_NAV: readonly AdminNavGroup[] = [
   { id: "home", title: "", items: [{ key: "home", label: "Inicio", href: ADMIN_BASE, icon: House }] },
   {
@@ -42,7 +42,6 @@ export const ADMIN_NAV: readonly AdminNavGroup[] = [
     id: "support",
     title: "SOPORTE",
     items: [
-      { key: "tickets", label: "Incidencias", href: `${ADMIN_BASE}/tickets`, icon: LifeBuoy },
       { key: "audit", label: "Registro de actividad", href: `${ADMIN_BASE}/audit`, icon: History },
     ],
   },

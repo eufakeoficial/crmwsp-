@@ -3,7 +3,7 @@ import { OptionCard } from "@/components/ui";
 import { AI_PROVIDERS, type AiProvider } from "@crmwsp/contracts";
 import { PROVIDER_GUIDES } from "./provider-guides";
 
-/** Step 1: provider cards, the (disabled) SaaS credits alternative and the OpenCode Go warning. */
+/** Step 1: provider cards and the OpenCode Go warning. */
 export function ProviderPicker({ value, onChange, disabled }: { value: AiProvider; onChange: (p: AiProvider) => void; disabled: boolean }) {
   return (
     <div className="flex flex-col gap-3">
@@ -18,13 +18,6 @@ export function ProviderPicker({ value, onChange, disabled }: { value: AiProvide
             </OptionCard>
           );
         })}
-      </div>
-      <div aria-disabled="true" className="flex flex-wrap items-center gap-3 rounded-[18px] border-2 border-dashed border-line-2 bg-paper-2 p-4 text-muted">
-        <div className="min-w-0 flex-1">
-          <b className="block text-ink-3">Usar créditos de CRMWSP</b>
-          <span className="text-sm">Sin key propia: pagas por uso a través de CRMWSP, con límite mensual.</span>
-        </div>
-        <span className="rounded-full bg-paper px-3 py-1 text-xs font-extrabold text-ink-3">Próximamente</span>
       </div>
       <div role="note" className="flex gap-2.5 rounded-[18px] bg-warning-soft p-3.5 text-[14px] text-warning">
         <AlertTriangle aria-hidden className="mt-0.5 size-5 flex-none" />

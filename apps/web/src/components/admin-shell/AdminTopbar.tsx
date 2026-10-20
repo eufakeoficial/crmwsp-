@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Menu, Search } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LogoMark } from "@/components/brand/Logo";
@@ -10,7 +10,7 @@ import { ADMIN_BASE } from "./nav";
 
 const DARK_FOCUS = "focus-visible:outline-lime";
 
-/** Fixed 64px black header: menu (mobile), logo, global search, notifications and profile. */
+/** Fixed 64px black header: menu (mobile), logo, global search and profile. */
 export function AdminTopbar({ drawerOpen, onToggleDrawer, onCloseDrawer }: { drawerOpen: boolean; onToggleDrawer: () => void; onCloseDrawer: () => void }) {
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -41,13 +41,10 @@ export function AdminTopbar({ drawerOpen, onToggleDrawer, onCloseDrawer }: { dra
           <span className="hidden rounded-md bg-ink px-2 py-0.5 text-xs font-bold whitespace-nowrap desk:inline">Ctrl + K</span>
         </button>
         <div className="flex flex-none items-center gap-2.5 min-[640px]:ml-auto">
-          <button type="button" aria-disabled="true" title="Notificaciones: próximamente" aria-label="Notificaciones" className={`grid size-[42px] place-items-center rounded-full bg-ink-2 text-white ${DARK_FOCUS}`}>
-            <Bell aria-hidden className="size-[18px]" />
-          </button>
           <Link href="/app" className={`hidden min-h-[42px] items-center rounded-full bg-ink-2 px-3.5 text-[13px] font-bold whitespace-nowrap text-white no-underline min-[640px]:flex ${DARK_FOCUS}`}>
             Ir a mi negocio
           </Link>
-          <UserMenu />
+          <UserMenu tone="lime" />
         </div>
       </header>
       {searchOpen ? <AdminSearch onClose={() => setSearchOpen(false)} /> : null}
