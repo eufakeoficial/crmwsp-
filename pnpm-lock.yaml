@@ -199,6 +199,9 @@ importers:
       '@crmwsp/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@crmwsp/knowledge':
+        specifier: workspace:*
+        version: link:../../packages/knowledge
       '@crmwsp/mailer':
         specifier: workspace:*
         version: link:../../packages/mailer

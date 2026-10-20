@@ -29,6 +29,7 @@ import { cancelFollowUpsForConversation } from "./followups/pg-store.js";
 import { contactAutomationsPaused, routeInbound } from "./inbox/routing.js";
 import { STORE_MEDIA_JOB, STORE_MEDIA_JOB_OPTIONS, storeMediaJobId, type StoreMediaJobData } from "./media/job.js";
 import { enqueueOwnerCommand, ownerModeHook } from "./owner-mode/ingest-hook.js";
+import { enqueueOrderExtraction } from "./order-extraction/queue.js";
 
 /** Minimal publisher (ioredis satisfies it). */
 export interface EventPublisher {
@@ -52,6 +53,8 @@ export interface ProcessorDeps {
   mediaQueue?: Pick<Queue, "add">;
   /** `owner-mode` queue (F9); messages from verified owner phones never enter the customer pipeline. */
   ownerQueue?: Pick<Queue, "add">;
+  /** `order-extraction` queue (F4); when absent, media messages are not scanned for orders. */
+  orderExtractionQueue?: Pick<Queue, "add">;
 }
 
 export type InboxEventType = "message.received" | "message.created" | "message.status" | "conversation.updated";
@@ -75,6 +78,8 @@ interface IngestTxResult extends IngestMessageResult {
   scheduleAiTurn: boolean;
   /** Attachment whose bytes must be copied to object storage after commit. */
   attachmentId?: string | null;
+  /** Mime type of that attachment (F4 order detection decides on it). */
+  mediaMimeType?: string | null;
 }
 
 export interface IngestStatusResult {
@@ -320,9 +325,9 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     }
 
     await markProcessed(tx, eventId);
-    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn, attachmentId };
+    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn, attachmentId, mediaMimeType: m.media?.mimeType ?? null };
   });
-  const { scheduleAiTurn, attachmentId, ...result } = out;
+  const { scheduleAiTurn, attachmentId, mediaMimeType, ...result } = out;
   if (result.ownerCommandId) {
     if (!result.duplicate) await enqueueOwnerCommand(deps.ownerQueue, tenantId, result.ownerCommandId, deps.logger ?? silent);
     return result;
@@ -343,7 +348,20 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
         (deps.logger ?? silent).warn(`could not enqueue store-media (${err instanceof Error ? err.name : "unknown"})`);
       }
     }
-    if (scheduleAiTurn && deps.aiQueue) {
+    // F4: an order-candidate media message (audio/photo/PDF) goes to order extraction INSTEAD of the
+    // AI turn; the extraction replies with the order or schedules the AI turn itself (one reply).
+    const extracting =
+      scheduleAiTurn &&
+      deps.aiQueue !== undefined &&
+      attachmentId !== null &&
+      attachmentId !== undefined &&
+      (await enqueueOrderExtraction(
+        deps.orderExtractionQueue,
+        { tenantId, conversationId: result.conversationId, messageId: result.messageId },
+        mediaMimeType,
+        deps.logger ?? silent,
+      ));
+    if (scheduleAiTurn && deps.aiQueue && !extracting) {
       const data: AiTurnJobData = { tenantId, conversationId: result.conversationId, triggerMessageId: result.messageId };
       try {
         await deps.aiQueue.add(AI_TURN_JOB, data, { ...AI_JOB_OPTIONS, jobId: aiTurnJobId(result.messageId) });
