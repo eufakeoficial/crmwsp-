@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo, LogoMark } from "@/components/brand/Logo";
 import { cn } from "@/lib/cn";
+import { UserMenu } from "./UserMenu";
 import { NAV_MAIN, NAV_SECONDARY, type NavItem, isActive } from "./nav-items";
 
 /** Red counters per nav key, e.g. `{ inbox: 3 }`. Empty until real data exists. */
@@ -85,11 +86,12 @@ function AppRail({ counts = {} }: { counts?: NavCounts }) {
   return (
     <nav
       aria-label="Principal"
-      className="fixed inset-y-0 left-0 z-[25] hidden w-[72px] flex-col items-center gap-1 overflow-y-auto bg-ink py-3 [scrollbar-width:none] desk:flex"
+      className="fixed inset-y-0 left-0 z-[25] hidden w-[72px] flex-col items-center bg-ink py-3 desk:flex"
     >
-      <Link href="/app" aria-label="CRMWSP, ir al inicio" title="CRMWSP" className="mb-2 rounded-xl no-underline">
+      <Link href="/app" aria-label="CRMWSP, ir al inicio" title="CRMWSP" className="mb-2 flex-none rounded-xl no-underline">
         <LogoMark size={36} />
       </Link>
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto [scrollbar-width:none]">
       {items.map((item) => {
         const Icon = item.icon;
         const active = isActive(pathname, item.href);
@@ -116,6 +118,8 @@ function AppRail({ counts = {} }: { counts?: NavCounts }) {
           </Link>
         );
       })}
+      </div>
+      <UserMenu placement="rail" className="pt-2 pb-10" />
     </nav>
   );
 }

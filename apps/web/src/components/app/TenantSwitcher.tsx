@@ -1,20 +1,16 @@
 "use client";
 
-import { Check, ChevronDown, LogOut, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { ROLE_LABELS } from "./roles";
 import { useSession } from "./SessionProvider";
-import { usePlatformMe } from "@/components/platform/use-platform-me";
 
-/** White pill with the active company and a lime chevron button; opens the company list and logout. */
+/** White pill with the active company and a lime chevron button; opens the company list. */
 export function TenantSwitcher() {
-  const { me, tenant, selectTenant, logout } = useSession();
+  const { me, tenant, selectTenant } = useSession();
   const [open, setOpen] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
-  const isPlatformAdmin = usePlatformMe();
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -80,29 +76,6 @@ export function TenantSwitcher() {
               {t.id === tenant?.id ? <Check aria-hidden className="size-4" /> : null}
             </button>
           ))}
-          {isPlatformAdmin ? (
-            <Link
-              href="/app/admin"
-              onClick={() => setOpen(false)}
-              className="mt-1 flex min-h-11 items-center gap-2.5 rounded-xl border-t border-paper px-2.5 font-bold hover:bg-paper"
-              data-testid="platform-admin-link"
-            >
-              <ShieldCheck aria-hidden className="size-[18px]" />
-              Admin
-            </Link>
-          ) : null}
-          <button
-            type="button"
-            disabled={loggingOut}
-            onClick={() => {
-              setLoggingOut(true);
-              void logout();
-            }}
-            className="mt-1 flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border-t border-paper px-2.5 font-bold text-danger hover:bg-paper disabled:opacity-50"
-          >
-            <LogOut aria-hidden className="size-[18px]" />
-            Cerrar sesión
-          </button>
         </div>
       ) : null}
     </div>

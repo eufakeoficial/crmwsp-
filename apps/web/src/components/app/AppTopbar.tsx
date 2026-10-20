@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { NotificationBell } from "./notifications/NotificationBell";
 import { TenantSwitcher } from "./TenantSwitcher";
+import { UserMenu } from "./UserMenu";
 import { useSession } from "./SessionProvider";
 
 const ROUND = "grid size-9 flex-none place-items-center rounded-full";
@@ -33,6 +34,7 @@ export function AppTopbar({ menuOpen, onToggleMenu, hideOnDesktop = false }: { m
         <Plus aria-hidden className="size-5" />
         Nuevo presupuesto
       </Link>
+      <UserMenu />
     </header>
   );
 }
