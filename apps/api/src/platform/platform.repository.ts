@@ -3,8 +3,13 @@ import type {
   LimitsOverride,
   MembershipRole,
   MonthlyPaymentTotal,
+  PlatformAuditEntry,
   PlatformAuditEvent,
+  PlatformChannel,
+  PlatformChannelStatus,
+  PlatformLimitOverride,
   PlatformPlanId,
+  PlatformUser,
   PlatformTenant,
   SubscriptionPayment,
   SubscriptionPaymentMethod,
@@ -152,6 +157,140 @@ export class PlatformRepository {
 
   async setRequireApproval(actor: string, value: boolean, ip: string | null): Promise<void> {
     await this.sql`select public.platform_set_require_approval(${actor}, ${value}, ${ip}::inet)`;
+  }
+
+  // --- 0057: users, channels, plans, usage, audit search ---
+
+  async listUsers(actor: string, q: string | null, userId: string | null = null): Promise<PlatformUser[]> {
+    const rows = await this.sql<
+      {
+        user_id: string;
+        email: string;
+        name: string | null;
+        created_at: Date;
+        last_login_at: Date | null;
+        active_sessions: number;
+        is_platform_admin: boolean;
+        tenants: { tenantId: string; name: string; role: MembershipRole }[];
+      }[]
+    >`select user_id, email, name, created_at, last_login_at, active_sessions, is_platform_admin, tenants
+      from public.platform_user_list(${actor}, ${q}, ${userId})`;
+    return rows.map((r) => ({
+      id: r.user_id,
+      email: r.email,
+      name: r.name,
+      createdAt: iso(r.created_at),
+      lastLoginAt: r.last_login_at ? iso(r.last_login_at) : null,
+      activeSessions: Number(r.active_sessions),
+      isPlatformAdmin: r.is_platform_admin === true,
+      tenants: (r.tenants ?? []).map((t) => ({ tenantId: t.tenantId, name: t.name, role: t.role })),
+    }));
+  }
+
+  async revokeUserSessions(actor: string, userId: string, ip: string | null): Promise<number> {
+    const [r] = await this.sql<{ n: number }[]>`select public.platform_revoke_user_sessions(${actor}, ${userId}, ${ip}::inet) as n`;
+    return Number(r?.n ?? 0);
+  }
+
+  async listChannels(actor: string, status: PlatformChannelStatus | null): Promise<PlatformChannel[]> {
+    const rows = await this.sql<
+      {
+        channel_id: string;
+        tenant_id: string;
+        tenant_name: string;
+        provider: string;
+        phone_last4: string;
+        status: PlatformChannelStatus;
+        created_at: Date;
+        last_inbound_at: Date | null;
+        last_outbound_at: Date | null;
+        failed_7d: number;
+      }[]
+    >`select channel_id, tenant_id, tenant_name, provider, phone_last4, status, created_at, last_inbound_at, last_outbound_at, failed_7d
+      from public.platform_channel_list(${actor}, ${status})`;
+    return rows.map((r) => ({
+      id: r.channel_id,
+      tenantId: r.tenant_id,
+      tenantName: r.tenant_name,
+      provider: r.provider,
+      phoneLast4: r.phone_last4,
+      status: r.status,
+      createdAt: iso(r.created_at),
+      lastInboundAt: r.last_inbound_at ? iso(r.last_inbound_at) : null,
+      lastOutboundAt: r.last_outbound_at ? iso(r.last_outbound_at) : null,
+      failedLast7d: Number(r.failed_7d),
+    }));
+  }
+
+  async planCounts(actor: string): Promise<{ plan: string; status: TenantStatus; count: number }[]> {
+    const rows = await this.sql<{ plan: string; status: TenantStatus; tenant_count: number }[]>`
+      select plan, status, tenant_count from public.platform_plan_counts(${actor})`;
+    return rows.map((r) => ({ plan: r.plan, status: r.status, count: Number(r.tenant_count) }));
+  }
+
+  async limitOverrides(actor: string): Promise<PlatformLimitOverride[]> {
+    const rows = await this.sql<
+      { tenant_id: string; name: string; slug: string; status: TenantStatus; plan: PlatformPlanId; limits_override: LimitsOverride; updated_at: Date }[]
+    >`select tenant_id, name, slug, status, plan, limits_override, updated_at from public.platform_limit_overrides(${actor})`;
+    return rows.map((r) => ({
+      tenantId: r.tenant_id,
+      name: r.name,
+      slug: r.slug,
+      status: r.status,
+      plan: r.plan,
+      limitsOverride: r.limits_override,
+      updatedAt: iso(r.updated_at),
+    }));
+  }
+
+  async usage(
+    actor: string,
+    month: string,
+  ): Promise<{ tenantId: string; name: string; slug: string; plan: PlatformPlanId; aiMessages: number; broadcastSends: number; ttsCharacters: number; aiCostMicro: string }[]> {
+    const rows = await this.sql<
+      { tenant_id: string; name: string; slug: string; plan: PlatformPlanId; ai_messages: string; broadcast_sends: string; tts_characters: string; ai_cost_micro: string }[]
+    >`select tenant_id, name, slug, plan, ai_messages, broadcast_sends, tts_characters, ai_cost_micro from public.platform_usage(${actor}, ${month})`;
+    return rows.map((r) => ({
+      tenantId: r.tenant_id,
+      name: r.name,
+      slug: r.slug,
+      plan: r.plan,
+      aiMessages: Number(r.ai_messages),
+      broadcastSends: Number(r.broadcast_sends),
+      ttsCharacters: Number(r.tts_characters),
+      aiCostMicro: String(r.ai_cost_micro),
+    }));
+  }
+
+  async auditSearch(
+    actor: string,
+    f: { actor: string | null; action: string | null; tenantId: string | null; from: Date | null; to: Date | null; limit: number; offset: number },
+  ): Promise<{ items: PlatformAuditEntry[]; total: number }> {
+    const rows = await this.sql<
+      {
+        event_id: string;
+        actor_email: string | null;
+        action: string;
+        tenant_id: string | null;
+        tenant_name: string | null;
+        diff: Record<string, unknown>;
+        created_at: Date;
+        total_count: string;
+      }[]
+    >`select event_id, actor_email, action, tenant_id, tenant_name, diff, created_at, total_count
+      from public.platform_audit_search(${actor}, ${f.actor}, ${f.action}, ${f.tenantId}, ${f.from}, ${f.to}, ${f.limit}, ${f.offset})`;
+    return {
+      total: rows[0] ? Number(rows[0].total_count) : 0,
+      items: rows.map((r) => ({
+        id: r.event_id,
+        actorEmail: r.actor_email,
+        action: r.action,
+        tenantId: r.tenant_id,
+        tenantName: r.tenant_name,
+        diff: r.diff ?? {},
+        createdAt: iso(r.created_at),
+      })),
+    };
   }
 }
 

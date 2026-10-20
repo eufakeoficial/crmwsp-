@@ -88,6 +88,13 @@ describe.skipIf(!hasDb)("platform backoffice (e2e)", () => {
       ["GET", "/platform/payments"],
       ["POST", "/platform/payments"],
       ["PATCH", "/platform/settings"],
+      ["GET", "/platform/users"],
+      ["GET", `/platform/users/${s.adminId}`],
+      ["POST", `/platform/users/${s.adminId}/revoke-sessions`],
+      ["GET", "/platform/channels"],
+      ["GET", "/platform/plans"],
+      ["GET", "/platform/usage"],
+      ["GET", "/platform/audit"],
     ] as const) {
       const res = await call(m, url, { cookie: s.clientCookie, payload: {} });
       expect(res.statusCode, `${m} ${url}`).toBe(404);
@@ -177,6 +184,44 @@ describe.skipIf(!hasDb)("platform backoffice (e2e)", () => {
     expect((await asAdmin("POST", `/platform/tenants/${l.tenant}/status`, { action: "approve" })).statusCode).toBe(200);
     expect(sent.at(-1)).toMatchObject({ to: late.email });
     expect((await call("GET", "/team/invitations", { cookie: l.cookie, tenant: l.tenant })).statusCode).toBe(200);
+  });
+
+  it("backoffice sections: users, channels, plans, usage and audit (whitelisted fields)", async () => {
+    const users = await asAdmin("GET", `/platform/users?q=${encodeURIComponent(client.email)}`);
+    expect(users.statusCode).toBe(200);
+    const items = (users.json() as { items: Record<string, unknown>[] }).items;
+    expect(items).toHaveLength(1);
+    expect(Object.keys(items[0]!).sort()).toEqual(["activeSessions", "createdAt", "email", "id", "isPlatformAdmin", "lastLoginAt", "name", "tenants"]);
+    expect(items[0]).toMatchObject({ email: client.email, isPlatformAdmin: false, tenants: [{ tenantId: s.clientTenant, role: "owner" }] });
+    expect(JSON.stringify(items)).not.toMatch(/password|token|hash/i);
+    const clientId = items[0]!["id"] as string;
+    expect((await asAdmin("GET", `/platform/users/${clientId}`)).statusCode).toBe(200);
+    expect((await asAdmin("GET", `/platform/users/${randomUUID()}`)).statusCode).toBe(404);
+
+    const channels = await asAdmin("GET", "/platform/channels?status=active");
+    expect(channels.statusCode).toBe(200);
+    expect(JSON.stringify(channels.json())).not.toMatch(/webhook|credential|externalApp/i);
+    expect((await asAdmin("GET", "/platform/channels?status=bogus")).statusCode).toBe(400);
+
+    const plans = (await asAdmin("GET", "/platform/plans")).json() as { plans: { id: string; priceMonthlyUsd: number }[]; overrides: { tenantId: string }[] };
+    expect(plans.plans.map((p) => p.id)).toEqual(["start", "pro"]);
+    expect(plans.overrides.map((o) => o.tenantId)).toContain(s.clientTenant);
+
+    const usage = await asAdmin("GET", "/platform/usage?month=2026-10");
+    expect(usage.statusCode).toBe(200);
+    expect(usage.json()).toMatchObject({ month: "2026-10", totals: { aiCostUsd: expect.any(Number) } });
+    expect((await asAdmin("GET", "/platform/usage?month=2026-13")).statusCode).toBe(400);
+
+    const audit = (await asAdmin("GET", `/platform/audit?tenantId=${s.clientTenant}&action=tenant.`)).json() as { items: { action: string; tenantName: string }[]; total: number; pageSize: number };
+    expect(audit.total).toBeGreaterThanOrEqual(3);
+    expect(audit.items[0]?.tenantName).toBe(client.tenantName);
+
+    const revoke = await asAdmin("POST", `/platform/users/${clientId}/revoke-sessions`);
+    expect(revoke.statusCode).toBe(200);
+    expect((revoke.json() as { revoked: number }).revoked).toBeGreaterThanOrEqual(1);
+    expect((await call("GET", "/auth/me", { cookie: s.clientCookie })).statusCode).toBe(401);
+    const logged = (await asAdmin("GET", "/platform/audit?action=user.sessions_revoked")).json() as { items: { diff: { userId: string } }[] };
+    expect(logged.items[0]?.diff.userId).toBe(clientId);
   });
 
   it("revoking the admin row takes effect on the next request", async () => {
