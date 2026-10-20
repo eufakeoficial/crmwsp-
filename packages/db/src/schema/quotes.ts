@@ -71,6 +71,9 @@ export const products = pgTable(
     version: integer("version").notNull().default(1),
     priceSource: productPriceSource("price_source").notNull().default("manual"),
     knowledgeChunkId: uuid("knowledge_chunk_id"),
+    /** Catalog synced from an external store (e.g. 'shopify'); both NULL for manual products. */
+    externalSource: text("external_source"),
+    externalId: text("external_id"),
     validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -88,6 +91,10 @@ export const products = pgTable(
       columns: [t.tenantId, t.knowledgeChunkId],
       foreignColumns: [knowledgeChunks.tenantId, knowledgeChunks.id],
     }).onDelete("set null"),
+    uniqueIndex("products_tenant_external_unique")
+      .on(t.tenantId, t.externalSource, t.externalId)
+      .where(sql`${t.externalSource} IS NOT NULL`),
+    check("products_external_pair_check", sql`(${t.externalSource} IS NULL) = (${t.externalId} IS NULL)`),
     check("products_price_check", sql`${t.priceMinor} >= 0`),
     check("products_tax_rate_check", sql`${t.taxRateBp} BETWEEN 0 AND 10000`),
   ],

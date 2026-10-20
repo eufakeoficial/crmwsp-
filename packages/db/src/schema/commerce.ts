@@ -65,6 +65,9 @@ export const productVariants = pgTable(
     stockReserved: integer("stock_reserved").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     position: integer("position").notNull().default(0),
+    /** Synced variant id of the external store; NULL for manual variants. */
+    externalSource: text("external_source"),
+    externalId: text("external_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -81,6 +84,10 @@ export const productVariants = pgTable(
       columns: [t.tenantId, t.productId],
       foreignColumns: [products.tenantId, products.id],
     }).onDelete("cascade"),
+    uniqueIndex("product_variants_tenant_external_unique")
+      .on(t.tenantId, t.externalSource, t.externalId)
+      .where(sql`${t.externalSource} IS NOT NULL`),
+    check("product_variants_external_pair_check", sql`(${t.externalSource} IS NULL) = (${t.externalId} IS NULL)`),
     check("product_variants_stock_on_hand_check", sql`${t.stockOnHand} >= 0`),
     check("product_variants_stock_reserved_check", sql`${t.stockReserved} >= 0`),
     check("product_variants_price_check", sql`${t.priceMinor} IS NULL OR ${t.priceMinor} >= 0`),

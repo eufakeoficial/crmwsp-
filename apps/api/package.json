@@ -31,7 +31,8 @@
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "zod": "4.6.7",
-    "@crmwsp/payments": "workspace:*"
+    "@crmwsp/payments": "workspace:*",
+    "@crmwsp/integrations": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/testing": "11.2.7",
