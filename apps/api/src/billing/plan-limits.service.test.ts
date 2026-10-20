@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const snapshot: PlanUsageSnapshot = {
   plan: null,
+  limitsOverride: null,
   period: "2026-10",
   aiMessages: 1_999,
   broadcastSends: 0,
@@ -42,6 +43,23 @@ describe("PlanLimitsService", () => {
 
   it("consume throws when the atomic increment is refused", async () => {
     await expect(svc.consume(T, "broadcast_sends", 5, tx)).rejects.toBeInstanceOf(PlanLimitExceededError);
+  });
+
+  it("limits_override raises and lowers caps; null keeps the plan default", async () => {
+    snapshot.limitsOverride = { contacts: 20_000, seats: 2, ai_messages: null };
+    try {
+      await expect(svc.assert(T, "contacts", 1, tx)).resolves.toBeUndefined();
+      const err = await svc.assert(T, "seats", 1, tx).catch((e: unknown) => e);
+      expect((err as PlanLimitExceededError).details).toMatchObject({ key: "seats", limit: 2, reason: "limit_reached" });
+      await expect(svc.assert(T, "ai_messages", 1_000_000, tx)).resolves.toBeUndefined();
+      const r = await svc.snapshot(tx);
+      expect(r.usage.find((u) => u.key === "contacts")).toMatchObject({ limit: 20_000 });
+      expect(r.usage.find((u) => u.key === "whatsapp_numbers")).toMatchObject({ limit: 2 });
+    } finally {
+      snapshot.limitsOverride = null;
+    }
+    const err = await svc.assert(T, "contacts", 1, tx).catch((e: unknown) => e);
+    expect((err as PlanLimitExceededError).details).toMatchObject({ limit: 10_000 });
   });
 
   it("snapshot exposes plan, period and usage without a billing provider", async () => {

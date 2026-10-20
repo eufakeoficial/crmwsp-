@@ -11,7 +11,7 @@ import {
 } from "@crmwsp/ai";
 import { AI_ACTION_TYPES, aiActionSchema } from "@crmwsp/contracts";
 import type { AiActionType, AiDecision, AiTurnOutput } from "@crmwsp/contracts";
-import { checkLimit, getPlan } from "@crmwsp/billing";
+import { checkLimit, resolveEffectivePlan } from "@crmwsp/billing";
 import {
   agentConfigs,
   consumeUsage,
@@ -354,7 +354,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
 
   // Plan limit (monthly AI messages): same contract as the budget, the AI stops, the inbox doesn't.
   const usage = await readPlanUsage(tx);
-  if (!checkLimit(getPlan(usage.plan), "ai_messages", usage.aiMessages, 1).allowed) {
+  if (!checkLimit(resolveEffectivePlan(usage.plan, usage.limitsOverride), "ai_messages", usage.aiMessages, 1).allowed) {
     await handoffWriter(tx, c, events).record("plan_limit_reached", null);
     return { done: { result: { outcome: "handoff", reason: "plan_limit_reached" }, events, connection: conn } };
   }

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { checkLimit, getPlan, isMonthlyLimit, summarizeUsage, type LimitKey, type MonthlyLimitKey } from "@crmwsp/billing";
+import { checkLimit, isMonthlyLimit, resolveEffectivePlan, summarizeUsage, type LimitKey, type MonthlyLimitKey } from "@crmwsp/billing";
 import { PlanLimitExceededError, type BillingPlanResponse } from "@crmwsp/contracts";
 import { consumeUsage, readPlanUsage, withTenant, type DbHandle, type PlanUsageSnapshot, type Transaction } from "@crmwsp/db";
 import { DB_HANDLE } from "../common/http.js";
@@ -30,7 +30,7 @@ export class PlanLimitsService {
   /** Throws `PlanLimitExceededError` (402) if `amount` more units would exceed the plan. Consumes nothing. */
   async assert(tenantId: string, key: LimitKey, amount = 1, tx?: Transaction): Promise<void> {
     const snapshot = await this.run(tenantId, tx, readPlanUsage);
-    const plan = getPlan(snapshot.plan);
+    const plan = resolveEffectivePlan(snapshot.plan, snapshot.limitsOverride);
     const result = checkLimit(plan, key, usedByKey(snapshot)[key], amount);
     if (!result.allowed) {
       throw new PlanLimitExceededError(`Plan ${plan.name}: ${key} ${result.reason}`, {
@@ -45,7 +45,8 @@ export class PlanLimitsService {
    */
   async consume(tenantId: string, key: MonthlyLimitKey, amount: number, tx?: Transaction): Promise<number> {
     return this.run(tenantId, tx, async (t) => {
-      const plan = getPlan((await readPlanUsage(t)).plan);
+      const usage = await readPlanUsage(t);
+      const plan = resolveEffectivePlan(usage.plan, usage.limitsOverride);
       const limit = plan.limits[key];
       const total = await consumeUsage(t, tenantId, key, amount, limit);
       if (total === null) {
@@ -59,7 +60,7 @@ export class PlanLimitsService {
 
   async snapshot(tx: Transaction): Promise<BillingPlanResponse> {
     const s = await readPlanUsage(tx);
-    const plan = getPlan(s.plan);
+    const plan = resolveEffectivePlan(s.plan, s.limitsOverride);
     const items = summarizeUsage(plan, usedByKey(s));
     return {
       plan: { id: plan.id, name: plan.name, priceMonthlyUsd: plan.priceMonthlyUsd, priceAnnualUsd: plan.priceAnnualUsd },

@@ -135,8 +135,12 @@ describe.skipIf(!hasDb)("platform backoffice (e2e)", () => {
     const res = await asAdmin("PUT", `/platform/tenants/${s.clientTenant}/plan`, { plan: "pro", limitsOverride: { seats: 40 } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ plan: "pro", limitsOverride: { seats: 40 } });
-    const usage = await call("GET", "/billing/usage", { cookie: s.clientCookie, tenant: s.clientTenant });
-    if (usage.statusCode === 200) expect(JSON.stringify(usage.json())).toContain('"pro"');
+    const billing = await call("GET", "/billing/plan", { cookie: s.clientCookie, tenant: s.clientTenant });
+    expect(billing.statusCode).toBe(200);
+    const bp = billing.json() as { plan: { id: string }; usage: { key: string; limit: number | null }[] };
+    expect(bp.plan.id).toBe("pro");
+    expect(bp.usage.find((u) => u.key === "seats")?.limit).toBe(40);
+    expect(bp.usage.find((u) => u.key === "contacts")?.limit).toBe(30_000);
     const pay = await asAdmin("POST", "/platform/payments", {
       tenantId: s.clientTenant,
       amountMinor: 8900,

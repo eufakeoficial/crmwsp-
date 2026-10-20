@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PLANS, checkLimit, getPlan, isMonthlyLimit, summarizeUsage, usagePeriod } from "../index.js";
+import { PLANS, checkLimit, getPlan, isMonthlyLimit, resolveEffectivePlan, summarizeUsage, usagePeriod } from "../index.js";
 
 describe("plans", () => {
   it("match the landing pricing (seats, contacts, numbers, price)", () => {
@@ -67,5 +67,20 @@ describe("usagePeriod", () => {
     expect(usagePeriod(at)).toBe("2026-11");
     expect(usagePeriod(at, "America/La_Paz")).toBe("2026-10");
     expect(usagePeriod(at, "Not/AZone")).toBe("2026-11");
+  });
+});
+
+describe("resolveEffectivePlan", () => {
+  it("override raises and lowers caps per key; null means unlimited", () => {
+    const p = resolveEffectivePlan("start", { seats: 50, ai_messages: 10, contacts: null });
+    expect(p.limits).toMatchObject({ seats: 50, ai_messages: 10, contacts: null, whatsapp_numbers: 2, broadcast_sends: 0 });
+    expect(checkLimit(p, "ai_messages", 10, 1).allowed).toBe(false);
+    expect(checkLimit(p, "seats", 20, 1).allowed).toBe(true);
+  });
+
+  it("null or invalid override keeps the plan defaults", () => {
+    expect(resolveEffectivePlan("pro", null).limits).toEqual(PLANS.pro.limits);
+    expect(resolveEffectivePlan("pro", { seats: -1, bogus: 3, contacts: 1.5 }).limits).toEqual(PLANS.pro.limits);
+    expect(PLANS.start.limits.seats).toBe(5);
   });
 });

@@ -45,8 +45,9 @@ rechazada/suspendida), el `TenantGuard` le responde 403 en toda la API del panel
 
 **Planes.** El admin cambia el plan (Start/Pro) y, opcionalmente, guarda límites a medida en
 `tenant_plans.limits_override`. El cambio de plan es efectivo en la siguiente petición (el plan se
-lee en cada comprobación). Los límites a medida quedan guardados y visibles en el backoffice; su
-aplicación en `@crmwsp/billing` (`getPlan`) es un paso posterior.
+lee en cada comprobación). Los límites a medida se aplican por clave: límite efectivo = override ??
+límite del plan (`resolveEffectivePlan` en `@crmwsp/billing`), en `PlanLimitsService`, `GET /billing/plan`
+y el turno de IA del worker.
 
 **Cobros de suscripción.** `subscription_payments` (importe en unidades menores, moneda, periodo,
 método `transfer | cash | card_manual | mercadopago | stripe`, referencia, notas, quién lo registró)
@@ -62,4 +63,4 @@ en USD, sin descuentos), cobros del mes y nº de atrasados.
   vía entre tenants es un conjunto cerrado de funciones auditables y testeadas.
 - `list_user_tenants` devuelve también el estado (cambio de tipo de retorno: se recrea).
 - Revocar un admin es inmediato (se comprueba en cada petición).
-- Pendiente: aplicar `limits_override` en el cálculo de límites y un historial de usuarios global.
+- Pendiente: un historial de usuarios global y aplicar `limits_override` también en el modo dueño del worker.

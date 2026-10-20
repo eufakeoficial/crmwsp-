@@ -3,6 +3,7 @@ import { inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type DbHandle } from "../client.js";
 import { runMigrations } from "../migrate.js";
+import { readPlanUsage } from "../plan-usage.js";
 import { channelConnections, memberships, tenants, users } from "../schema/index.js";
 import { dangerouslyWithoutTenant, withTenant } from "../with-tenant.js";
 
@@ -179,6 +180,10 @@ describe.skipIf(!hasDb)("platform admin: table privileges and definer functions"
     await app.sql`select public.platform_set_tenant_plan(${s.admin}, ${s.tenant}, 'pro', ${JSON.stringify({ seats: 30 })}::jsonb, null)`;
     const plan = await withTenant(app.db, s.tenant, (tx) => tx.execute<{ plan: string }>("select plan from tenant_plans" as never));
     expect(plan[0]?.plan).toBe("pro");
+    const usage = await withTenant(app.db, s.tenant, readPlanUsage);
+    expect(usage.limitsOverride).toEqual({ seats: 30 });
+    const other = await withTenant(app.db, s.other, readPlanUsage);
+    expect(other.limitsOverride).toBeNull();
     const bad = await settle(app.sql`select public.platform_set_tenant_plan(${s.admin}, ${s.tenant}, 'gold', null, null)`);
     expect(pgCode(bad)).toBe("22023");
   });
