@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, char, check, foreignKey, index, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, char, check, date, foreignKey, index, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { bytea } from "./channel-connections.js";
 import { orders } from "./commerce.js";
 import { contacts } from "./contacts.js";
@@ -136,3 +136,81 @@ export const capiEvents = pgTable(
   ],
 );
 export type CapiEvent = typeof capiEvents.$inferSelect;
+
+/**
+ * Meta Marketing API (Insights) source of a tenant (BYOK, `ads_read`). The access token only as
+ * ciphertext (AAD = tenant + purpose); never returned nor logged. Also holds the thresholds of
+ * the "escalar / pausar" recommendations (recommendations only: nothing is changed in Meta).
+ */
+export const metaAdsConnections = pgTable(
+  "meta_ads_connections",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    /** `act_<digits>`. */
+    adAccountId: text("ad_account_id").notNull(),
+    adAccountName: text("ad_account_name"),
+    /** Ad account currency as reported by Meta (spend is stored in it). */
+    currency: char("currency", { length: 3 }),
+    accessTokenEncrypted: bytea("access_token_encrypted").notNull(),
+    tokenHint: text("token_hint"),
+    status: text("status", { enum: ["active", "disabled"] }).notNull().default("active"),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    lastSyncStatus: text("last_sync_status", { enum: ["ok", "error"] }),
+    /** Sanitized error (HTTP status / Meta error code); never the token nor the request. */
+    lastSyncError: text("last_sync_error"),
+    /** Recommendation thresholds. ROAS in basis points (300 = 3.00x). Money in account-currency minor units. */
+    targetRoasBp: integer("target_roas_bp").notNull().default(300),
+    breakEvenRoasBp: integer("break_even_roas_bp").notNull().default(100),
+    minSpendMinor: bigint("min_spend_minor", { mode: "number" }).notNull().default(2000),
+    minConversations: integer("min_conversations").notNull().default(5),
+    pauseSpendMinor: bigint("pause_spend_minor", { mode: "number" }).notNull().default(5000),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("meta_ads_connections_tenant_unique").on(t.tenantId),
+    check("meta_ads_connections_status_check", sql`${t.status} IN ('active', 'disabled')`),
+    check("meta_ads_connections_account_check", sql`${t.adAccountId} ~ '^act_[0-9]{1,32}$'`),
+    check("meta_ads_connections_thresholds_check", sql`${t.targetRoasBp} > 0 AND ${t.breakEvenRoasBp} > 0 AND ${t.minSpendMinor} >= 0 AND ${t.minConversations} >= 0 AND ${t.pauseSpendMinor} >= 0`),
+  ],
+);
+export type MetaAdsConnection = typeof metaAdsConnections.$inferSelect;
+
+/**
+ * Daily spend per ad synced from the Insights API (`time_increment=1`). One row per
+ * (tenant, ad, day); a re-sync overwrites the day. Takes precedence over the manual `ad_spend`
+ * total for the same ad.
+ */
+export const adSpendDaily = pgTable(
+  "ad_spend_daily",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    adId: text("ad_id").notNull(),
+    date: date("date", { mode: "string" }).notNull(),
+    spendMinor: bigint("spend_minor", { mode: "number" }).notNull(),
+    currency: char("currency", { length: 3 }).notNull(),
+    impressions: bigint("impressions", { mode: "number" }).notNull().default(0),
+    clicks: bigint("clicks", { mode: "number" }).notNull().default(0),
+    /** Meta-reported messaging conversations started (informational; the CRM count comes from ad_attributions). */
+    metaConversations: integer("meta_conversations").notNull().default(0),
+    adName: text("ad_name"),
+    adsetId: text("adset_id"),
+    adsetName: text("adset_name"),
+    campaignId: text("campaign_id"),
+    campaignName: text("campaign_name"),
+    adAccountId: text("ad_account_id").notNull(),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("ad_spend_daily_tenant_ad_date_unique").on(t.tenantId, t.adId, t.date),
+    index("ad_spend_daily_tenant_date_idx").on(t.tenantId, t.date),
+    check("ad_spend_daily_amounts_check", sql`${t.spendMinor} >= 0 AND ${t.impressions} >= 0 AND ${t.clicks} >= 0 AND ${t.metaConversations} >= 0`),
+  ],
+);
+export type AdSpendDaily = typeof adSpendDaily.$inferSelect;

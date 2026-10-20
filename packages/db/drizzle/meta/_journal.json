@@ -344,6 +344,20 @@
       "when": 1792530010000,
       "tag": "0052_rls_platform_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792550000000,
+      "tag": "0055_meta_ads_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792550010000,
+      "tag": "0056_rls_meta_ads_sync",
+      "breakpoints": true
     }
   ]
 }

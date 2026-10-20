@@ -78,3 +78,4 @@ export function computeRoas(revenue: CurrencyMinor[], spend: CurrencyMinor[]): A
     return { currency, revenueMinor, spendMinor, roas: spendMinor > 0 ? Math.round((revenueMinor / spendMinor) * 100) / 100 : null };
   });
 }
+export * from "./recommendations.js";
