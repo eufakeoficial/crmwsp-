@@ -11,8 +11,11 @@ import {
 } from "@crmwsp/ai";
 import { AI_ACTION_TYPES, aiActionSchema } from "@crmwsp/contracts";
 import type { AiActionType, AiDecision, AiTurnOutput } from "@crmwsp/contracts";
+import { checkLimit, getPlan } from "@crmwsp/billing";
 import {
   agentConfigs,
+  consumeUsage,
+  readPlanUsage,
   aiActions,
   attachments,
   contacts,
@@ -341,6 +344,13 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
   if (budget.exceeded) {
     await handoffWriter(tx, c, events).record("budget_exceeded", null);
     return { done: { result: { outcome: "handoff", reason: "budget_exceeded" }, events, connection: conn } };
+  }
+
+  // Plan limit (monthly AI messages): same contract as the budget, the AI stops, the inbox doesn't.
+  const usage = await readPlanUsage(tx);
+  if (!checkLimit(getPlan(usage.plan), "ai_messages", usage.aiMessages, 1).allowed) {
+    await handoffWriter(tx, c, events).record("plan_limit_reached", null);
+    return { done: { result: { outcome: "handoff", reason: "plan_limit_reached" }, events, connection: conn } };
   }
 
   const [tenant] = await tx.select({ name: tenants.name }).from(tenants).limit(1);
@@ -679,6 +689,9 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
 
   // The provider cost was incurred whatever happens next.
   await recordUsage(tx, c, p.calls, p.queryEmbeddingTokens);
+  // One AI message per turn that reached the provider. Recorded uncapped: the cap is enforced
+  // before the provider call (prepare), and the cost was incurred anyway.
+  if (p.calls.length > 0) await consumeUsage(tx, tenantId, "ai_messages", 1, null);
 
   // Re-validate under a row lock: the conversation may have changed while the LLM was thinking.
   const [conv] = await tx

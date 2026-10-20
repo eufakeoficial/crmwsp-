@@ -9,3 +9,5 @@ export type { ChunkHit, SearchChunksParams, SearchChunksTextParams } from "./kno
 // package's drizzle-orm instance and types instead of resolving their own.
 export { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 export { computeLineTotal, divRoundHalfEven } from "./line-total.js";
+export { consumeUsage, readPlanUsage } from "./plan-usage.js";
+export type { CounterKey, PlanUsageSnapshot } from "./plan-usage.js";
