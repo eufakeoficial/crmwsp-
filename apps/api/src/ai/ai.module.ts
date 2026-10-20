@@ -6,11 +6,12 @@ import { ChannelsModule } from "../channels/channels.module.js";
 import { AI_QUEUE, aiQueueName } from "./ai.constants.js";
 import { AiActionsController } from "./ai-actions.controller.js";
 import { AiController } from "./ai.controller.js";
+import { BotTemplatesController } from "./bot-templates.controller.js";
 import { LlmProviderFactory } from "./llm-provider.factory.js";
 
 @Module({
   imports: [AuthModule, ChannelsModule],
-  controllers: [AiController, AiActionsController],
+  controllers: [AiController, AiActionsController, BotTemplatesController],
   providers: [
     LlmProviderFactory,
     {
