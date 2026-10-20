@@ -9,6 +9,7 @@ import { DecryptionError, type CipherBox } from "@crmwsp/crypto";
 import { isUuid, type Database, type LlmConnection } from "@crmwsp/db";
 import { UnrecoverableError, type Queue } from "bullmq";
 import type { LockRedis } from "./lock.js";
+import type { MediaLoader } from "./transcribe.js";
 import { tenantChannel, type EventPublisher, type InboxEvent, type Logger } from "../processors.js";
 
 /** AAD purpose of the encrypted BYOK LLM key (ADR 0008; same as the API's llm connections). */
@@ -42,6 +43,8 @@ export interface AiDeps {
   lookup?: LookupFn;
   /** Default embedding model when the connection does not configure one. */
   embeddingModel?: string;
+  /** Downloads inbound media (voice notes) for transcription; absent = audio is not transcribed. */
+  loadMedia?: MediaLoader;
   now?: () => Date;
 }
 

@@ -3,7 +3,7 @@ import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
 import { createDb } from "@crmwsp/db";
 import { GupshupProvider } from "@crmwsp/whatsapp";
 import { Queue } from "bullmq";
-import { createAiWorker } from "./ai/index.js";
+import { createAiWorker, createBspMediaLoader } from "./ai/index.js";
 import { AI_QUEUE_NAME, OUTBOUND_QUEUE_NAME, createRedis } from "./queue.js";
 import { createInboundWorker } from "./worker.js";
 import { createOutboundWorker } from "./outbound.js";
@@ -80,6 +80,7 @@ function main(): void {
       cipher,
       outboundQueue,
       lockRedis,
+      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider() }),
       logger,
     });
     ai.on("failed", (job, err) =>

@@ -14,6 +14,7 @@ import type { AiActionType, AiDecision, AiTurnOutput } from "@crmwsp/contracts";
 import {
   agentConfigs,
   aiActions,
+  attachments,
   contacts,
   conversations,
   knowledgeSources,
@@ -39,6 +40,14 @@ import { AI_TURN_MAX_ATTEMPTS, SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS } from
 import { applyConversationHandoff, runAction } from "./actions.js";
 import { maybeWarnBudget, readBudget } from "./budget.js";
 import { withRedisLock } from "./lock.js";
+import {
+  AUDIO_NOT_TRANSCRIBED,
+  DEFAULT_TRANSCRIPTION_MODEL,
+  transcribeAttachment,
+  voiceNoteText,
+  type AudioAttachment,
+  type TranscribeOutcome,
+} from "./transcribe.js";
 import {
   InvalidModelOutputError,
   assertIds,
@@ -122,7 +131,8 @@ function buildQuery(history: Array<{ author: string; body: string | null; type: 
   for (let i = history.length - 1; i >= 0 && picked.length < QUERY_MESSAGES; i--) {
     const m = history[i]!;
     if (m.author !== "contact") break;
-    if (m.body?.trim()) picked.unshift(m.body.trim());
+    const text = m.body?.trim().replace(/^\[voice note\]\s*/, "");
+    if (text && text !== AUDIO_NOT_TRANSCRIBED) picked.unshift(text);
   }
   return picked.join("\n").slice(0, QUERY_MAX_CHARS);
 }
@@ -224,6 +234,9 @@ interface Prepared {
   config: typeof agentConfigs.$inferSelect | undefined;
   contact: typeof contacts.$inferSelect | undefined;
   history: HistoryRow[];
+  /** Trigger audio attachment (voice note) and stored transcripts of earlier voice notes by message id. */
+  triggerAudio: AudioAttachment | undefined;
+  transcripts: Map<string, string>;
 }
 
 /** Writes handoff rows inside `tx`; the conversation is moved to `pending` at most once. */
@@ -291,7 +304,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
   if (!conv) throw new UnrecoverableError("conversation not found");
 
   const [trigger] = await tx
-    .select({ id: messages.id, direction: messages.direction, conversationId: messages.conversationId })
+    .select({ id: messages.id, direction: messages.direction, conversationId: messages.conversationId, type: messages.type })
     .from(messages)
     .where(eq(messages.id, triggerMessageId))
     .limit(1);
@@ -327,7 +340,28 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
     .where(eq(messages.conversationId, conversationId))
     .orderBy(desc(messages.createdAt), desc(messages.id))
     .limit(HISTORY_LIMIT);
-  return { prep: { conn, tenantName: tenant?.name ?? "", config, contact, history: historyDesc.reverse() } };
+  const history = historyDesc.reverse();
+  const audioIds = history.filter((m) => m.type === "audio").map((m) => m.id);
+  if (trigger.type === "audio" && !audioIds.includes(trigger.id)) audioIds.push(trigger.id);
+  const transcripts = new Map<string, string>();
+  let triggerAudio: AudioAttachment | undefined;
+  if (audioIds.length > 0) {
+    const rows = await tx
+      .select({
+        id: attachments.id,
+        messageId: attachments.messageId,
+        externalMediaId: attachments.externalMediaId,
+        mimeType: attachments.mimeType,
+        transcript: attachments.transcript,
+      })
+      .from(attachments)
+      .where(inArray(attachments.messageId, audioIds));
+    for (const r of rows) {
+      if (r.transcript?.trim()) transcripts.set(r.messageId, r.transcript.trim());
+      if (r.messageId === triggerMessageId && !triggerAudio) triggerAudio = r;
+    }
+  }
+  return { prep: { conn, tenantName: tenant?.name ?? "", config, contact, history, triggerAudio, transcripts } };
 }
 
 /**
@@ -359,7 +393,8 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   // 1. Short read transaction.
   const phase1 = await withTenant(deps.db, tenantId, (tx) => prepare(deps, tx, c));
   if ("done" in phase1) return phase1.done;
-  const { conn, tenantName, config, contact, history } = phase1.prep;
+  const { conn, tenantName, config, contact, triggerAudio, transcripts } = phase1.prep;
+  let history = phase1.prep.history;
   const contextIds = new Set(history.map((m) => m.id));
   const confidenceThreshold = config ? Number(config.confidenceThreshold) : DEFAULT_CONFIDENCE_THRESHOLD;
 
@@ -369,6 +404,39 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   let queryEmbeddingTokens: { model: string; tokens: number } | undefined;
   try {
     const provider = buildProvider(deps, tenantId, conn);
+
+    // Voice note: transcribe once (BYOK provider), persist, and let the turn see the text.
+    // Any failure degrades to a marker; the transcript is stored before the chat call so a retry
+    // of this job never pays for the same audio twice.
+    if (triggerAudio) {
+      const outcome = await transcribeAttachment(triggerAudio, {
+        tenantId,
+        conversationId: c.conversationId,
+        provider,
+        supported: conn.capabilities.transcription === true,
+        model: transcriptionModelFor(conn),
+        loadMedia: deps.loadMedia,
+        logger,
+      });
+      if (outcome.status === "transcribed") {
+        try {
+          await withTenant(deps.db, tenantId, (tx) => persistTranscript(tx, c, triggerAudio.id, outcome));
+        } catch (err) {
+          logger.warn(`ai-turn ${triggerMessageId} could not persist transcript (${err instanceof Error ? err.name : "unknown"})`);
+        }
+      } else if (outcome.status !== "cached") {
+        logger.warn(`ai-turn ${triggerMessageId} voice note not transcribed (${outcome.reason})`);
+      }
+      const text = outcome.status === "cached" || outcome.status === "transcribed" ? outcome.text : undefined;
+      if (text) transcripts.set(triggerMessageId, text);
+      history = history.map((m) =>
+        m.type === "audio" && m.id === triggerMessageId ? { ...m, body: voiceNoteText(outcome) } : m,
+      );
+    }
+    // Earlier voice notes with a stored transcript.
+    history = history.map((m) =>
+      m.type === "audio" && !m.body?.trim() && transcripts.has(m.id) ? { ...m, body: `[voice note] ${transcripts.get(m.id)}` } : m,
+    );
     const query = buildQuery(history);
     let sourceTitles = new Map<string, string>();
     if (query !== "") {
@@ -435,6 +503,43 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   return withTenant(deps.db, tenantId, (tx) =>
     persist(tx, c, { conn, config, calls, hits, contextIds, confidenceThreshold, queryEmbeddingTokens }),
   );
+}
+
+function transcriptionModelFor(conn: LlmConnection): string {
+  const configured = (conn.capabilities as { transcriptionModel?: unknown }).transcriptionModel;
+  return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : DEFAULT_TRANSCRIPTION_MODEL;
+}
+
+/** Stores the transcript once (first writer wins) and books the transcription cost in the ledger. */
+async function persistTranscript(
+  tx: Transaction,
+  c: TurnCtx,
+  attachmentId: string,
+  t: Extract<TranscribeOutcome, { status: "transcribed" }>,
+): Promise<void> {
+  await tx
+    .update(attachments)
+    .set({ transcript: t.text })
+    .where(and(eq(attachments.id, attachmentId), sql`${attachments.transcript} is null`));
+  await tx.insert(usageLedger).values({
+    tenantId: c.tenantId,
+    kind: "transcription_seconds",
+    quantity: String(t.seconds),
+    unit: "seconds",
+    costMinor: BigInt(t.costMinor),
+    currency: "USD",
+    refType: "conversation",
+    refId: c.conversationId,
+    meta: {
+      model: t.model,
+      attachmentId,
+      messageId: c.triggerMessageId,
+      durationEstimated: t.durationEstimated,
+      verified: t.verified,
+      priceKnown: t.priceKnown,
+      unit: "usd_microcents",
+    },
+  });
 }
 
 async function recordUsage(

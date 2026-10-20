@@ -7,7 +7,7 @@ import { publishEvents, silent, type AiDeps } from "./common.js";
  * 1e-8 USD, flagged with `meta.unit = "usd_microcents"`) because per-call costs are far below one
  * cent. `llm_connections.monthly_budget_minor` is in minor units (cents) of `budget_currency`, so a
  * USD budget is compared as `budget_cents * 1_000_000` micro-cents (1 cent = 1e-2 USD = 1e6 * 1e-8).
- * Only the AI kinds (`llm_tokens`, `embedding_tokens`) in USD count.
+ * Only the AI kinds (`llm_tokens`, `embedding_tokens`, `transcription_seconds`) in USD count.
  *
  * Non-USD budgets: there is no FX source yet and prices are estimates, so the worker is
  * conservative the other way round: it does NOT stop the AI for budget (no conversion = no
@@ -35,7 +35,7 @@ export async function readBudget(
     return { exceeded: false, warn: false, currencyMismatch: true };
   }
   const rows = await tx.execute<{ cost_minor: string | null }>(
-    sql`select cost_minor from tenant_monthly_spend(now()) where currency = ${BUDGET_CURRENCY} and kind in ('llm_tokens', 'embedding_tokens')`,
+    sql`select cost_minor from tenant_monthly_spend(now()) where currency = ${BUDGET_CURRENCY} and kind in ('llm_tokens', 'embedding_tokens', 'transcription_seconds')`,
   );
   let spentMicro = 0n;
   for (const r of rows) spentMicro += BigInt(String(r.cost_minor ?? "0").split(".")[0] || "0");

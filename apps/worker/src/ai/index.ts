@@ -12,3 +12,6 @@ export { createAiWorker } from "./worker.js";
 export type { AiWorkerOptions } from "./worker.js";
 export { LockTimeoutError, withRedisLock } from "./lock.js";
 export type { LockOptions, LockRedis } from "./lock.js";
+export { createBspMediaLoader } from "./media.js";
+export { AUDIO_NOT_TRANSCRIBED, transcribeAttachment, voiceNoteText } from "./transcribe.js";
+export type { MediaLoader, TranscribeOutcome } from "./transcribe.js";
