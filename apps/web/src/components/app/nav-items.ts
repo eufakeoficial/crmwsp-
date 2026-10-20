@@ -11,6 +11,7 @@ export interface NavItem {
 /** Subsections of Configuración, shown as sidebar sub-links and as tabs. */
 export const SETTINGS_SECTIONS: readonly NavItem[] = [
   { key: "settings-ai", label: "IA", href: "/app/settings/ai", icon: Sparkles },
+  { key: "settings-integrations", label: "Integraciones", href: "/app/settings/integrations", icon: Plug },
   { key: "settings-knowledge", label: "Conocimiento", href: "/app/settings/knowledge", icon: BookOpen },
   { key: "settings-approvals", label: "Aprobaciones", href: "/app/settings/approvals", icon: ClipboardCheck },
   { key: "settings-templates", label: "Plantillas", href: "/app/settings/templates", icon: LayoutTemplate },
