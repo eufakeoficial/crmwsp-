@@ -1,5 +1,6 @@
 import { ElevenLabsTTSProvider } from "@crmwsp/ai";
 import { pathToFileURL } from "node:url";
+import { parsePdf } from "@crmwsp/knowledge";
 import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
 import { createDb } from "@crmwsp/db";
 import { GupshupProvider } from "@crmwsp/whatsapp";
@@ -119,13 +120,15 @@ function main(): void {
       loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider(), store: mediaStore }),
       logger,
     });
-    // F4: PDFs are handed off until `pdfText` is wired (the worker does not depend on @crmwsp/knowledge yet).
+    // F4: order detection on voice notes, photos and PDFs (PDF text via @crmwsp/knowledge).
     orderExtractionWorker = createOrderExtractionWorker({
       connection: createRedis(redisUrl),
       db: db.db,
       cipher,
       publisher,
       outboundQueue,
+      aiQueue,
+      pdfText: async (bytes) => (await parsePdf(bytes)).text,
       loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider(), store: mediaStore }),
       logger,
     });

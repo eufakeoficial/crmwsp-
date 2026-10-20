@@ -332,7 +332,20 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
         (deps.logger ?? silent).warn(`could not enqueue store-media (${err instanceof Error ? err.name : "unknown"})`);
       }
     }
-    if (scheduleAiTurn && deps.aiQueue) {
+    // F4: an order-candidate media message (audio/photo/PDF) goes to order extraction INSTEAD of the
+    // AI turn; the extraction replies with the order or schedules the AI turn itself (one reply).
+    const extracting =
+      scheduleAiTurn &&
+      deps.aiQueue !== undefined &&
+      attachmentId !== null &&
+      attachmentId !== undefined &&
+      (await enqueueOrderExtraction(
+        deps.orderExtractionQueue,
+        { tenantId, conversationId: result.conversationId, messageId: result.messageId },
+        mediaMimeType,
+        deps.logger ?? silent,
+      ));
+    if (scheduleAiTurn && deps.aiQueue && !extracting) {
       const data: AiTurnJobData = { tenantId, conversationId: result.conversationId, triggerMessageId: result.messageId };
       try {
         await deps.aiQueue.add(AI_TURN_JOB, data, { ...AI_JOB_OPTIONS, jobId: aiTurnJobId(result.messageId) });
@@ -340,15 +353,6 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
         // The message is committed and visible in the inbox; a retry of this job would be a
         // duplicate and would not re-enqueue, so do not fail the ingest.
         (deps.logger ?? silent).warn(`could not enqueue ai-turn (${err instanceof Error ? err.name : "unknown"})`);
-      }
-      // F4: voice notes, photos and PDFs may carry an order (same AI gate as the turn).
-      if (attachmentId) {
-        await enqueueOrderExtraction(
-          deps.orderExtractionQueue,
-          { tenantId, conversationId: result.conversationId, messageId: result.messageId },
-          mediaMimeType,
-          deps.logger ?? silent,
-        );
       }
     }
   }

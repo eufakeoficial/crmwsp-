@@ -70,7 +70,7 @@ export interface NewExtraction {
 }
 
 export interface OrderTxStore {
-  extractionExists(): Promise<boolean>;
+  existingExtraction(): Promise<{ status: string; reason: string | null } | undefined>;
   insertExtraction(row: NewExtraction): Promise<string | null>;
   loadCatalog(): Promise<CatalogCandidate[]>;
   createQuoteDraft(lines: DraftLine[], currency: string): Promise<{ id: string; number: string }>;
@@ -93,20 +93,17 @@ export interface OrderFlowPorts {
   canAutoReply(conv: ConversationState): boolean;
   replyClientMessageId: string;
   conversationId: string;
-  /** True on the last attempt: a missing transcript is then final instead of retried. */
-  lastAttempt: boolean;
+  /**
+   * Transcribes the voice note once and persists transcript + cost (the AI turn that may run
+   * afterwards reuses it). Returns null when transcription is unavailable or failed.
+   */
+  transcribe?: (() => Promise<string | null>) | undefined;
   logger: Logger;
 }
 
-export class TranscriptPendingError extends Error {
-  constructor() {
-    super("voice note transcript not available yet");
-    this.name = "TranscriptPendingError";
-  }
-}
-
 export type OrderFlowResult =
-  | { outcome: "skipped"; reason: string; events: InboxEvent[] }
+  /** `aiTurn`: no order reply was given, so the normal AI turn must answer this message. */
+  | { outcome: "skipped"; reason: string; aiTurn: boolean; events: InboxEvent[] }
   | {
       outcome: "created";
       extractionId: string;
@@ -117,7 +114,12 @@ export type OrderFlowResult =
       events: InboxEvent[];
     };
 
-const skipped = (reason: string): OrderFlowResult => ({ outcome: "skipped", reason, events: [] });
+const skipped = (reason: string, aiTurn = true): OrderFlowResult => ({ outcome: "skipped", reason, aiTurn, events: [] });
+
+/** Stored outcomes after which the AI turn (not the extraction) answers the customer. */
+export function storedOutcomeNeedsAiTurn(row: { status: string; reason: string | null }): boolean {
+  return row.status === "failed" || (row.status === "skipped" && row.reason === "not_an_order");
+}
 
 type Read =
   | { kind: "messages"; messages: ReturnType<typeof buildOrderTextMessages>; model: string }
@@ -126,11 +128,9 @@ type Read =
 
 async function prepareInput(ctx: ExtractionContext, llm: LlmAccess, p: OrderFlowPorts): Promise<Read> {
   if (ctx.source === "audio") {
-    const text = ctx.transcript?.trim() ?? "";
-    if (text === "") {
-      if (!p.lastAttempt) throw new TranscriptPendingError();
-      return { kind: "skip", reason: "no_transcript" };
-    }
+    let text = ctx.transcript?.trim() ?? "";
+    if (text === "" && p.transcribe) text = (await p.transcribe())?.trim() ?? "";
+    if (text === "") return { kind: "skip", reason: "no_transcript" };
     if (!looksLikeOrder(text)) return { kind: "skip", reason: "not_an_order" };
     return { kind: "messages", messages: buildOrderTextMessages("audio", text), model: llm.model };
   }
@@ -184,7 +184,8 @@ export function toStoredLine(l: MatchedLine): StoredOrderLine {
 const SOURCE_LABEL: Record<OrderSourceKind, string> = { audio: "audio", image: "foto", pdf: "PDF" };
 
 export async function handleOrderExtraction(p: OrderFlowPorts): Promise<OrderFlowResult> {
-  if (await p.inTx((s) => s.extractionExists())) return skipped("already-processed");
+  const existing = await p.inTx((s) => s.existingExtraction());
+  if (existing) return skipped("already-processed", storedOutcomeNeedsAiTurn(existing));
   const ctx = await p.context();
   if (!ctx) return skipped("no_media");
   if (ctx.source === "image" && ctx.hasPendingPaymentOrder) return skipped("receipt_flow");
@@ -207,7 +208,7 @@ export async function handleOrderExtraction(p: OrderFlowPorts): Promise<OrderFlo
         currency: null,
         model: null,
       });
-      if (!id) return skipped("already-processed");
+      if (!id) return skipped("already-processed", false);
       await s.notify({
         kind: "handoff",
         title: `Posible pedido por ${SOURCE_LABEL[ctx.source]} sin leer`,
@@ -269,7 +270,7 @@ export async function handleOrderExtraction(p: OrderFlowPorts): Promise<OrderFlo
       currency: matched.currency,
       model: read.model,
     });
-    if (!id) return skipped("already-processed");
+    if (!id) return skipped("already-processed", false);
     if (usage) await s.recordUsage({ model: read.model, usage, extractionId: id, source: ctx.source });
 
     const draft = draftLines(matched.lines);

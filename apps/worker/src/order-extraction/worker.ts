@@ -1,16 +1,28 @@
 import { UnrecoverableError, Worker, type ConnectionOptions, type Job, type Queue } from "bullmq";
 import { assertIds, publishEvents, silent, type AiDeps } from "../ai/common.js";
 import { safeErrorText } from "../processors.js";
-import { SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS } from "../queue.js";
-import { TranscriptPendingError, handleOrderExtraction, type OrderFlowResult } from "./flow.js";
+import { AI_JOB_OPTIONS, AI_TURN_JOB, SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS, aiTurnJobId, type AiTurnJobData } from "../queue.js";
+import { handleOrderExtraction, type OrderFlowResult } from "./flow.js";
 import { pgOrderFlowPorts, type OrderExtractionDeps } from "./pg.js";
 import { EXTRACT_ORDER_JOB, EXTRACT_ORDER_MAX_ATTEMPTS, ORDER_EXTRACTION_QUEUE_NAME, type ExtractOrderJobData } from "./queue.js";
 
 export interface OrderExtractionWorkerDeps extends OrderExtractionDeps, Pick<AiDeps, "publisher"> {
   outboundQueue: Pick<Queue, "add">;
+  /** `ai` queue: the normal AI turn is scheduled from here when the media turned out not to be an order. */
+  aiQueue: Pick<Queue, "add">;
 }
 
-/** One `extract-order` job: detection, matching and the quote DRAFT; then the reply is handed to outbound. */
+/** Hands the message back to the normal AI turn (same job id as ingest would use: deduplicated). */
+export async function scheduleAiTurn(deps: Pick<OrderExtractionWorkerDeps, "aiQueue">, job: ExtractOrderJobData): Promise<void> {
+  const data: AiTurnJobData = { tenantId: job.tenantId, conversationId: job.conversationId, triggerMessageId: job.messageId };
+  await deps.aiQueue.add(AI_TURN_JOB, data, { ...AI_JOB_OPTIONS, jobId: aiTurnJobId(job.messageId) });
+}
+
+/**
+ * One `extract-order` job. Exactly one customer reply per inbound media message: ingest schedules
+ * this job INSTEAD of the AI turn for order candidates; when an order is found its summary is the
+ * reply, otherwise (chit-chat, no items, model failure, receipt...) the normal AI turn is scheduled.
+ */
 export async function processExtractOrder(
   deps: OrderExtractionWorkerDeps,
   data: unknown,
@@ -18,9 +30,14 @@ export async function processExtractOrder(
 ): Promise<OrderFlowResult> {
   const job = assertIds(data, ["tenantId", "conversationId", "messageId"]) as ExtractOrderJobData;
   const logger = deps.logger ?? silent;
-  const out = await handleOrderExtraction(
-    pgOrderFlowPorts(deps, job, { lastAttempt: attempt.attemptsMade + 1 >= attempt.maxAttempts, logger }),
-  );
+  let out: OrderFlowResult;
+  try {
+    out = await handleOrderExtraction(pgOrderFlowPorts(deps, job, { logger }));
+  } catch (err) {
+    // Last attempt failed: never leave the customer without an answer.
+    if (attempt.attemptsMade + 1 >= attempt.maxAttempts) await scheduleAiTurn(deps, job);
+    throw err;
+  }
   if (out.outcome === "created" && out.enqueueMessageId) {
     await deps.outboundQueue.add(
       SEND_MESSAGE_JOB,
@@ -28,7 +45,8 @@ export async function processExtractOrder(
       { ...SEND_MESSAGE_JOB_OPTIONS, jobId: out.enqueueMessageId },
     );
   }
-  await publishEvents(deps as AiDeps, job.tenantId, out.events);
+  if (out.outcome === "skipped" && out.aiTurn) await scheduleAiTurn(deps, job);
+  await publishEvents(deps as unknown as AiDeps, job.tenantId, out.events);
   return out;
 }
 
@@ -49,7 +67,7 @@ export function createOrderExtractionWorker(opts: OrderExtractionWorkerOptions):
           maxAttempts: job.opts.attempts ?? EXTRACT_ORDER_MAX_ATTEMPTS,
         });
       } catch (err) {
-        if (err instanceof UnrecoverableError || err instanceof TranscriptPendingError) throw err;
+        if (err instanceof UnrecoverableError) throw err;
         const name = (err as { name?: unknown } | null)?.name;
         if (name === "LlmProviderError" || name === "DecryptionError" || name === "UnsafeBaseUrlError") throw err as Error;
         throw new Error(safeErrorText(err));

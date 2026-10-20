@@ -7,11 +7,10 @@ export const EXTRACT_ORDER_JOB = "extract-order";
 export const EXTRACT_ORDER_MAX_ATTEMPTS = 5;
 
 /**
- * Delayed so the AI turn (which transcribes voice notes once and persists the transcript) usually
- * runs first: this job reuses that transcript instead of paying for a second transcription.
+ * Runs instead of the AI turn for order candidates (it transcribes voice notes itself and persists
+ * the transcript, so a later AI turn reuses it without a second charge).
  */
 export const EXTRACT_ORDER_JOB_OPTIONS = {
-  delay: 10_000,
   attempts: EXTRACT_ORDER_MAX_ATTEMPTS,
   backoff: { type: "exponential", delay: 10_000 },
   removeOnComplete: { age: 24 * 3600, count: 10_000 },

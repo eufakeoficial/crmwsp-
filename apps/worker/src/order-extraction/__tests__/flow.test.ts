@@ -2,7 +2,6 @@ import type { ChatRequest, ChatResult, OrderExtractionOutput } from "@crmwsp/ai"
 import type { CatalogCandidate, DraftLine } from "@crmwsp/domain";
 import { describe, expect, it, vi } from "vitest";
 import {
-  TranscriptPendingError,
   handleOrderExtraction,
   type ExtractionContext,
   type LlmAccess,
@@ -43,7 +42,7 @@ function fakeStore() {
     linked: [] as string[],
   };
   const store: OrderTxStore = {
-    extractionExists: async () => state.extractions.length > 0,
+    existingExtraction: async () => (state.extractions[0] ? { status: state.extractions[0].status, reason: state.extractions[0].reason } : undefined),
     insertExtraction: async (r) => (state.extractions.push(r), `ext-${state.extractions.length}`),
     loadCatalog: async () => catalog,
     createQuoteDraft: async (lines, currency) => (state.quotes.push({ lines, currency }), { id: "q-1", number: "P-2026-0001" }),
@@ -81,7 +80,6 @@ function ports(ctx: Partial<ExtractionContext> & { source: ExtractionContext["so
     canAutoReply: () => true,
     replyClientMessageId: "order-extraction-reply-m1",
     conversationId: "conv-1",
-    lastAttempt: false,
     logger: silent,
     ...rest,
   };
@@ -119,16 +117,24 @@ describe("handleOrderExtraction", () => {
     expect(state.replies[0]).toContain("¿El «modelo B» es Modelo B (Azul) o Modelo B (Rojo)?");
   });
 
-  it("audio without transcript yet is retried, then skipped on the last attempt", async () => {
-    await expect(handleOrderExtraction(ports({ source: "audio" }).p)).rejects.toBeInstanceOf(TranscriptPendingError);
-    const last = ports({ source: "audio" }, { lastAttempt: true });
-    expect(await handleOrderExtraction(last.p)).toMatchObject({ outcome: "skipped", reason: "no_transcript" });
-    expect(last.chat).not.toHaveBeenCalled();
+  it("audio without transcript is transcribed by the extraction itself", async () => {
+    const transcribe = vi.fn(async () => TRANSCRIPT_FIXTURE);
+    const { p, state } = ports({ source: "audio" }, { transcribe });
+    expect(await handleOrderExtraction(p)).toMatchObject({ outcome: "created", replied: true });
+    expect(transcribe).toHaveBeenCalledOnce();
+    expect(state.replies).toHaveLength(1);
+  });
+
+  it("untranscribable audio hands the message to the AI turn", async () => {
+    const { p, chat } = ports({ source: "audio" }, { transcribe: async () => null });
+    expect(await handleOrderExtraction(p)).toMatchObject({ outcome: "skipped", reason: "no_transcript", aiTurn: true });
+    expect(chat).not.toHaveBeenCalled();
   });
 
   it("chit-chat voice notes never reach the LLM", async () => {
     const { p, chat, state } = ports({ source: "audio", transcript: "hola, ¿a qué hora abren?" });
-    expect(await handleOrderExtraction(p)).toMatchObject({ outcome: "skipped", reason: "not_an_order" });
+    expect(await handleOrderExtraction(p)).toMatchObject({ outcome: "skipped", reason: "not_an_order", aiTurn: true });
+    expect(state.replies).toHaveLength(0);
     expect(chat).not.toHaveBeenCalled();
     expect(state.extractions).toHaveLength(0);
   });
@@ -165,10 +171,10 @@ describe("handleOrderExtraction", () => {
     expect(chat.mock.calls[0]![0].messages[1]!.content).toContain("PEDIDO 0042");
   });
 
-  it("pdf without a parser is handed off", async () => {
-    const { p, state } = ports({ source: "pdf" });
-    await handleOrderExtraction(p);
-    expect(state.extractions[0]).toMatchObject({ status: "skipped", reason: "pdf_parser_unavailable" });
+  it("an unreadable pdf is handed off to a human (no AI turn reply)", async () => {
+    const { p, state } = ports({ source: "pdf" }, { pdfText: async () => "   " });
+    expect(await handleOrderExtraction(p)).toMatchObject({ outcome: "created", status: "skipped", replied: false });
+    expect(state.extractions[0]).toMatchObject({ status: "skipped", reason: "pdf_without_text" });
   });
 
   it("policy deny of create_quote_draft keeps the extraction but builds no quote", async () => {
@@ -191,7 +197,7 @@ describe("handleOrderExtraction", () => {
     expect(await handleOrderExtraction(bad.p)).toMatchObject({ outcome: "skipped", reason: "invalid_output" });
     expect(bad.state.extractions[0]).toMatchObject({ status: "failed" });
     expect(bad.state.usage).toHaveLength(1);
-    expect(await handleOrderExtraction(bad.p)).toMatchObject({ outcome: "skipped", reason: "already-processed" });
+    expect(await handleOrderExtraction(bad.p)).toMatchObject({ outcome: "skipped", reason: "already-processed", aiTurn: true });
     expect(bad.chat).toHaveBeenCalledOnce();
   });
 });

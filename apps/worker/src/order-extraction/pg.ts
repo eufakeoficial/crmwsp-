@@ -24,6 +24,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { insertNotification } from "../notifications/notify.js";
 import { readBudget } from "../ai/budget.js";
 import { buildProvider, type AiDeps } from "../ai/common.js";
+import { DEFAULT_TRANSCRIPTION_MODEL, transcribeAttachment, type TranscribeOutcome } from "../ai/transcribe.js";
 import { aiMayAutoReply, sessionWindowOpen } from "../ai/turn.js";
 import { orderSourceOf, type ExtractOrderJobData } from "./queue.js";
 import type { ExtractionContext, LlmAccess, OrderFlowPorts, OrderTxStore } from "./flow.js";
@@ -82,6 +83,49 @@ export async function loadCatalogCandidates(tx: Transaction): Promise<CatalogCan
   return out;
 }
 
+function transcriptionModelFor(conn: LlmConnection): string {
+  const configured = (conn.capabilities as { transcriptionModel?: unknown }).transcriptionModel;
+  return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : DEFAULT_TRANSCRIPTION_MODEL;
+}
+
+/**
+ * Stores the transcript once (first writer wins) and books its cost only for the writer that
+ * stored it, so the AI turn that runs afterwards reuses it without a second charge.
+ */
+async function persistTranscript(
+  tx: Transaction,
+  job: ExtractOrderJobData,
+  attachmentId: string,
+  t: Extract<TranscribeOutcome, { status: "transcribed" }>,
+): Promise<void> {
+  const updated = await tx
+    .update(attachments)
+    .set({ transcript: t.text })
+    .where(and(eq(attachments.id, attachmentId), sql`${attachments.transcript} is null`))
+    .returning({ id: attachments.id });
+  if (updated.length === 0) return;
+  await tx.insert(usageLedger).values({
+    tenantId: job.tenantId,
+    kind: "transcription_seconds",
+    quantity: String(t.seconds),
+    unit: "seconds",
+    costMinor: BigInt(t.costMinor),
+    currency: "USD",
+    refType: "conversation",
+    refId: job.conversationId,
+    meta: {
+      model: t.model,
+      attachmentId,
+      messageId: job.messageId,
+      purpose: "order_extraction",
+      durationEstimated: t.durationEstimated,
+      verified: t.verified,
+      priceKnown: t.priceKnown,
+      unit: "usd_microcents",
+    },
+  });
+}
+
 function visionModelFor(conn: LlmConnection): string {
   const configured = conn.capabilities.visionModel;
   return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : conn.modelCheap;
@@ -90,9 +134,13 @@ function visionModelFor(conn: LlmConnection): string {
 export function createPgOrderStore(tx: Transaction, tenantId: string, job: ExtractOrderJobData, now: Date): OrderTxStore {
   const { conversationId, messageId } = job;
   return {
-    async extractionExists() {
-      const [r] = await tx.select({ id: orderExtractions.id }).from(orderExtractions).where(eq(orderExtractions.messageId, messageId)).limit(1);
-      return r !== undefined;
+    async existingExtraction() {
+      const [r] = await tx
+        .select({ status: orderExtractions.status, reason: orderExtractions.reason })
+        .from(orderExtractions)
+        .where(eq(orderExtractions.messageId, messageId))
+        .limit(1);
+      return r;
     },
     async insertExtraction(r) {
       const rows = await tx
@@ -262,14 +310,14 @@ export interface OrderExtractionDeps extends Pick<AiDeps, "db" | "cipher" | "fet
 export function pgOrderFlowPorts(
   deps: OrderExtractionDeps,
   job: ExtractOrderJobData,
-  opts: { lastAttempt: boolean; logger: NonNullable<AiDeps["logger"]> },
+  opts: { logger: NonNullable<AiDeps["logger"]> },
 ): OrderFlowPorts {
   const now = deps.now?.() ?? new Date();
   let ctxCache: ExtractionContext | undefined;
+  let connCache: { conn: LlmConnection; provider: ReturnType<typeof buildProvider> } | undefined;
   return {
     conversationId: job.conversationId,
     replyClientMessageId: orderReplyClientMessageId(job.messageId),
-    lastAttempt: opts.lastAttempt,
     logger: opts.logger,
     ...(deps.pdfText ? { pdfText: deps.pdfText } : {}),
     async context() {
@@ -283,8 +331,9 @@ export function pgOrderFlowPorts(
         return { c, budget: await readBudget(tx, c) };
       });
       if (!conn) return undefined;
+      connCache = { conn: conn.c, provider: buildProvider(deps as AiDeps, job.tenantId, conn.c) };
       return {
-        provider: buildProvider(deps as AiDeps, job.tenantId, conn.c),
+        provider: connCache.provider,
         model: conn.c.modelCheap,
         visionModel: visionModelFor(conn.c),
         visionSupported: conn.c.capabilities.vision === true,
@@ -302,6 +351,27 @@ export function pgOrderFlowPorts(
           });
         }
       : undefined,
+    async transcribe() {
+      const att = ctxCache;
+      if (!connCache || !att?.attachmentId) return null;
+      const { conn, provider } = connCache;
+      const outcome = await transcribeAttachment(
+        { id: att.attachmentId, externalMediaId: att.externalMediaId, mimeType: att.mimeType, transcript: att.transcript },
+        {
+          tenantId: job.tenantId,
+          conversationId: job.conversationId,
+          provider,
+          supported: conn.capabilities.transcription === true,
+          model: transcriptionModelFor(conn),
+          loadMedia: deps.loadMedia,
+          logger: opts.logger,
+        },
+      );
+      if (outcome.status === "cached") return outcome.text;
+      if (outcome.status !== "transcribed") return null;
+      await withTenant(deps.db, job.tenantId, (tx) => persistTranscript(tx, job, att.attachmentId as string, outcome));
+      return outcome.text;
+    },
     inTx: (fn) => withTenant(deps.db, job.tenantId, (tx) => fn(createPgOrderStore(tx, job.tenantId, job, now))),
     canAutoReply: (conv) => aiMayAutoReply(conv) && sessionWindowOpen(conv.lastInboundAt, now),
   };
