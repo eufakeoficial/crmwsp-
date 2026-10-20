@@ -34,10 +34,25 @@ export function SidebarLink({ item, active, count, onNavigate }: { item: NavItem
   );
 }
 
+function SubLinks({ items, pathname, counts, onNavigate }: { items: readonly NavItem[]; pathname: string; counts: NavCounts; onNavigate?: (() => void) | undefined }) {
+  return (
+    <div className="ml-5 flex flex-col gap-0.5 border-l border-ink-4 pl-2">
+      {items.map((c) => (
+        <SidebarLink key={c.key} item={c} active={isActive(pathname, c.href)} count={counts[c.key]} onNavigate={onNavigate} />
+      ))}
+    </div>
+  );
+}
+
 export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNavigate?: () => void }) {
   const pathname = usePathname();
   const render = (items: readonly NavItem[]) =>
-    items.map((i) => <SidebarLink key={i.key} item={i} active={isActive(pathname, i.href)} count={counts[i.key]} {...(onNavigate ? { onNavigate } : {})} />);
+    items.map((i) => (
+      <div key={i.key} className="flex flex-col gap-1">
+        <SidebarLink item={i} active={isActive(pathname, i.href) && !i.children} count={counts[i.key]} {...(onNavigate ? { onNavigate } : {})} />
+        {i.children && isActive(pathname, i.href) ? <SubLinks items={i.children} pathname={pathname} counts={counts} onNavigate={onNavigate} /> : null}
+      </div>
+    ));
   return (
     <>
       {render(NAV_MAIN)}

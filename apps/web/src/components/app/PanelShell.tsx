@@ -3,11 +3,21 @@
 import type { ReactNode } from "react";
 import { AppShell } from "./AppShell";
 import { useSession } from "./SessionProvider";
+import { usePendingApprovals } from "@/lib/hooks/use-pending-approvals";
+import { canManageAi } from "./roles";
 import { TenantEventsProvider, useUnreadOpen } from "./TenantEventsProvider";
 
 function Counted({ children }: { children: ReactNode }) {
   const unread = useUnreadOpen();
-  return <AppShell counts={unread > 0 ? { inbox: unread } : {}}>{children}</AppShell>;
+  const { tenant } = useSession();
+  const approvals = usePendingApprovals(canManageAi(tenant?.role));
+  const counts: Record<string, number> = {};
+  if (unread > 0) counts["inbox"] = unread;
+  if (approvals > 0) {
+    counts["settings"] = approvals;
+    counts["settings-approvals"] = approvals;
+  }
+  return <AppShell counts={counts}>{children}</AppShell>;
 }
 
 /**

@@ -1,11 +1,19 @@
-import { Contact, Gauge, Inbox, Kanban, FileText, Plug, Settings, Users, type LucideIcon } from "lucide-react";
+import { BookOpen, ClipboardCheck, Contact, Gauge, Inbox, Kanban, FileText, Plug, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
   label: string;
   href: string;
   icon: LucideIcon;
+  children?: readonly NavItem[];
 }
+
+/** Subsections of Configuración, shown as sidebar sub-links and as tabs. */
+export const SETTINGS_SECTIONS: readonly NavItem[] = [
+  { key: "settings-ai", label: "IA", href: "/app/settings/ai", icon: Sparkles },
+  { key: "settings-knowledge", label: "Conocimiento", href: "/app/settings/knowledge", icon: BookOpen },
+  { key: "settings-approvals", label: "Aprobaciones", href: "/app/settings/approvals", icon: ClipboardCheck },
+];
 
 export const NAV_MAIN: readonly NavItem[] = [
   { key: "home", label: "Inicio", href: "/app", icon: Gauge },
@@ -18,7 +26,7 @@ export const NAV_MAIN: readonly NavItem[] = [
 ];
 
 export const NAV_SECONDARY: readonly NavItem[] = [
-  { key: "settings", label: "Configuración", href: "/app/settings", icon: Settings },
+  { key: "settings", label: "Configuración", href: "/app/settings", icon: Settings, children: SETTINGS_SECTIONS },
 ];
 
 /** Active item from the path: `/app` only matches exactly, the rest match by prefix. */

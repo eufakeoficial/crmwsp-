@@ -38,7 +38,7 @@ export function getActiveTenantId(): string | null {
 }
 
 export interface RequestOptions<S extends z.ZodType | undefined> {
-  method?: "GET" | "POST" | "PATCH";
+  method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   /** Query string params; undefined values are skipped. */
   query?: Record<string, string | number | undefined>;
@@ -59,7 +59,9 @@ export async function request<S extends z.ZodType | undefined = undefined>(
   { method = "GET", body, schema, query }: RequestOptions<S> = {},
 ): Promise<S extends z.ZodType ? z.output<S> : undefined> {
   const headers: Record<string, string> = { accept: "application/json" };
-  if (body !== undefined) headers["content-type"] = "application/json";
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+  // Multipart bodies set their own boundary header; JSON otherwise.
+  if (body !== undefined && !isForm) headers["content-type"] = "application/json";
   if (activeTenantId !== null) headers[TENANT_HEADER] = activeTenantId;
 
   let res: Response;
@@ -68,7 +70,7 @@ export async function request<S extends z.ZodType | undefined = undefined>(
       method,
       headers,
       credentials: "include",
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(body !== undefined ? { body: isForm ? (body as FormData) : JSON.stringify(body) } : {}),
     });
   } catch {
     throw new ApiError("NETWORK_ERROR", "Network request failed", 0);
