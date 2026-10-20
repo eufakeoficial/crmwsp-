@@ -26,6 +26,7 @@ import {
   shippingAddressSchema,
   type Order,
   type Quote,
+  type QuoteAcceptLink,
   type QuoteList,
 } from "@crmwsp/contracts";
 import {
@@ -491,6 +492,26 @@ export class QuotesController {
     await this.queue.add(SEND_MESSAGE_JOB, data, { ...SEND_MESSAGE_JOB_OPTIONS, jobId: messageId });
     await this.hub.publish(db.tenantId, { type: "message.created", conversationId, messageId });
     return quote;
+  }
+
+  /**
+   * Issues a fresh public acceptance link for a `sent` quote so it can be copied. Only the hash is stored,
+   * so the previously sent link stops working. No state change.
+   */
+  @Post(":id/accept-link")
+  @Roles("owner", "admin", "agent")
+  @HttpCode(200)
+  async acceptLink(@CurrentTenantDb() db: TenantDb, @Param("id") id: string, @Req() req: HttpRequest): Promise<QuoteAcceptLink> {
+    if (!isUuid(id)) throw new NotFoundError();
+    return db.run(async (tx) => {
+      const q = await lockQuote(tx, id);
+      if (q.status !== "sent") throw new ConflictError(`Only sent quotes have an acceptance link (this one is ${q.status})`);
+      if (q.validUntil.getTime() <= Date.now()) throw new ConflictError("The quote has expired");
+      const { token, hash } = newAcceptToken(db.tenantId);
+      await tx.update(quotes).set({ acceptTokenHash: hash, updatedAt: new Date() }).where(eq(quotes.id, id));
+      await writeAudit(tx, { tenantId: db.tenantId, userId: db.userId, entity: "quote", entityId: id, action: "quote.accept_link_reissued", diff: {}, ip: req.ip });
+      return { url: `${webBase()}/q/${token}`, validUntil: q.validUntil.toISOString() };
+    });
   }
 
   /** accepted -> a `draft` order (idempotent: a live order of the quote is returned instead of a duplicate). */

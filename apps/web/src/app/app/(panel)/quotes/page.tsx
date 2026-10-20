@@ -1,10 +1,5 @@
-import { EmptyState, PageHeader } from "@/components/app/EmptyState";
+import { QuotesView } from "@/components/quotes/QuotesView";
 
-export default function Page() {
-  return (
-    <>
-      <PageHeader title="Presupuestos" />
-      <EmptyState title="Próximamente" soon>Aquí crearás y enviarás presupuestos con cobro.</EmptyState>
-    </>
-  );
+export default function QuotesPage() {
+  return <QuotesView />;
 }
