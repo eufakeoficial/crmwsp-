@@ -13,6 +13,8 @@ export const contacts = pgTable(
     name: text("name"),
     extracted: jsonb("extracted").$type<Record<string, unknown>>().notNull().default({}),
     tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    /** AI turns and follow-ups skip the contact until this instant (T23). */
+    automationsPausedUntil: timestamp("automations_paused_until", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

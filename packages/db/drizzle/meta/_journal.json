@@ -246,6 +246,20 @@
       "when": 1792502760000,
       "tag": "0036_messages_template",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792502790000,
+      "tag": "0039_inbox_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792502800000,
+      "tag": "0040_rls_inbox_v2",
+      "breakpoints": true
     }
   ]
 }
