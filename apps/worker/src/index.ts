@@ -1,3 +1,4 @@
+import { ElevenLabsTTSProvider } from "@crmwsp/ai";
 import { pathToFileURL } from "node:url";
 import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
 import { createDb } from "@crmwsp/db";
@@ -83,6 +84,7 @@ function main(): void {
       publisher,
       cipher,
       logger,
+      ...(mediaStore ? { voice: { tts: new ElevenLabsTTSProvider(), store: mediaStore } } : {}),
     });
     outboundQueue = new Queue(OUTBOUND_QUEUE_NAME, { connection: createRedis(redisUrl) });
     // AI jobs also need the master keys (BYOK LLM keys are encrypted).

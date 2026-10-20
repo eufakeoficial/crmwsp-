@@ -30,3 +30,9 @@ export interface EmbedSourceJobData {
 
 /** AAD purpose of the encrypted LLM API key (ADR 0008). */
 export const LLM_API_KEY_PURPOSE = "llm_api_key";
+
+/** AAD purpose of the encrypted TTS (ElevenLabs) API key; same value in apps/worker. */
+export const TTS_API_KEY_PURPOSE = "tts_api_key";
+
+/** DI token: TTSProvider (ElevenLabs by default; tests swap it). */
+export const TTS_PROVIDER = Symbol("TTS_PROVIDER");

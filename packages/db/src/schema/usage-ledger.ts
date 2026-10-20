@@ -9,6 +9,7 @@ export const usageKind = pgEnum("usage_kind", [
   "wa_message",
   "storage",
   "psp_fee",
+  "tts_characters",
 ]);
 
 /**

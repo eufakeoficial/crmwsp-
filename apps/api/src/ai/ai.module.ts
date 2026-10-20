@@ -3,7 +3,9 @@ import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { AuthModule } from "../auth/auth.module.js";
 import { ChannelsModule } from "../channels/channels.module.js";
-import { AI_QUEUE, aiQueueName } from "./ai.constants.js";
+import { ElevenLabsTTSProvider, type TTSProvider } from "@crmwsp/ai";
+import { AI_QUEUE, TTS_PROVIDER, aiQueueName } from "./ai.constants.js";
+import { VoiceController } from "./voice.controller.js";
 import { AiActionsController } from "./ai-actions.controller.js";
 import { AiController } from "./ai.controller.js";
 import { BotTemplatesController } from "./bot-templates.controller.js";
@@ -11,9 +13,10 @@ import { LlmProviderFactory } from "./llm-provider.factory.js";
 
 @Module({
   imports: [AuthModule, ChannelsModule],
-  controllers: [AiController, AiActionsController, BotTemplatesController],
+  controllers: [AiController, AiActionsController, BotTemplatesController, VoiceController],
   providers: [
     LlmProviderFactory,
+    { provide: TTS_PROVIDER, useFactory: (): TTSProvider => new ElevenLabsTTSProvider() },
     {
       provide: AI_QUEUE,
       useFactory: (): Queue => {

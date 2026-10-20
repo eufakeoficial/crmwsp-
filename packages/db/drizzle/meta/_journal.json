@@ -162,6 +162,20 @@
       "when": 1792499199926,
       "tag": "0022_rls_commerce_integrations",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792499209926,
+      "tag": "0032_voice_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792499210926,
+      "tag": "0033_rls_voice_settings",
+      "breakpoints": true
     }
   ]
 }
