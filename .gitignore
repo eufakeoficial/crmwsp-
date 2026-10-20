@@ -9,3 +9,6 @@ coverage
 
 # Local Redis snapshots
 dump.rdb
+
+# Capturas locales para revisión
+.screens/
