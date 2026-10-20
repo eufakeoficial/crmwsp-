@@ -79,6 +79,18 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 
 **Salida:** un cobro real en staging/prod cierra la oportunidad automáticamente; el dashboard cuadra con Stripe.
 
+## Fase 4b — Marketing y crecimiento (prioridad tras el cobro)
+
+Funciones principales que comparten los CRM líderes de ecommerce/marketing (Wati, Manychat, Kommo, Respond.io, SleekFlow):
+
+1. **Campañas masivas** con plantillas aprobadas por Meta y segmentos (p. ej. compraron en 90 días, etiqueta, etapa), solo a contactos con consentimiento de marketing, con límite de envío y métricas (enviados, leídos, respondidos, ventas atribuidas).
+2. **Recuperación de carritos/pedidos sin pagar y presupuestos sin respuesta**: recordatorios automáticos con motivo explicable, ventana de 24 h respetada (plantilla si está cerrada).
+3. **Atribución de anuncios**: capturar el origen "clic a WhatsApp" (referral/`ctwa_clid` que reenvía el BSP) y ligar anuncio → conversación → pedido cobrado.
+4. **Instagram DM y Messenger** detrás de la misma interfaz de canal (vía BSP o API oficial de Meta según disponibilidad).
+5. **Flujos automáticos** sin programar: bienvenida, horario fuera de oficina, preguntas frecuentes, encuestas y captura de datos, con editor visual simple.
+
+**Salida:** una tienda lanza una campaña a un segmento con consentimiento, recupera pedidos sin pagar y ve qué anuncio generó cada venta cobrada.
+
 ## Fase 5 — Escala 1: SaaS automático
 
 - Stripe Billing: planes Business/Growth, límites por plan, suspensión segura, bolsa de mensajes y exceso.
