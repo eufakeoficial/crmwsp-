@@ -1,4 +1,4 @@
-import { BookOpen, ClipboardCheck, Contact, Gauge, Inbox, Kanban, FileText, Plug, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { BookOpen, ClipboardCheck, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, ShoppingBag, Sparkles, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -21,6 +21,8 @@ export const NAV_MAIN: readonly NavItem[] = [
   { key: "contacts", label: "Contactos", href: "/app/contacts", icon: Contact },
   { key: "pipeline", label: "Pipeline", href: "/app/pipeline", icon: Kanban },
   { key: "quotes", label: "Presupuestos", href: "/app/quotes", icon: FileText },
+  { key: "orders", label: "Pedidos", href: "/app/orders", icon: ShoppingBag },
+  { key: "products", label: "Productos", href: "/app/products", icon: Package },
   { key: "channels", label: "Canales", href: "/app/channels", icon: Plug },
   { key: "team", label: "Equipo", href: "/app/team", icon: Users },
 ];
