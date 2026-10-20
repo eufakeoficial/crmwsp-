@@ -65,6 +65,13 @@ export const conversationsApi = {
       body: { text, clientMessageId },
       schema: messageSchema,
     }),
+  /** 202 with the queued template message (works outside the 24 h window). */
+  sendTemplate: (id: string, templateId: string, params: string[]) =>
+    request(`/conversations/${id}/template-messages`, {
+      method: "POST",
+      body: { templateId, params },
+      schema: messageSchema,
+    }),
 };
 
 export const contactsApi = {

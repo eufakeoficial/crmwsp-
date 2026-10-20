@@ -8,6 +8,7 @@ import {
   listConversationsQuerySchema,
   listMessagesQuerySchema,
   sendMessageRequestSchema,
+  sendTemplateMessageRequestSchema,
   updateConversationRequestSchema,
   type Conversation,
   type ConversationListResponse,
@@ -22,9 +23,11 @@ import {
   isUuid,
   memberships,
   messages,
+  messageTemplates,
   sql,
   type Transaction,
 } from "@crmwsp/db";
+import { renderTemplateBody, validateTemplateParams } from "@crmwsp/domain";
 import type { Queue } from "bullmq";
 import { CurrentTenantDb } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -314,6 +317,67 @@ export class ConversationsController {
     if (created) {
       await this.hub.publish(db.tenantId, { type: "message.created", conversationId: id, messageId: message.id });
     }
+    const [dto] = await db.run((tx) => withAttachments(tx, [message]));
+    if (!dto) throw new NotFoundError();
+    return dto;
+  }
+  /** Manual template send: the only way to write outside the 24 h window (T21). */
+  @Post(":id/template-messages")
+  @HttpCode(202)
+  async sendTemplate(@CurrentTenantDb() db: TenantDb, @Param("id") id: string, @Body() body: unknown): Promise<Message> {
+    if (!isUuid(id)) throw new NotFoundError();
+    const input = parseOrThrow(sendTemplateMessageRequestSchema, body);
+
+    const message = await db.run(async (tx) => {
+      const [conv] = await tx
+        .select({ id: conversations.id, channelConnectionId: conversations.channelConnectionId })
+        .from(conversations)
+        .where(eq(conversations.id, id));
+      if (!conv) throw new NotFoundError();
+      const [tpl] = await tx
+        .select({ id: messageTemplates.id, body: messageTemplates.body, externalId: messageTemplates.externalId })
+        .from(messageTemplates)
+        .where(
+          and(
+            eq(messageTemplates.id, input.templateId),
+            eq(messageTemplates.channelConnectionId, conv.channelConnectionId),
+            eq(messageTemplates.status, "approved"),
+          ),
+        );
+      if (!tpl || !tpl.externalId) throw new ValidationError("Template is not approved for this channel");
+      const issue = validateTemplateParams(tpl.body, input.params);
+      if (issue) throw new ValidationError(`Invalid template params (${issue})`);
+
+      const [inserted] = await tx
+        .insert(messages)
+        .values({
+          tenantId: db.tenantId,
+          conversationId: id,
+          direction: "outbound",
+          type: "template",
+          body: renderTemplateBody(tpl.body, input.params),
+          status: "queued",
+          author: "user",
+          authorUserId: db.userId,
+          templateId: tpl.id,
+          templateParams: input.params,
+        })
+        .returning(messageColumns);
+      if (!inserted) throw new NotFoundError();
+      await tx
+        .update(conversations)
+        .set({
+          lastMessageAt: sql`greatest(coalesce(${conversations.lastMessageAt}, ${inserted.createdAt.toISOString()}::timestamptz), ${inserted.createdAt.toISOString()}::timestamptz)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, id));
+      return inserted;
+    });
+
+    // Enqueued after commit; the params never travel in the job payload.
+    const data: SendMessageJobData = { tenantId: db.tenantId, messageId: message.id };
+    await this.queue.add(SEND_MESSAGE_JOB, data, { ...SEND_MESSAGE_JOB_OPTIONS, jobId: message.id });
+    await this.hub.publish(db.tenantId, { type: "message.created", conversationId: id, messageId: message.id });
     const [dto] = await db.run((tx) => withAttachments(tx, [message]));
     if (!dto) throw new NotFoundError();
     return dto;

@@ -1,5 +1,5 @@
 import type { CipherBox } from "@crmwsp/crypto";
-import { shouldSendVoiceReply } from "@crmwsp/domain";
+import { shouldSendVoiceReply, validateTemplateParams } from "@crmwsp/domain";
 import {
   attachments,
   broadcastRecipients,
@@ -108,6 +108,18 @@ export function resolveTemplateParams(variables: unknown[], ctx: { contactName: 
     }
     throw new UnrecoverableError("unsupported template variable");
   });
+}
+
+/** Params stored on the message by a manual inbox send; null when absent (variables path). */
+export function manualTemplateParams(stored: unknown, templateBody: string | null): string[] | null {
+  if (stored === null || stored === undefined) return null;
+  if (!Array.isArray(stored) || !stored.every((p) => typeof p === "string")) {
+    throw new UnrecoverableError("invalid template params");
+  }
+  if (templateBody === null || validateTemplateParams(templateBody, stored) !== null) {
+    throw new UnrecoverableError("template params do not match the template");
+  }
+  return stored;
 }
 
 /** Picks the provider call for a message: approved templates go through sendTemplate, the rest as text. */
@@ -244,6 +256,8 @@ export async function processSendMessage(
         tplLanguage: messageTemplates.language,
         tplStatus: messageTemplates.status,
         tplVariables: messageTemplates.variables,
+        tplBody: messageTemplates.body,
+        msgTemplateParams: messages.templateParams,
         connectionId: channelConnections.id,
         sourcePhone: channelConnections.phoneE164,
         appName: channelConnections.externalAppId,
@@ -257,6 +271,7 @@ export async function processSendMessage(
       .innerJoin(conversations, eq(conversations.id, messages.conversationId))
       .innerJoin(contacts, eq(contacts.id, conversations.contactId))
       .innerJoin(channelConnections, eq(channelConnections.id, conversations.channelConnectionId))
+      // Template messages: messages.template_id (manual inbox send, T21) or one of the sources below.
       // Template messages come from follow-ups: follow_ups.sent_message_id -> message, template_id -> template.
       .leftJoin(followUps, eq(followUps.sentMessageId, messages.id))
       // Broadcast messages: broadcast_recipients.message_id -> message, broadcasts.template_id -> template.
@@ -265,7 +280,7 @@ export async function processSendMessage(
       .leftJoin(
         messageTemplates,
         and(
-          eq(messageTemplates.id, sql`coalesce(${followUps.templateId}, ${broadcasts.templateId})`),
+          eq(messageTemplates.id, sql`coalesce(${messages.templateId}, ${followUps.templateId}, ${broadcasts.templateId})`),
           eq(messageTemplates.channelConnectionId, channelConnections.id),
         ),
       )
@@ -314,7 +329,9 @@ export async function processSendMessage(
           type: loaded.type,
           body: loaded.body,
           contactName: loaded.contactName,
-          params: loaded.recipientId ? (loaded.recipientParams ?? []) : null,
+          params: loaded.recipientId
+            ? (loaded.recipientParams ?? [])
+            : manualTemplateParams(loaded.msgTemplateParams, loaded.tplBody),
           template:
             loaded.tplName !== null
               ? {
