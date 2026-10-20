@@ -15,6 +15,8 @@ export const contacts = pgTable(
     tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
     /** How the contact entered the book; `ad` is derived from ad_attributions, not stored. */
     source: text("source", { enum: ["organic", "api", "import"] }).notNull().default("organic"),
+    /** AI turns and follow-ups skip the contact until this instant (T23). */
+    automationsPausedUntil: timestamp("automations_paused_until", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -78,6 +78,6 @@ describe("inboxEventSchema (realtime, incl. AI events from the worker)", () => {
   });
   it("rejects unknown types and the event list covers every type", () => {
     expect(inboxEventSchema.safeParse({ type: "ai.unknown", conversationId: ids.c }).success).toBe(false);
-    expect(INBOX_EVENT_TYPES).toHaveLength(8);
+    expect(INBOX_EVENT_TYPES).toHaveLength(9);
   });
 });

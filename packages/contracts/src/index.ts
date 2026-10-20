@@ -24,3 +24,4 @@ export * from "./contacts.js";
 export * from "./profitability.js";
 export * from "./contact-filters.js";
 export * from "./contact-import.js";
+export * from "./inbox-v2.js";

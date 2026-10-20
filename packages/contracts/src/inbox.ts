@@ -215,9 +215,11 @@ export type UpdateConversationRequest = z.infer<typeof updateConversationRequest
 
 /** Thread-scoped inbox events (best effort; clients refetch on receipt). */
 export const threadEventSchema = z.object({
-  type: z.enum(["message.received", "message.created", "message.status", "conversation.updated"]),
+  type: z.enum(["message.received", "message.created", "message.status", "conversation.updated", "note.created"]),
   conversationId: uuidSchema,
   messageId: uuidSchema.optional(),
+  /** Internal note id (note.created, T23). */
+  noteId: uuidSchema.optional(),
 });
 export type ThreadEvent = z.infer<typeof threadEventSchema>;
 
@@ -241,6 +243,7 @@ export const INBOX_EVENT_TYPES = [
   "message.created",
   "message.status",
   "conversation.updated",
+  "note.created",
   "ai.reply_drafted",
   "ai.action_pending",
   "ai.handoff",
