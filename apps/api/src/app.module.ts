@@ -14,12 +14,13 @@ import { SalesModule } from "./sales/sales.module.js";
 import { StorageModule } from "./storage/storage.module.js";
 import { TenantModule } from "./tenant/tenant.module.js";
 import { PaymentsModule } from "./payments/payments.module.js";
+import { IntegrationsModule } from "./integrations/integrations.module.js";
 import { MetricsModule } from "./metrics/metrics.module.js";
 import { FollowUpsModule } from "./followups/followups.module.js";
 import { WebhooksModule } from "./webhooks/webhooks.module.js";
 
 @Module({
-  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, FollowUpsModule],
+  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, IntegrationsModule, FollowUpsModule],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AppErrorFilter }],
 })

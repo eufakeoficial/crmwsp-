@@ -65,6 +65,9 @@ importers:
       '@crmwsp/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@crmwsp/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@crmwsp/knowledge':
         specifier: workspace:*
         version: link:../../packages/knowledge
