@@ -106,11 +106,11 @@ export function useThread(conversationId: string | null, userId: string, onChang
   );
 
   /** Manual template send; resolves false on failure so the picker can keep its input. */
-  const sendTemplate = useCallback(async (templateId: string, params: string[]): Promise<boolean> => {
+  const sendTemplate = useCallback(async (templateId: string, params: string[], clientMessageId: string): Promise<boolean> => {
     const id = idRef.current;
     if (!id) return false;
     try {
-      const saved = await conversationsApi.sendTemplate(id, templateId, params);
+      const saved = await conversationsApi.sendTemplate(id, templateId, params, clientMessageId);
       setMessages((prev) => mergeMessages(prev, [saved]));
       changedRef.current();
       return true;

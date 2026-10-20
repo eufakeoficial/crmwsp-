@@ -137,6 +137,8 @@ export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
 export const sendTemplateMessageRequestSchema = z.object({
   templateId: uuidSchema,
   params: z.array(z.string().trim().min(1).max(1024)).max(20),
+  /** Idempotency key: template sends are billed, a retry must not send twice. */
+  clientMessageId: uuidSchema,
 });
 export type SendTemplateMessageRequest = z.infer<typeof sendTemplateMessageRequestSchema>;
 

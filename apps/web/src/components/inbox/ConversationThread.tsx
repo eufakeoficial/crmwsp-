@@ -43,7 +43,7 @@ export function ConversationThread({
   onAssign: (userId: string | null) => void;
   onStatus: (s: ConversationStatus) => void;
   onSend: (text: string) => Promise<void>;
-  onSendTemplate: (templateId: string, params: string[]) => Promise<boolean>;
+  onSendTemplate: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
   onLoadOlder: () => void;
 }) {
   return (

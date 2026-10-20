@@ -328,12 +328,25 @@ export class ConversationsController {
     if (!isUuid(id)) throw new NotFoundError();
     const input = parseOrThrow(sendTemplateMessageRequestSchema, body);
 
-    const message = await db.run(async (tx) => {
+    const { message, created } = await db.run(async (tx) => {
+      const findExisting = async () => {
+        const [row] = await tx
+          .select(messageColumns)
+          .from(messages)
+          .where(eq(messages.clientMessageId, input.clientMessageId));
+        return row;
+      };
       const [conv] = await tx
         .select({ id: conversations.id, channelConnectionId: conversations.channelConnectionId })
         .from(conversations)
         .where(eq(conversations.id, id));
       if (!conv) throw new NotFoundError();
+      // Idempotent retry: answer with the original message, never send (bill) twice.
+      const existing = await findExisting();
+      if (existing) {
+        if (existing.conversationId !== id) throw new ConflictError("clientMessageId already used");
+        return { message: existing, created: false };
+      }
       const [tpl] = await tx
         .select({ id: messageTemplates.id, body: messageTemplates.body, externalId: messageTemplates.externalId })
         .from(messageTemplates)
@@ -361,9 +374,19 @@ export class ConversationsController {
           authorUserId: db.userId,
           templateId: tpl.id,
           templateParams: input.params,
+          clientMessageId: input.clientMessageId,
+        })
+        .onConflictDoNothing({
+          target: [messages.tenantId, messages.clientMessageId],
+          where: sql`${messages.clientMessageId} is not null`,
         })
         .returning(messageColumns);
-      if (!inserted) throw new NotFoundError();
+      if (!inserted) {
+        // Concurrent duplicate committed first.
+        const dup = await findExisting();
+        if (!dup || dup.conversationId !== id) throw new ConflictError("clientMessageId already used");
+        return { message: dup, created: false };
+      }
       await tx
         .update(conversations)
         .set({
@@ -371,13 +394,15 @@ export class ConversationsController {
           updatedAt: new Date(),
         })
         .where(eq(conversations.id, id));
-      return inserted;
+      return { message: inserted, created: true };
     });
 
-    // Enqueued after commit; the params never travel in the job payload.
-    const data: SendMessageJobData = { tenantId: db.tenantId, messageId: message.id };
-    await this.queue.add(SEND_MESSAGE_JOB, data, { ...SEND_MESSAGE_JOB_OPTIONS, jobId: message.id });
-    await this.hub.publish(db.tenantId, { type: "message.created", conversationId: id, messageId: message.id });
+    // Enqueued after commit, only for the request that created the message; params never travel in the job.
+    if (created) {
+      const data: SendMessageJobData = { tenantId: db.tenantId, messageId: message.id };
+      await this.queue.add(SEND_MESSAGE_JOB, data, { ...SEND_MESSAGE_JOB_OPTIONS, jobId: message.id });
+      await this.hub.publish(db.tenantId, { type: "message.created", conversationId: id, messageId: message.id });
+    }
     const [dto] = await db.run((tx) => withAttachments(tx, [message]));
     if (!dto) throw new NotFoundError();
     return dto;

@@ -5,6 +5,7 @@ import { Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Input } from "@/components/ui";
 import { broadcastsApi } from "@/lib/broadcasts-api";
+import { newClientMessageId } from "@/lib/inbox-api";
 
 /** Fills `{{n}}` with 1-based values (preview only; the server renders the stored body). */
 export function previewTemplate(body: string, values: readonly string[]): string {
@@ -17,7 +18,8 @@ export function TemplatePicker({
   onSend,
 }: {
   channelConnectionId: string;
-  onSend: (templateId: string, params: string[]) => Promise<boolean>;
+  /** Template sends are billed: each attempt carries its own idempotency key. */
+  onSend: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
 }) {
   const [templates, setTemplates] = useState<BroadcastTemplate[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -58,7 +60,7 @@ export function TemplatePicker({
     inFlight.current = true;
     setSending(true);
     setSendError(false);
-    void onSend(selected.id, filled).then((ok) => {
+    void onSend(selected.id, filled, newClientMessageId()).then((ok) => {
       inFlight.current = false;
       setSending(false);
       if (ok) choose("");

@@ -22,7 +22,7 @@ export function Composer({
   onSend: (text: string) => Promise<void>;
   /** With both set, a closed window offers the approved-template picker. */
   channelConnectionId?: string;
-  onSendTemplate?: (templateId: string, params: string[]) => Promise<boolean>;
+  onSendTemplate?: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
 }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
