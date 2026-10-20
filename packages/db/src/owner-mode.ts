@@ -80,13 +80,14 @@ export type AiActionDecisionResult =
   | { ok: false; reason: "not_found" | "not_pending"; status?: string };
 
 /**
- * Human decision on a `pending_approval` AI action. Same rules as POST /ai/actions/:id/approve|reject:
+ * Human decision on a `pending_approval` AI action: the single rule used by POST /ai/actions/:id/approve|reject
+ * and by owner mode (F9):
  * decision row + status + audit in the caller's transaction; a rejected quote approval also rejects
  * the quote. Approval does not execute: the caller enqueues `execute-ai-action` after commit.
  */
 export async function decideAiActionAsUser(
   tx: Transaction,
-  input: { tenantId: string; actionId: string; userId: string; decision: "approved" | "rejected"; note?: string | null; source: string },
+  input: { tenantId: string; actionId: string; userId: string; decision: "approved" | "rejected"; note?: string | null; source: string; ip?: string | null },
 ): Promise<AiActionDecisionResult> {
   const [action] = await tx.select().from(aiActions).where(eq(aiActions.id, input.actionId)).for("update");
   if (!action) return { ok: false, reason: "not_found" };
@@ -119,6 +120,7 @@ export async function decideAiActionAsUser(
       source: input.source,
       ...(input.note ? { note: input.note } : {}),
     },
+    ip: input.ip && input.ip.length > 0 ? input.ip : null,
   });
   return { ok: true, id: action.id, status: input.decision, type: action.type };
 }
