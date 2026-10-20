@@ -162,6 +162,20 @@
       "when": 1792499199926,
       "tag": "0022_rls_commerce_integrations",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792499201926,
+      "tag": "0025_developer_platform",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792499202926,
+      "tag": "0026_rls_developer_platform",
+      "breakpoints": true
     }
   ]
 }

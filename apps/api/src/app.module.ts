@@ -20,9 +20,10 @@ import { FollowUpsModule } from "./followups/followups.module.js";
 import { WebhooksModule } from "./webhooks/webhooks.module.js";
 import { NotificationsModule } from "./notifications/notifications.module.js";
 import { PaymentReviewsModule } from "./payment-reviews/payment-reviews.module.js";
+import { DevelopersModule } from "./developers/developers.module.js";
 
 @Module({
-  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, FollowUpsModule, NotificationsModule, PaymentReviewsModule, IntegrationsModule],
+  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, FollowUpsModule, NotificationsModule, PaymentReviewsModule, IntegrationsModule, DevelopersModule],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AppErrorFilter }],
 })

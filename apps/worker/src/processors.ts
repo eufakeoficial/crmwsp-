@@ -1,4 +1,5 @@
 import {
+  enqueueWebhookEvent,
   attachments,
   contacts,
   conversations,
@@ -158,8 +159,15 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
           updatedAt: now,
         },
       })
-      .returning({ id: contacts.id });
+      .returning({ id: contacts.id, inserted: sql<boolean>`(xmax = 0)` });
     if (!contact) throw new Error("contact upsert returned no row");
+    if (contact.inserted) {
+      await enqueueWebhookEvent(tx, tenantId, "contact.created", {
+        contactId: contact.id,
+        phoneE164: m.from,
+        name: m.contactName ?? null,
+      });
+    }
 
     // Serialise conversation creation per (tenant, contact, connection): concurrent messages
     // from the same contact would otherwise race on conversations_one_unresolved_unique.
@@ -214,6 +222,15 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       await markProcessed(tx, eventId);
       return { conversationId: existing.conversationId, messageId: existing.id, duplicate: true, scheduleAiTurn: false };
     }
+
+    await enqueueWebhookEvent(tx, tenantId, "message.received", {
+      messageId: inserted.id,
+      conversationId: inserted.conversationId,
+      contactId: contact.id,
+      type: m.type,
+      body: messageBody(m),
+      sentAt: m.timestamp.toISOString(),
+    });
 
     let attachmentId: string | null = null;
     if (m.media) {

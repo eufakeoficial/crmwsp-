@@ -12,6 +12,7 @@ import {
   type Database,
   type Transaction,
 } from "@crmwsp/db";
+import { emitOrderWebhook } from "../developers/order-events.js";
 import { insertNotification } from "../notifications/notify.js";
 import type { MarkPaidInput, OrderRecord, PaymentEventOutcome, PaymentLedger, PaymentLedgerTx, PaymentRecord } from "./payment-ledger.js";
 
@@ -112,6 +113,7 @@ class PgLedgerTx implements PaymentLedgerTx {
       conversationId: o?.conversationId ?? null,
       dedupeKey: `order_paid:${i.orderId}`,
     });
+    await emitOrderWebhook(this.tx, this.tenantId, "order.paid", i.orderId);
   }
 
   async setPaymentStatus(paymentId: string, status: "failed" | "expired"): Promise<void> {

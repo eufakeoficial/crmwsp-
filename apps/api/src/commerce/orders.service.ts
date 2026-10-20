@@ -2,6 +2,7 @@ import { ConflictError, NotFoundError, ValidationError, type Order } from "@crmw
 import { transitionOrder, type OrderAction } from "@crmwsp/domain";
 import { writeAudit } from "../inbox/audit.js";
 import { insertNotification } from "../notifications/notify.js";
+import { emitOrderWebhook } from "../developers/order-events.js";
 import {
   and,
   contacts,
@@ -88,6 +89,7 @@ export async function insertOrderDraft(tx: Transaction, o: NewOrder): Promise<st
       lineTotalMinor: l.lineTotalMinor,
     })),
   );
+  await emitOrderWebhook(tx, o.tenantId, "order.created", row.id);
   return row.id;
 }
 
@@ -255,6 +257,7 @@ export async function transitionOrderTx(
       dedupeKey: `order_confirmed:${id}`,
     });
   } else if (t.to === "paid") {
+    await emitOrderWebhook(tx, ctx.tenantId, "order.paid", id);
     await insertNotification(tx, ctx.tenantId, {
       kind: "order_paid",
       title: `Pedido ${o.number} pagado`,
