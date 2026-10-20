@@ -10,6 +10,7 @@ import { Alert, Card, Chip, DataCell, DataRow, DataTable, KpiCard, Spinner } fro
 import { ApiError } from "@/lib/api";
 import { analyticsApi } from "@/lib/analytics-api";
 import { formatMoneyMinor, formatNumber } from "@/lib/format";
+import { currencyOptions, useCurrencySettings } from "@/lib/currency-api";
 
 const GROUPS: { key: ProfitabilityGroupBy; label: string }[] = [
   { key: "customer", label: "Por cliente" },
@@ -42,7 +43,10 @@ export function ProfitabilityDashboard() {
     void load(days, groupBy, currency);
   }, [load, days, groupBy, currency]);
 
-  const cur = data?.currency ?? "USD";
+  const currencySettings = useCurrencySettings();
+  const cur = data?.currency ?? currencySettings?.base ?? "USD";
+  // Enabled currencies (base first), plus any other currency the period has data in.
+  const currencyChoices = [...new Set([...currencyOptions(currencySettings, cur), ...(data?.currencies ?? [])])];
   const usd = data?.usageCostCurrency ?? "USD";
   const money = (v: number) => formatMoneyMinor(v, cur);
   const usage = (v: number) => formatMoneyMinor(v, usd);
@@ -61,9 +65,9 @@ export function ProfitabilityDashboard() {
               </Chip>
             ))}
           </div>
-          {data && data.currencies.length > 1 ? (
+          {data && currencyChoices.length > 1 ? (
             <div role="group" aria-label="Moneda" className="flex gap-2">
-              {data.currencies.map((c) => (
+              {currencyChoices.map((c) => (
                 <Chip key={c} active={c === cur} onClick={() => setCurrency(c)}>
                   {c}
                 </Chip>

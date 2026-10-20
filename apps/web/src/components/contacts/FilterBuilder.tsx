@@ -26,6 +26,7 @@ import {
   relationChoices,
   toMoneyFilterValue,
 } from "./filter-meta";
+import { useCurrencySettings } from "@/lib/currency-api";
 
 interface Props {
   filter: ContactFilter;
@@ -125,6 +126,7 @@ function ConditionEditor({
     return initialMoney ? moneyInputText(initialMoney) : String(initial.value);
   });
   const [currency, setCurrency] = useState(initialMoney?.currency ?? tenantCurrency);
+  const currencySettings = useCurrencySettings();
   const [search, setSearch] = useState("");
 
   const pickField = (key: string) => {
@@ -256,7 +258,7 @@ function ConditionEditor({
             onChange={(e) => setCurrency(e.target.value)}
             className="h-9 rounded-[10px] border-[1.5px] border-line-2 bg-white px-2 text-sm"
           >
-            {moneyCurrencies(tenantCurrency).map((cur) => (
+            {moneyCurrencies(currencySettings?.base ?? tenantCurrency, currencySettings?.enabled, currency).map((cur) => (
               <option key={cur} value={cur}>
                 {cur}
               </option>

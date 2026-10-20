@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { normalizePrice, parseCsvText, rowsFromCsv, rowsToCsv, validateRows } from "./price-table";
 
 describe("price-table", () => {
+  it("defaults rows without currency to the tenant base and reads S/ and $ prices", () => {
+    const parsed = rowsFromCsv(parseCsvText("Producto;Precio\nCorte;25\nTinte;S/ 80\nPeinado;$ 30"), "PEN");
+    expect(parsed.rows.map((r) => [r.price, r.currency])).toEqual([["25", "PEN"], ["80", "PEN"], ["30", "USD"]]);
+    expect(rowsFromCsv(parseCsvText("Producto;Precio\nCorte;$ 5000"), "CLP").rows[0]!.currency).toBe("CLP");
+  });
+
   it("parses semicolon CSV with quotes and detects columns", () => {
     const parsed = rowsFromCsv(parseCsvText('Producto;Talla;Precio;Moneda\n"Camiseta; roja";M;12,50;USD\nGorra;;9 €;'));
     expect(parsed.rows).toEqual([

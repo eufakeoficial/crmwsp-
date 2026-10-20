@@ -4,6 +4,7 @@ import { Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { Alert, Button, Input, Spinner } from "@/components/ui";
 import { knowledgeApi } from "@/lib/ai-api";
+import { currencyOptions, defaultCurrency, useCurrencySettings } from "@/lib/currency-api";
 import { errorMessage } from "@/lib/messages";
 import { type PriceRow, normalizePrice, parseCsvText, rowsFromCsv, rowsToCsv, validateRows } from "./price-table";
 
@@ -23,6 +24,7 @@ export function PricesStep({ onImported }: { onImported: (what: string) => void 
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const currencySettings = useCurrencySettings();
 
   async function pick(file: File | undefined) {
     if (!file) return;
@@ -45,7 +47,7 @@ export function PricesStep({ onImported }: { onImported: (what: string) => void 
       return;
     }
     if (!lower.endsWith(".csv")) return setError("Formato no admitido. Sube un CSV o un PDF.");
-    const parsed = rowsFromCsv(parseCsvText(await file.text()));
+    const parsed = rowsFromCsv(parseCsvText(await file.text()), defaultCurrency(currencySettings));
     if (parsed.error) return setError(parsed.error);
     if (parsed.rows.length === 0) return setError("No hay filas con datos.");
     if (parsed.truncated) setNote("Mostramos las primeras 2000 filas; divide el archivo para importar el resto.");
@@ -103,7 +105,7 @@ export function PricesStep({ onImported }: { onImported: (what: string) => void 
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i} className="border-t border-line" title={issueAt.get(i)}>
-                    {(["name", "variant", "price", "currency"] as const).map((f) => (
+                    {(["name", "variant", "price"] as const).map((f) => (
                       <td key={f} className="p-1">
                         <Input
                           aria-label={`${f} fila ${i + 1}`}
@@ -114,6 +116,17 @@ export function PricesStep({ onImported }: { onImported: (what: string) => void 
                         />
                       </td>
                     ))}
+                    <td className="p-1">
+                      <select
+                        aria-label={`currency fila ${i + 1}`}
+                        aria-invalid={fieldInvalid(r, "currency")}
+                        className="h-9 rounded-[10px] border-[1.5px] border-ink bg-white px-2 text-[14px]"
+                        value={r.currency}
+                        onChange={(e) => edit(i, { currency: e.target.value })}
+                      >
+                        {currencyOptions(currencySettings, r.currency).map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -21,6 +21,7 @@ describe("money filter values", () => {
   });
   it("lists the tenant currency first and describes the chip in that currency", () => {
     expect(moneyCurrencies("CLP")[0]).toBe("CLP");
+    expect(moneyCurrencies("PEN", ["USD", "PEN"], "EUR")).toEqual(["PEN", "USD", "EUR"]);
     const text = describeCondition({ field: "total_paid", type: "number", operator: "gt", value: { amountMinor: 15000, currency: "CLP" } }, { segments: [] });
     expect(text).toContain("15.000");
     expect(text).not.toContain(",00");

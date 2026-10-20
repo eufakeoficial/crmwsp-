@@ -1,10 +1,11 @@
 "use client";
 
-import type { Product } from "@crmwsp/contracts";
+import type { CurrencySettings, Product } from "@crmwsp/contracts";
 import { type FormEvent, useId, useState } from "react";
 import { Alert, Button, Input, Label, Modal, Textarea } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { productsApi } from "@/lib/commerce-api";
+import { currencyOptions } from "@/lib/currency-api";
 import { currencyDecimals, majorToMinor, minorToMajor } from "@/lib/format";
 import { errorMessage } from "@/lib/messages";
 import { KIND_LABELS, STATUS_LABELS, optionsLabel } from "./product-meta";
@@ -20,11 +21,14 @@ function saveErrorMessage(err: unknown): string {
 export function ProductFormDialog({
   product,
   defaultCurrency,
+  currencies,
   onClose,
   onSaved,
 }: {
   product: Product | null;
   defaultCurrency: string;
+  /** Tenant currency settings: the select offers only enabled currencies. */
+  currencies?: CurrencySettings | undefined;
   onClose: () => void;
   onSaved: (p: Product) => void;
 }) {
@@ -137,7 +141,15 @@ export function ProductFormDialog({
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           {field("price", "Precio", <Input id={`${formId}-price`} inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0,00" />)}
-          {field("currency", "Moneda", <Input id={`${formId}-currency`} value={currency} onChange={(e) => setCurrency(e.target.value)} maxLength={3} />)}
+          {field(
+            "currency",
+            "Moneda",
+            <select id={`${formId}-currency`} className={SELECT} value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              {currencyOptions(currencies, product?.currency ?? defaultCurrency).map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>,
+          )}
           {field("tax", "Impuesto (%)", <Input id={`${formId}-tax`} inputMode="decimal" value={taxPct} onChange={(e) => setTaxPct(e.target.value)} />)}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">

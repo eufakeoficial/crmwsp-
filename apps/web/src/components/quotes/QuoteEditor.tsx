@@ -2,13 +2,14 @@
 
 import type { Contact, ProductSearchItem, Quote, QuoteItemInput } from "@crmwsp/contracts";
 import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Button, Input, Label, Modal, Textarea } from "@/components/ui";
 import { contactsApi } from "@/lib/inbox-api";
 import { currencyDecimals, formatMoneyMinor, majorToMinor } from "@/lib/format";
 import { errorMessage } from "@/lib/messages";
 import { catalogSearchApi, quotesApi } from "@/lib/quotes-api";
-import { QUOTE_CURRENCIES, contactLabel, datePlusDays } from "./quote-meta";
+import { contactLabel, datePlusDays } from "./quote-meta";
+import { currencyOptions, useCurrencySettings } from "@/lib/currency-api";
 
 interface Line {
   key: number;
@@ -59,7 +60,12 @@ export function QuoteEditor({ quote, onClose, onSaved }: { quote: Quote | null; 
   const [contact, setContact] = useState<{ id: string; label: string } | null>(quote ? { id: quote.contact.id, label: contactLabel(quote) } : null);
   const [contactQuery, setContactQuery] = useState("");
   const [contactResults, setContactResults] = useState<Contact[]>([]);
+  const currencySettings = useCurrencySettings();
   const [currency, setCurrency] = useState(quote?.currency ?? "EUR");
+  // New quotes default to the tenant base currency once it loads.
+  useEffect(() => {
+    if (!quote && currencySettings) setCurrency(currencySettings.base);
+  }, [quote, currencySettings]);
   const [validUntil, setValidUntil] = useState(quote ? quote.validUntil.slice(0, 10) : datePlusDays(15));
   const [notes, setNotes] = useState(quote?.notes ?? "");
   const [terms, setTerms] = useState(quote?.terms ?? "");
@@ -188,7 +194,7 @@ export function QuoteEditor({ quote, onClose, onSaved }: { quote: Quote | null; 
               setProductResults([]);
             }}
           >
-            {QUOTE_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {currencyOptions(currencySettings, currency).map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>

@@ -7,6 +7,7 @@ import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { useSession } from "@/components/app/SessionProvider";
 import { Alert, Button, Card, Chip, SearchInput, StatusChip, Toast, type Tone } from "@/components/ui";
 import { productsApi } from "@/lib/commerce-api";
+import { defaultCurrency, useCurrencySettings } from "@/lib/currency-api";
 import { formatMoneyMinor } from "@/lib/format";
 import { useToast } from "@/lib/hooks/use-toast";
 import { errorMessage } from "@/lib/messages";
@@ -23,6 +24,7 @@ export function ProductsView() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [status, setStatus] = useState<StatusFilter>("all");
+  const currencySettings = useCurrencySettings();
   const [draftQuery, setDraftQuery] = useState("");
   const [query, setQuery] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
@@ -155,7 +157,8 @@ export function ProductsView() {
       {editing ? (
         <ProductFormDialog
           product={editing === "new" ? null : editing}
-          defaultCurrency={products?.[0]?.currency ?? "EUR"}
+          defaultCurrency={defaultCurrency(currencySettings, products?.[0]?.currency ?? "EUR")}
+          currencies={currencySettings}
           onClose={() => setEditing(null)}
           onSaved={onSaved}
         />
