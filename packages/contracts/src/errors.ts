@@ -13,6 +13,7 @@ export const ErrorCode = {
   EncryptionNotConfigured: "ENCRYPTION_NOT_CONFIGURED",
   InsufficientStock: "INSUFFICIENT_STOCK",
   StorageNotConfigured: "STORAGE_NOT_CONFIGURED",
+  PlanLimitExceeded: "PLAN_LIMIT_EXCEEDED",
   Internal: "INTERNAL_ERROR",
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -65,6 +66,13 @@ export class NotFoundError extends AppError {
 export class ConflictError extends AppError {
   constructor(message = "Conflict", options?: AppErrorOptions) {
     super(ErrorCode.Conflict, message, 409, options);
+  }
+}
+
+/** The tenant's plan does not allow this (limit reached or feature not included). 402. */
+export class PlanLimitExceededError extends AppError {
+  constructor(message = "Plan limit exceeded", options?: AppErrorOptions) {
+    super(ErrorCode.PlanLimitExceeded, message, 402, options);
   }
 }
 

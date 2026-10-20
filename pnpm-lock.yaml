@@ -53,6 +53,9 @@ importers:
       '@crmwsp/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@crmwsp/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@crmwsp/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -181,6 +184,9 @@ importers:
       '@crmwsp/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@crmwsp/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@crmwsp/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

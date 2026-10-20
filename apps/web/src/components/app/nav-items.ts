@@ -1,4 +1,4 @@
-import { BookOpen, ClipboardCheck, Receipt, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, ShoppingBag, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { BookOpen, ClipboardCheck, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, ShoppingBag, Sparkles, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -13,6 +13,7 @@ export const SETTINGS_SECTIONS: readonly NavItem[] = [
   { key: "settings-ai", label: "IA", href: "/app/settings/ai", icon: Sparkles },
   { key: "settings-knowledge", label: "Conocimiento", href: "/app/settings/knowledge", icon: BookOpen },
   { key: "settings-approvals", label: "Aprobaciones", href: "/app/settings/approvals", icon: ClipboardCheck },
+  { key: "settings-plan", label: "Plan y uso", href: "/app/settings/plan", icon: CreditCard },
 ];
 
 export const NAV_MAIN: readonly NavItem[] = [
