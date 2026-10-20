@@ -14,6 +14,7 @@ import { BROADCAST_QUEUE_NAME, createBroadcastWorker, scheduleBroadcastTick } fr
 import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
 import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotificationTick } from "./notifications/index.js";
 import { WEBHOOK_QUEUE_NAME, createWebhookSender, createWebhookWorker, scheduleWebhookTick } from "./webhooks/index.js";
+import { ORDER_EXTRACTION_QUEUE_NAME, createOrderExtractionWorker } from "./order-extraction/index.js";
 
 export * from "./queue.js";
 export * from "./processors.js";
@@ -26,6 +27,7 @@ export * from "./notifications/index.js";
 export * from "./media/index.js";
 export * from "./webhooks/index.js";
 export * from "./broadcasts/index.js";
+export * from "./order-extraction/index.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -53,6 +55,8 @@ function main(): void {
   // Producer for store-media jobs (inbound media copied to S3); disabled when S3_* is not configured.
   const mediaStore = mediaStoreFromEnv();
   const mediaQueue = mediaStore ? new Queue(MEDIA_QUEUE_NAME, { connection: createRedis(redisUrl) }) : undefined;
+  // Producer for F4 order detection on inbound voice notes, photos and PDFs.
+  const orderExtractionQueue = new Queue(ORDER_EXTRACTION_QUEUE_NAME, { connection: createRedis(redisUrl) });
 
   const worker = createInboundWorker({
     connection,
@@ -62,6 +66,7 @@ function main(): void {
     publisher,
     aiQueue,
     ...(mediaQueue ? { mediaQueue } : {}),
+    orderExtractionQueue,
     logger,
   });
   worker.on("failed", (job, err) =>
@@ -85,6 +90,7 @@ function main(): void {
   let webhookQueue: Queue | undefined;
   let broadcastWorker: ReturnType<typeof createBroadcastWorker> | undefined;
   let broadcastQueue: Queue | undefined;
+  let orderExtractionWorker: ReturnType<typeof createOrderExtractionWorker> | undefined;
   try {
     const keys = loadMasterKeysFromEnv(process.env);
     const cipher = createCipherBox(keys);
@@ -113,6 +119,19 @@ function main(): void {
       loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider(), store: mediaStore }),
       logger,
     });
+    // F4: PDFs are handed off until `pdfText` is wired (the worker does not depend on @crmwsp/knowledge yet).
+    orderExtractionWorker = createOrderExtractionWorker({
+      connection: createRedis(redisUrl),
+      db: db.db,
+      cipher,
+      publisher,
+      outboundQueue,
+      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider(), store: mediaStore }),
+      logger,
+    });
+    orderExtractionWorker.on("failed", (job, err) =>
+      logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
+    );
     if (mediaStore) {
       mediaWorker = createMediaWorker({
         connection: createRedis(redisUrl),
@@ -177,8 +196,8 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close()])
-      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), webhookQueue?.close(), broadcastQueue?.close()]))
+    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), orderExtractionWorker?.close()])
+      .then(() => Promise.allSettled([aiQueue.close(), orderExtractionQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), webhookQueue?.close(), broadcastQueue?.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));
   };

@@ -27,6 +27,7 @@ import { applyBroadcastStatus, recordMarketingOptOut } from "./broadcasts/consen
 import { cancelFollowUpsForConversation } from "./followups/pg-store.js";
 import { contactAutomationsPaused, routeInbound } from "./inbox/routing.js";
 import { STORE_MEDIA_JOB, STORE_MEDIA_JOB_OPTIONS, storeMediaJobId, type StoreMediaJobData } from "./media/job.js";
+import { enqueueOrderExtraction } from "./order-extraction/queue.js";
 
 /** Minimal publisher (ioredis satisfies it). */
 export interface EventPublisher {
@@ -48,6 +49,8 @@ export interface ProcessorDeps {
   aiQueue?: Pick<Queue, "add">;
   /** `media` queue; when absent, inbound media is not copied to object storage. */
   mediaQueue?: Pick<Queue, "add">;
+  /** `order-extraction` queue (F4); when absent, media messages are not scanned for orders. */
+  orderExtractionQueue?: Pick<Queue, "add">;
 }
 
 export type InboxEventType = "message.received" | "message.created" | "message.status" | "conversation.updated";
@@ -69,6 +72,8 @@ interface IngestTxResult extends IngestMessageResult {
   scheduleAiTurn: boolean;
   /** Attachment whose bytes must be copied to object storage after commit. */
   attachmentId?: string | null;
+  /** Mime type of that attachment (F4 order detection decides on it). */
+  mediaMimeType?: string | null;
 }
 
 export interface IngestStatusResult {
@@ -308,9 +313,9 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     }
 
     await markProcessed(tx, eventId);
-    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn, attachmentId };
+    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn, attachmentId, mediaMimeType: m.media?.mimeType ?? null };
   });
-  const { scheduleAiTurn, attachmentId, ...result } = out;
+  const { scheduleAiTurn, attachmentId, mediaMimeType, ...result } = out;
 
   if (!result.duplicate) {
     await publish(deps, tenantId, {
@@ -335,6 +340,15 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
         // The message is committed and visible in the inbox; a retry of this job would be a
         // duplicate and would not re-enqueue, so do not fail the ingest.
         (deps.logger ?? silent).warn(`could not enqueue ai-turn (${err instanceof Error ? err.name : "unknown"})`);
+      }
+      // F4: voice notes, photos and PDFs may carry an order (same AI gate as the turn).
+      if (attachmentId) {
+        await enqueueOrderExtraction(
+          deps.orderExtractionQueue,
+          { tenantId, conversationId: result.conversationId, messageId: result.messageId },
+          mediaMimeType,
+          deps.logger ?? silent,
+        );
       }
     }
   }
