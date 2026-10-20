@@ -43,7 +43,7 @@ export function TenantSwitcher() {
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls="tenant-menu"
-        className="flex h-12 w-full max-w-full cursor-pointer items-center gap-2 rounded-full bg-white pr-2 pl-4 text-[15px] font-bold text-ink"
+        className="flex h-9 w-full max-w-full cursor-pointer items-center gap-2 rounded-full bg-white pr-2 pl-3 text-[13px] font-bold text-ink"
       >
         <span className="sr-only">Empresa activa: </span>
         <span className="truncate" data-testid="active-tenant">{tenant?.name ?? "Sin empresa"}</span>
@@ -52,7 +52,7 @@ export function TenantSwitcher() {
         </span>
       </button>
       {open ? (
-        <div id="tenant-menu" className="absolute top-14 left-0 z-50 flex w-[280px] max-w-[calc(100vw-24px)] flex-col gap-0.5 rounded-[20px] bg-white p-2 shadow-[0_16px_40px_rgba(18,18,18,.22)]">
+        <div id="tenant-menu" className="absolute top-11 left-0 z-50 flex w-[280px] max-w-[calc(100vw-24px)] flex-col gap-0.5 rounded-[20px] bg-white p-2 shadow-[0_16px_40px_rgba(18,18,18,.22)]">
           <div className="flex items-center gap-2.5 border-b border-paper px-2.5 pt-2 pb-3">
             <Avatar name={me.user.name ?? me.user.email} round size="lg" />
             <span className="min-w-0">

@@ -18,11 +18,11 @@ export function SidebarLink({ item, active, count, onNavigate }: { item: NavItem
       {...(onNavigate ? { onClick: onNavigate } : {})}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex min-h-[50px] items-center gap-3 rounded-full px-4 py-1 no-underline",
+        "flex min-h-[34px] items-center gap-2.5 rounded-full px-3 py-0.5 text-[13px] no-underline",
         active ? "bg-lime font-extrabold text-ink" : "font-semibold text-white hover:bg-ink-2",
       )}
     >
-      <Icon aria-hidden className="size-5 flex-none" />
+      <Icon aria-hidden className="size-4 flex-none" />
       <span className="flex-1 whitespace-nowrap">{item.label}</span>
       {count ? (
         <span className="rounded-full bg-alert px-2 text-[12px] font-extrabold text-white">
@@ -48,7 +48,7 @@ export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNa
   const pathname = usePathname();
   const render = (items: readonly NavItem[]) =>
     items.map((i) => (
-      <div key={i.key} className="flex flex-col gap-1">
+      <div key={i.key} className="flex flex-col gap-0.5">
         <SidebarLink item={i} active={isActive(pathname, i.href) && !i.children} count={counts[i.key]} {...(onNavigate ? { onNavigate } : {})} />
         {i.children && isActive(pathname, i.href) ? <SubLinks items={i.children} pathname={pathname} counts={counts} onNavigate={onNavigate} /> : null}
       </div>
@@ -65,12 +65,12 @@ export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNa
 /** AI assistant card: links to the AI settings, where the assist mode (draft, human sends) is chosen. */
 export function AssistantCard() {
   return (
-    <div className="mt-auto flex flex-col items-start gap-2 rounded-[22px] bg-ink-2 p-3.5 text-white">
-      <span className="grid size-10 place-items-center rounded-xl bg-lime text-ink">
+    <div className="mt-auto flex flex-col items-start gap-2 rounded-[18px] bg-ink-2 p-3 text-white">
+      <span className="grid size-8 place-items-center rounded-lg bg-lime text-ink">
         <Sparkles aria-hidden className="size-5" />
       </span>
-      <b className="text-[15px]">Asistente de IA</b>
-      <span className="text-[13px] text-subtle">Modo asistente: la IA redacta y tú envías.</span>
+      <b className="text-[13px]">Asistente de IA</b>
+      <span className="text-[12px] text-subtle">Modo asistente: la IA redacta y tú envías.</span>
       <Link href="/app/settings/ai" className="text-[13px] font-bold text-lime no-underline hover:underline">
         Configurar la IA
       </Link>
@@ -81,9 +81,9 @@ export function AssistantCard() {
 /** Floating black sidebar (desktop, from the `desk` breakpoint). */
 export function AppSidebar({ counts }: { counts?: NavCounts }) {
   return (
-    <nav aria-label="Principal" className="fixed top-0 bottom-0 left-0 z-[25] hidden w-[260px] p-3 desk:block">
-      <div className="flex h-full flex-col gap-1 overflow-y-auto rounded-[28px] bg-ink px-3 py-[18px] text-white [scrollbar-color:var(--color-ink-4)_transparent] [scrollbar-width:thin]">
-        <Logo href="/app" inverted className="px-2 pb-[18px]" />
+    <nav aria-label="Principal" className="fixed top-0 bottom-0 left-0 z-[25] hidden w-[220px] p-3 desk:block">
+      <div className="flex h-full flex-col gap-1 overflow-y-auto rounded-[22px] bg-ink px-2.5 py-3.5 text-white [scrollbar-color:var(--color-ink-4)_transparent] [scrollbar-width:thin]">
+        <Logo href="/app" inverted className="px-2 pb-3" />
         <NavLinks {...(counts ? { counts } : {})} />
         <AssistantCard />
       </div>

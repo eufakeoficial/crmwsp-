@@ -20,14 +20,14 @@ export function SectionHero({
   tone?: Tone;
 }) {
   return (
-    <section className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-[28px] bg-ink p-[22px] text-white">
+    <section className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-[22px] bg-ink p-[18px] text-white">
       <span aria-hidden className={cn("absolute -top-10 -right-[30px] size-[200px] rounded-full opacity-50", TONE_BG[tone])} />
-      <span className="relative grid size-16 flex-none place-items-center rounded-[20px] bg-lime text-ink">
-        <Icon aria-hidden className="size-[30px]" />
+      <span className="relative grid size-12 flex-none place-items-center rounded-[16px] bg-lime text-ink">
+        <Icon aria-hidden className="size-6" />
       </span>
       <div className="relative min-w-0 flex-[1_1_260px]">
         {eyebrow ? <span className="text-xs font-extrabold opacity-75">{eyebrow}</span> : null}
-        <h2 className="m-0 text-[28px] tracking-[-0.03em]">{title}</h2>
+        <h2 className="m-0 text-[22px] tracking-[-0.03em]">{title}</h2>
         {subtitle ? <span className="opacity-85">{subtitle}</span> : null}
       </div>
       {actions ? <div className="relative flex flex-wrap gap-2">{actions}</div> : null}

@@ -20,7 +20,7 @@ export function AppShell({ children, counts }: { children: ReactNode; counts?: N
       </a>
       <AppSidebar {...(counts ? { counts } : {})} />
       <AppTopbar menuOpen={open} onToggleMenu={() => setOpen((v) => !v)} />
-      <main id="app-content" tabIndex={-1} className="min-w-0 px-[clamp(12px,3vw,28px)] pt-[88px] pb-24 outline-none desk:pl-[calc(260px+clamp(12px,3vw,28px))]">
+      <main id="app-content" tabIndex={-1} className="min-w-0 px-[clamp(12px,3vw,28px)] pt-[68px] pb-24 outline-none desk:pl-[calc(220px+clamp(12px,3vw,28px))]">
         {children}
       </main>
       {open ? <AppMenuSheet onClose={() => setOpen(false)} {...(counts ? { counts } : {})} /> : null}

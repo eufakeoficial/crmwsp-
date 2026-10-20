@@ -13,9 +13,9 @@ const VARIANTS: Record<ButtonVariant, string> = {
 };
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: "h-9 px-3 text-[13px]",
-  md: "h-11 px-5 text-[14px]",
-  lg: "h-14 px-6 text-[17px]",
+  sm: "h-8 px-3 text-[13px]",
+  md: "h-9 px-4 text-[13px]",
+  lg: "h-11 px-5 text-[15px]",
 };
 
 /** Class string of a pill button; also used to style `<Link>`s as buttons. */
