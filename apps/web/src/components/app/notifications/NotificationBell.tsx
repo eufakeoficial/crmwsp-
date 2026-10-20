@@ -9,7 +9,7 @@ import { formatDateTime } from "@/lib/format";
 import { notificationsApi } from "@/lib/notifications-api";
 
 /** Poll interval: covers notifications that are not paired with an inbox event (e.g. Stripe paid). */
-const POLL_MS = 20_000;
+const POLL_MS = 30_000;
 
 export function notificationHref(n: Pick<Notification, "kind" | "entity" | "entityId" | "conversationId">): string | null {
   if (n.kind === "payment_review") return "/app/payments/reviews";
@@ -19,7 +19,7 @@ export function notificationHref(n: Pick<Notification, "kind" | "entity" | "enti
   return null;
 }
 
-export function NotificationBell() {
+export function NotificationBell({ triggerClassName = "size-10 border border-line bg-surface hover:bg-ink/5" }: { triggerClassName?: string } = {}) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[] | null>(null);
   const [unread, setUnread] = useState(0);
@@ -84,7 +84,7 @@ export function NotificationBell() {
           setOpen((v) => !v);
           if (!open) refresh();
         }}
-        className="relative grid size-10 place-items-center rounded-full border border-line bg-surface hover:bg-ink/5"
+        className={`relative grid place-items-center rounded-full ${triggerClassName}`}
       >
         <Bell className="size-5" aria-hidden />
         {unread > 0 ? (
