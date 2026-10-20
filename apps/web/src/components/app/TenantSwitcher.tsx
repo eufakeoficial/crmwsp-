@@ -1,17 +1,20 @@
 "use client";
 
-import { Check, ChevronDown, LogOut } from "lucide-react";
+import { Check, ChevronDown, LogOut, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { ROLE_LABELS } from "./roles";
 import { useSession } from "./SessionProvider";
+import { usePlatformMe } from "@/components/platform/use-platform-me";
 
 /** White pill with the active company and a lime chevron button; opens the company list and logout. */
 export function TenantSwitcher() {
   const { me, tenant, selectTenant, logout } = useSession();
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const isPlatformAdmin = usePlatformMe();
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -77,6 +80,17 @@ export function TenantSwitcher() {
               {t.id === tenant?.id ? <Check aria-hidden className="size-4" /> : null}
             </button>
           ))}
+          {isPlatformAdmin ? (
+            <Link
+              href="/app/admin"
+              onClick={() => setOpen(false)}
+              className="mt-1 flex min-h-11 items-center gap-2.5 rounded-xl border-t border-paper px-2.5 font-bold hover:bg-paper"
+              data-testid="platform-admin-link"
+            >
+              <ShieldCheck aria-hidden className="size-[18px]" />
+              Admin
+            </Link>
+          ) : null}
           <button
             type="button"
             disabled={loggingOut}

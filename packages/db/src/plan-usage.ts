@@ -10,6 +10,8 @@ const PERIOD_SQL = sql`to_char(now() at time zone coalesce(
 export interface PlanUsageSnapshot {
   /** Stored plan id, `null` when the tenant has no `tenant_plans` row (default plan). */
   plan: string | null;
+  /** Per-tenant limit overrides set by a platform admin (`null` = none). */
+  limitsOverride: Record<string, number | null> | null;
   period: string;
   aiMessages: number;
   broadcastSends: number;
@@ -22,6 +24,7 @@ export interface PlanUsageSnapshot {
 export async function readPlanUsage(tx: Transaction): Promise<PlanUsageSnapshot> {
   const [row] = await tx.execute<{
     plan: string | null;
+    limits_override: Record<string, number | null> | null;
     period: string;
     ai_messages: string | null;
     broadcast_sends: string | null;
@@ -32,6 +35,7 @@ export async function readPlanUsage(tx: Transaction): Promise<PlanUsageSnapshot>
     with p as (select ${PERIOD_SQL} as period)
     select
       (select plan from tenant_plans limit 1) as plan,
+      (select limits_override from tenant_plans limit 1) as limits_override,
       p.period,
       (select used from usage_counters u where u.period = p.period and u.limit_key = 'ai_messages') as ai_messages,
       (select used from usage_counters u where u.period = p.period and u.limit_key = 'broadcast_sends') as broadcast_sends,
@@ -44,6 +48,7 @@ export async function readPlanUsage(tx: Transaction): Promise<PlanUsageSnapshot>
   if (!row) throw new Error("plan usage query returned no row");
   return {
     plan: row.plan,
+    limitsOverride: row.limits_override ?? null,
     period: row.period,
     aiMessages: Number(row.ai_messages ?? 0),
     broadcastSends: Number(row.broadcast_sends ?? 0),

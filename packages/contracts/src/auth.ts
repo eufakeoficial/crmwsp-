@@ -33,11 +33,17 @@ export const loginRequestSchema = z.object({
 });
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
+/** Tenant lifecycle (ADR 0011): only `active` tenants can use the panel, channels and AI. */
+export const tenantStatusSchema = z.enum(["active", "pending_approval", "rejected", "suspended"]);
+export type TenantStatus = z.infer<typeof tenantStatusSchema>;
+
 export const userTenantSchema = z.object({
   id: tenantIdSchema,
   slug: z.string(),
   name: z.string(),
   role: membershipRoleSchema,
+  /** Missing on older API responses = active. */
+  status: tenantStatusSchema.optional(),
 });
 export type UserTenant = z.infer<typeof userTenantSchema>;
 

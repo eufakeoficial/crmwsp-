@@ -1,4 +1,4 @@
-import { Building2, ChartColumn, CreditCard, History, House, LifeBuoy, Plug, Settings, Users, type LucideIcon } from "lucide-react";
+import { Building2, ChartColumn, CreditCard, History, House, LifeBuoy, Plug, Receipt, Settings, UserCheck, Users, type LucideIcon } from "lucide-react";
 
 export interface AdminNavItem {
   key: string;
@@ -16,7 +16,7 @@ export interface AdminNavGroup {
 
 export const ADMIN_BASE = "/app/admin";
 
-/** SaaS backoffice menu. Pages do not exist yet: every route shows an EmptyState. */
+/** SaaS backoffice menu (ADR 0011). Routes without a page yet show an EmptyState. */
 export const ADMIN_NAV: readonly AdminNavGroup[] = [
   { id: "home", title: "", items: [{ key: "home", label: "Inicio", href: ADMIN_BASE, icon: House }] },
   {
@@ -24,6 +24,7 @@ export const ADMIN_NAV: readonly AdminNavGroup[] = [
     title: "PLATAFORMA",
     items: [
       { key: "tenants", label: "Empresas", href: `${ADMIN_BASE}/tenants`, icon: Building2 },
+      { key: "approvals", label: "Aprobaciones", href: `${ADMIN_BASE}/approvals`, icon: UserCheck },
       { key: "users", label: "Usuarios", href: `${ADMIN_BASE}/users`, icon: Users },
       { key: "channels", label: "Canales BSP", href: `${ADMIN_BASE}/channels`, icon: Plug },
     ],
@@ -32,6 +33,7 @@ export const ADMIN_NAV: readonly AdminNavGroup[] = [
     id: "billing",
     title: "FACTURACIÓN",
     items: [
+      { key: "payments", label: "Pagos", href: `${ADMIN_BASE}/payments`, icon: Receipt },
       { key: "plans", label: "Planes", href: `${ADMIN_BASE}/plans`, icon: CreditCard },
       { key: "usage", label: "Uso y consumo", href: `${ADMIN_BASE}/usage`, icon: ChartColumn },
     ],

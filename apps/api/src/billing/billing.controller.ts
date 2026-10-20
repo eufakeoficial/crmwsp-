@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, UseGuards } from "@nestjs/common";
 import type { BillingPlanResponse } from "@crmwsp/contracts";
 import { CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -9,7 +9,7 @@ import { PlanLimitsService } from "./plan-limits.service.js";
 // SessionGuard is global (APP_GUARD) and runs first.
 @UseGuards(TenantGuard)
 export class BillingController {
-  constructor(private readonly limits: PlanLimitsService) {}
+  constructor(@Inject(PlanLimitsService) private readonly limits: PlanLimitsService) {}
 
   /**
    * GET /billing/plan — current plan and usage of the tenant (response: `billingPlanResponseSchema`

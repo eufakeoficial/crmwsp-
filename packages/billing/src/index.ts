@@ -67,6 +67,23 @@ export function getPlan(id: string | null | undefined): PlanDefinition {
   return isPlanId(id) ? PLANS[id] : PLANS[DEFAULT_PLAN];
 }
 
+/**
+ * Effective plan of a tenant: the plan's limits with per-key overrides set by a platform admin
+ * (`tenant_plans.limits_override`, ADR 0011). A key present in the override wins (a number, or
+ * `null` = unlimited); missing or invalid keys keep the plan default.
+ */
+export function resolveEffectivePlan(id: string | null | undefined, override?: unknown): PlanDefinition {
+  const base = getPlan(id);
+  if (!override || typeof override !== "object" || Array.isArray(override)) return base;
+  const limits = { ...base.limits };
+  for (const [key, value] of Object.entries(override as Record<string, unknown>)) {
+    if (!isLimitKey(key)) continue;
+    if (value === null) limits[key] = null;
+    else if (typeof value === "number" && Number.isInteger(value) && value >= 0) limits[key] = value;
+  }
+  return { ...base, limits };
+}
+
 export type LimitCheck =
   | { allowed: true; limit: number | null; used: number; remaining: number | null }
   | { allowed: false; limit: number; used: number; remaining: number; reason: "not_included" | "limit_reached" };
