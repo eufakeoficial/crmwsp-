@@ -43,7 +43,7 @@ export const messages = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index("messages_tenant_id_id_idx").on(t.tenantId, t.id),
+    uniqueIndex("messages_tenant_id_id_idx").on(t.tenantId, t.id),
     index("messages_tenant_conversation_created_idx").on(t.tenantId, t.conversationId, t.createdAt),
     uniqueIndex("messages_tenant_external_id_unique")
       .on(t.tenantId, t.externalId)

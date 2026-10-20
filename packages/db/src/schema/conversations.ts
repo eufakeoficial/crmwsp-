@@ -33,7 +33,7 @@ export const conversations = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index("conversations_tenant_id_id_idx").on(t.tenantId, t.id),
+    uniqueIndex("conversations_tenant_id_id_idx").on(t.tenantId, t.id),
     index("conversations_tenant_last_message_idx").on(t.tenantId, t.lastMessageAt.desc()),
     uniqueIndex("conversations_one_unresolved_unique")
       .on(t.tenantId, t.contactId, t.channelConnectionId)

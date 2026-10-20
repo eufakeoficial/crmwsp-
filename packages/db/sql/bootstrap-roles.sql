@@ -12,6 +12,10 @@
 -- the migrator role (the "system_owner" RLS policies target the owner role).
 -- Default privileges are declared FOR ROLE the migrator, because they only
 -- apply to objects created by that role.
+--
+-- pgvector: migration 0009 runs CREATE EXTENSION IF NOT EXISTS vector. If the
+-- migrator may not create extensions (managed Postgres), an admin must run
+-- `CREATE EXTENSION IF NOT EXISTS vector;` in the target database first.
 \set ON_ERROR_STOP on
 
 SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_role') AS create_app \gset

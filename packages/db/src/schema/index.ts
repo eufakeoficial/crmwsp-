@@ -9,3 +9,8 @@ export * from "./inbound-events.js";
 export * from "./audit-events.js";
 export * from "./user-credentials.js";
 export * from "./sessions.js";
+export * from "./llm-connections.js";
+export * from "./agent-configs.js";
+export * from "./knowledge.js";
+export * from "./ai-actions.js";
+export * from "./usage-ledger.js";
