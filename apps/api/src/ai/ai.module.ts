@@ -10,16 +10,19 @@ import { AiActionsController } from "./ai-actions.controller.js";
 import { AiController } from "./ai.controller.js";
 import { BotTemplatesController } from "./bot-templates.controller.js";
 import { LlmProviderFactory } from "./llm-provider.factory.js";
+import { ImproveTextController } from "./improve-text.controller.js";
+import { ImproveTextService } from "./improve-text.service.js";
 import { SimulatorController } from "./simulator.controller.js";
 import { SimulatorService } from "./simulator.service.js";
 import { BillingModule } from "../billing/billing.module.js";
 
 @Module({
   imports: [AuthModule, ChannelsModule, BillingModule],
-  controllers: [AiController, AiActionsController, BotTemplatesController, VoiceController, SimulatorController],
+  controllers: [AiController, AiActionsController, BotTemplatesController, VoiceController, SimulatorController, ImproveTextController],
   providers: [
     LlmProviderFactory,
     SimulatorService,
+    ImproveTextService,
     { provide: TTS_PROVIDER, useFactory: (): TTSProvider => new ElevenLabsTTSProvider() },
     {
       provide: AI_QUEUE,
