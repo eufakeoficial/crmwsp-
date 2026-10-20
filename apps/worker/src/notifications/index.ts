@@ -14,6 +14,7 @@ import { UnrecoverableError, Worker, type ConnectionOptions, type Job, type Queu
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { tenantChannel, type EventPublisher, type Logger } from "../processors.js";
 import { SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS, type SendMessageJobData } from "../queue.js";
+import { runReminderTick } from "../inbox/reminders.js";
 import { dispatchNotifications, type NotificationStore } from "./engine.js";
 
 export * from "./engine.js";
@@ -113,6 +114,12 @@ export interface NotificationTickResult {
  */
 export async function runNotificationTick(deps: NotificationTickDeps): Promise<NotificationTickResult> {
   const logger = deps.logger ?? silent;
+  // Due reminders (T23) become notifications first, so this same pass delivers them.
+  try {
+    await runReminderTick(deps.db, deps.now?.() ?? new Date(), logger);
+  } catch (err) {
+    logger.warn(`reminder tick failed (${err instanceof Error ? err.name : "unknown"})`);
+  }
   const rows = await deps.db.execute<{ tenant_id: string }>(sql`select tenant_id from notification_tenant_ids()`);
   const res: NotificationTickResult = { tenants: rows.length, dispatched: 0, sent: 0, failedTenants: 0 };
   for (const { tenant_id: tenantId } of rows) {

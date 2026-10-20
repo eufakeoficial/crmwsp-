@@ -28,7 +28,15 @@ export function createPgFollowUpStore(tx: Transaction, tenantId: string): Follow
           orderId: followUps.orderId,
         })
         .from(followUps)
-        .where(and(eq(followUps.status, "scheduled"), lte(followUps.scheduledAt, now)))
+        .where(
+          and(
+            eq(followUps.status, "scheduled"),
+            lte(followUps.scheduledAt, now),
+            // Paused contacts (T23): deferred, not cancelled; sent on a tick after the pause.
+            sql`not exists (select 1 from conversations pc join contacts pct on pct.id = pc.contact_id
+              where pc.id = ${followUps.conversationId} and pct.automations_paused_until > ${now.toISOString()}::timestamptz)`,
+          ),
+        )
         .orderBy(followUps.scheduledAt)
         .limit(limit)
         .for("update", { skipLocked: true });

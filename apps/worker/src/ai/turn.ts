@@ -41,6 +41,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { InboxEvent } from "../processors.js";
 import { AI_TURN_MAX_ATTEMPTS, SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS } from "../queue.js";
 import { insertNotification } from "../notifications/notify.js";
+import { contactAutomationsPaused, routeHandoff } from "../inbox/routing.js";
 import { applyConversationHandoff, runAction } from "./actions.js";
 import { extractReceipt, findPendingPaymentOrder, handleReceipt, pgReceiptPorts, type ReceiptImage } from "./receipt.js";
 import { maybeWarnBudget, readBudget } from "./budget.js";
@@ -82,7 +83,7 @@ export interface AiTurnAttempt {
 }
 
 export type AiTurnResult =
-  | { outcome: "skipped"; reason: "ai-off" | "already-processed" | "no-llm-connection" }
+  | { outcome: "skipped"; reason: "ai-off" | "already-processed" | "no-llm-connection" | "automations-paused" }
   | { outcome: "handoff"; reason: string }
   | { outcome: "processed"; replied: boolean; drafted: boolean; handoff: boolean; actionIds: string[] };
 
@@ -254,6 +255,7 @@ function handoffWriter(tx: Transaction, c: TurnCtx, events: Array<AiEvent | Inbo
     handedOff = true;
     // Unassigned conversations go to `pending`; an assigned agent already owns it.
     await applyConversationHandoff(tx, c.conversationId, c.now);
+    await routeHandoff(tx, c.tenantId, c.conversationId, c.now);
     await insertNotification(tx, c.tenantId, {
       kind: "handoff",
       title: "Una conversación necesita atención humana",
@@ -328,6 +330,10 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
   }
 
   if (conv.aiMode === "off") return { done: { result: { outcome: "skipped", reason: "ai-off" }, events } };
+  // Paused by an agent (manually or while replying): no AI turn at all (T23).
+  if (await contactAutomationsPaused(tx, conv.contactId, c.now)) {
+    return { done: { result: { outcome: "skipped", reason: "automations-paused" }, events } };
+  }
 
   const replay = await replayGuard(tx, c);
   if (replay) return { done: replay };
@@ -700,6 +706,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
       assignedUserId: conversations.assignedUserId,
       status: conversations.status,
       lastInboundAt: conversations.lastInboundAt,
+      contactId: conversations.contactId,
     })
     .from(conversations)
     .where(eq(conversations.id, conversationId))
@@ -715,7 +722,9 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
   const output = final.result.parsed as AiTurnOutput;
   const modelUsed = final.model;
   // Auto only when nobody (human or handoff) owns the conversation; otherwise drafts.
-  const mode: "auto" | "assist" = aiMayAutoReply(conv) ? "auto" : "assist";
+  // An agent may have paused automations while the LLM was thinking: draft only (T23).
+  const paused = await contactAutomationsPaused(tx, conv.contactId, c.now);
+  const mode: "auto" | "assist" = aiMayAutoReply(conv) && !paused ? "auto" : "assist";
 
   const validChunkIds = new Set(p.hits.map((h) => h.id));
   const chunkCitations = new Map<string, AiCitation>(

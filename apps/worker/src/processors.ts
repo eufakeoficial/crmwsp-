@@ -25,6 +25,7 @@ import {
 import { previousStatusesFor } from "./status.js";
 import { applyBroadcastStatus, recordMarketingOptOut } from "./broadcasts/consent.js";
 import { cancelFollowUpsForConversation } from "./followups/pg-store.js";
+import { contactAutomationsPaused, routeInbound } from "./inbox/routing.js";
 import { STORE_MEDIA_JOB, STORE_MEDIA_JOB_OPTIONS, storeMediaJobId, type StoreMediaJobData } from "./media/job.js";
 
 /** Minimal publisher (ioredis satisfies it). */
@@ -188,6 +189,7 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       .from(conversations)
       .where(where)
       .limit(1);
+    const conversationCreated = !conversation;
     if (!conversation) {
       [conversation] = await tx
         .insert(conversations)
@@ -283,10 +285,20 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     // The contact replied: pending follow-ups of this conversation are no longer needed.
     await cancelFollowUpsForConversation(tx, conversation.id);
 
+    // Inbox v2: open/reopen for a human and (auto-)assign when no automation owns the chat.
+    await routeInbound(tx, {
+      tenantId,
+      conversationId: conversation.id,
+      contactId: contact.id,
+      channelConnectionId: connectionId,
+      created: conversationCreated,
+      now,
+    });
+
     // An AI turn is scheduled only when the conversation has AI enabled and the tenant has an
     // active LLM connection whose last connection test passed.
     let scheduleAiTurn = false;
-    if (deps.aiQueue && conversation.aiMode !== "off") {
+    if (deps.aiQueue && conversation.aiMode !== "off" && !(await contactAutomationsPaused(tx, contact.id, now))) {
       const [llm] = await tx
         .select({ id: llmConnections.id })
         .from(llmConnections)
