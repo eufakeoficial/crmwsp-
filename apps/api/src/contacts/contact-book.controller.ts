@@ -1,7 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Put, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import {
   NotFoundError,
   listContactBookQuerySchema,
+  searchContactBookRequestSchema,
+  type ContactBookSearchResult,
+  type ContactTagCount,
   patchContactTagsRequestSchema,
   setMarketingConsentRequestSchema,
   type ContactBookDetail,
@@ -33,6 +36,7 @@ import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { writeAudit } from "../inbox/audit.js";
 import { decodeCursor, encodeCursor } from "../inbox/cursor.js";
+import { contactFilterWhere, countContacts } from "./contact-query.js";
 
 const CREATED_US = sql`(extract(epoch from ${contacts.createdAt}) * 1000000)::bigint`;
 const OPEN_ORDER_STATUSES = ["draft", "pending_payment", "paid", "fulfilled", "shipped"] as const;
@@ -123,6 +127,42 @@ export class ContactBookController {
         items: await toItems(tx, page.map((r) => r.c)),
         nextCursor: rows.length > q.limit && last ? encodeCursor({ t: last.us, id: last.c.id }) : null,
       };
+    });
+  }
+
+  /** Filtered page (same keyset order as `GET /contact-book`) plus the total matching count. */
+  @Post("search")
+  @HttpCode(200)
+  async search(@CurrentTenantDb() db: TenantDb, @Body() body: unknown): Promise<ContactBookSearchResult> {
+    const input = parseOrThrow(searchContactBookRequestSchema, body);
+    return db.run(async (tx) => {
+      const base = await contactFilterWhere(tx, input.filter, input.q);
+      const cur = input.cursor ? decodeCursor(input.cursor) : undefined;
+      const keyset = cur ? sql`(${CREATED_US}, ${contacts.id}) < (${cur.t}::bigint, ${cur.id}::uuid)` : undefined;
+      const rows = await tx
+        .select({ c: contacts, us: sql<string>`${CREATED_US}::text` })
+        .from(contacts)
+        .where(and(base, keyset))
+        .orderBy(desc(CREATED_US), desc(contacts.id))
+        .limit(input.limit + 1);
+      const page = rows.slice(0, input.limit);
+      const last = page[page.length - 1];
+      return {
+        items: await toItems(tx, page.map((r) => r.c)),
+        nextCursor: rows.length > input.limit && last ? encodeCursor({ t: last.us, id: last.c.id }) : null,
+        total: await countContacts(tx, base),
+      };
+    });
+  }
+
+  /** Every tag in use with its contact count (sidebar). */
+  @Get("tags")
+  async tags(@CurrentTenantDb() db: TenantDb): Promise<{ items: ContactTagCount[] }> {
+    return db.run(async (tx) => {
+      const rows = await tx.execute<{ tag: string; count: number }>(
+        sql`select t.tag, count(*)::int as count from ${contacts}, unnest(${contacts.tags}) as t(tag) group by t.tag order by count desc, t.tag asc limit 500`,
+      );
+      return { items: [...rows].map((r) => ({ tag: r.tag, count: Number(r.count) })) };
     });
   }
 

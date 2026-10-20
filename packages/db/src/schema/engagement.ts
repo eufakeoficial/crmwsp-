@@ -33,6 +33,10 @@ export interface ConsentEvidence {
   messageId?: string;
   source: string;
   text?: string;
+  /** Bulk action / CSV import provenance. */
+  userId?: string;
+  importId?: string;
+  line?: number;
 }
 
 export const consents = pgTable(

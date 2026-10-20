@@ -1,5 +1,6 @@
 import type { BroadcastAudience, BroadcastVariableSource } from "@crmwsp/contracts";
 import { and, asc, consents, contacts, eq, sql, type Transaction } from "@crmwsp/db";
+import { contactFilterWhere } from "../contacts/contact-query.js";
 import { MissingTemplateVariableError, resolveAudience, resolveBroadcastParams, type AudienceContact } from "@crmwsp/domain";
 
 const textArray = (values: readonly string[]) => sql`array[${sql.join(values.map((v) => sql`${v}`), sql`, `)}]::text[]`;
@@ -9,6 +10,12 @@ export async function loadAudienceContacts(tx: Transaction, audience: BroadcastA
   const where = [
     audience.tags.length ? sql`${contacts.tags} @> ${textArray(audience.tags)}` : undefined,
     audience.excludeTags.length ? sql`not (${contacts.tags} && ${textArray(audience.excludeTags)})` : undefined,
+    audience.segmentId
+      ? await contactFilterWhere(tx, {
+          match: "all",
+          conditions: [{ field: "segment", type: "relation", operator: "is", value: [audience.segmentId] }],
+        })
+      : undefined,
   ].filter((w) => w !== undefined);
   const rows = await tx
     .select({

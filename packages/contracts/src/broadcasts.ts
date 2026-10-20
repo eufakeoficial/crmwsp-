@@ -13,6 +13,8 @@ export const broadcastAudienceSchema = z.object({
   tags: z.array(tagSchema).max(20).default([]),
   /** Contacts carrying ANY of these tags are excluded. */
   excludeTags: z.array(tagSchema).max(20).default([]),
+  /** Saved contact segment the contacts must also match (contact book filters). */
+  segmentId: uuidSchema.optional(),
 });
 export type BroadcastAudience = z.infer<typeof broadcastAudienceSchema>;
 

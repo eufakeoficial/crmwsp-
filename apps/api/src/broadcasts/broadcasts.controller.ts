@@ -51,7 +51,11 @@ function toDto(r: Row): Broadcast {
     channelConnectionId: r.channelConnectionId,
     templateId: r.templateId,
     variableMapping: r.variableMapping as BroadcastVariableSource[],
-    audience: { tags: r.audience.tags ?? [], excludeTags: r.audience.excludeTags ?? [] },
+    audience: {
+      tags: r.audience.tags ?? [],
+      excludeTags: r.audience.excludeTags ?? [],
+      ...(r.audience.segmentId ? { segmentId: r.audience.segmentId } : {}),
+    },
     status: r.status,
     scheduledAt: iso(r.scheduledAt),
     startedAt: iso(r.startedAt),
@@ -258,7 +262,11 @@ export class BroadcastsController {
       const tpl = await loadApprovedTemplate(tx, before.templateId);
       const mapping = before.variableMapping as BroadcastVariableSource[];
       assertMapping(mapping, tpl.placeholders);
-      const audience = { tags: before.audience.tags ?? [], excludeTags: before.audience.excludeTags ?? [] };
+      const audience = {
+        tags: before.audience.tags ?? [],
+        excludeTags: before.audience.excludeTags ?? [],
+        ...(before.audience.segmentId ? { segmentId: before.audience.segmentId } : {}),
+      };
       const plan = planRecipients(await loadAudienceContacts(tx, audience), audience, mapping);
       const n = plan.recipients.length;
       if (n === 0) throw new ValidationError("audience is empty (no contacts with marketing opt-in match the filter)");

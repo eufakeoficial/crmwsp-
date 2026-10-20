@@ -21,3 +21,5 @@ export * from "./developers.js";
 export * from "./voice-settings.js";
 export * from "./broadcasts.js";
 export * from "./contacts.js";
+export * from "./contact-filters.js";
+export * from "./contact-import.js";
