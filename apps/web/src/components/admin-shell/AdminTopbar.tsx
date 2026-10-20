@@ -1,11 +1,10 @@
 "use client";
 
-import { Bell, LogOut, Menu, Search } from "lucide-react";
+import { Bell, Menu, Search } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { LogoMark } from "@/components/brand/Logo";
-import { Avatar } from "@/components/ui";
-import { useSession } from "@/components/app/SessionProvider";
+import { UserMenu } from "@/components/app/UserMenu";
 import { AdminSearch } from "./AdminSearch";
 import { ADMIN_BASE } from "./nav";
 
@@ -13,28 +12,17 @@ const DARK_FOCUS = "focus-visible:outline-lime";
 
 /** Fixed 64px black header: menu (mobile), logo, global search, notifications and profile. */
 export function AdminTopbar({ drawerOpen, onToggleDrawer, onCloseDrawer }: { drawerOpen: boolean; onToggleDrawer: () => void; onCloseDrawer: () => void }) {
-  const { me, logout } = useSession();
   const [searchOpen, setSearchOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
-  const name = me.user.name ?? me.user.email;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setSearchOpen(true);
-      } else if (e.key === "Escape") setProfileOpen(false);
-    };
-    const onPointerDown = (e: PointerEvent) => {
-      if (e.target instanceof Node && !profileRef.current?.contains(e.target)) setProfileOpen(false);
+      }
     };
     document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("pointerdown", onPointerDown);
-    };
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
   return (
@@ -56,25 +44,10 @@ export function AdminTopbar({ drawerOpen, onToggleDrawer, onCloseDrawer }: { dra
           <button type="button" aria-disabled="true" title="Notificaciones: próximamente" aria-label="Notificaciones" className={`grid size-[42px] place-items-center rounded-full bg-ink-2 text-white ${DARK_FOCUS}`}>
             <Bell aria-hidden className="size-[18px]" />
           </button>
-          <div ref={profileRef} className="relative">
-            <button type="button" onClick={() => setProfileOpen((v) => !v)} aria-expanded={profileOpen} aria-controls="admin-profile" aria-label="Mi perfil" className={`flex cursor-pointer items-center gap-2 bg-transparent p-0 text-white ${DARK_FOCUS}`}>
-              <Avatar name={name} round />
-              <b className="hidden max-w-[140px] truncate text-[13px] desk:block">{name}</b>
-            </button>
-            {profileOpen ? (
-              <div id="admin-profile" className="absolute top-[52px] right-0 flex w-[240px] flex-col rounded-[20px] bg-white p-2 text-ink shadow-[0_16px_40px_rgba(18,18,18,.25)]">
-                <div className="border-b border-paper px-2.5 pt-2 pb-3">
-                  <b className="block truncate">{name}</b>
-                  <span className="text-xs text-muted">{me.user.email}</span>
-                </div>
-                <Link href="/app" className="flex min-h-11 items-center rounded-xl px-2.5 font-semibold text-ink no-underline hover:bg-paper">Ir a mi panel</Link>
-                <button type="button" onClick={() => void logout()} className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl px-2.5 font-bold text-danger hover:bg-paper">
-                  <LogOut aria-hidden className="size-[18px]" />
-                  Cerrar sesión
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <Link href="/app" className={`hidden min-h-[42px] items-center rounded-full bg-ink-2 px-3.5 text-[13px] font-bold whitespace-nowrap text-white no-underline min-[640px]:flex ${DARK_FOCUS}`}>
+            Ir a mi negocio
+          </Link>
+          <UserMenu />
         </div>
       </header>
       {searchOpen ? <AdminSearch onClose={() => setSearchOpen(false)} /> : null}
