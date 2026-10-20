@@ -51,11 +51,18 @@ CREATE TABLE "payments" (
 	CONSTRAINT "payments_succeeded_verified_check" CHECK ("payments"."status" <> 'succeeded' OR ("payments"."verified_by" IS NOT NULL AND "payments"."paid_at" IS NOT NULL))
 );
 --> statement-breakpoint
-ALTER TABLE "payment_connections" ADD CONSTRAINT "payment_connections_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payment_events" ADD CONSTRAINT "payment_events_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payments" ADD CONSTRAINT "payments_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payments" ADD CONSTRAINT "payments_tenant_order_fk" FOREIGN KEY ("tenant_id","order_id") REFERENCES "public"."orders"("tenant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "payment_connections_tenant_id_id_idx" ON "payment_connections" USING btree ("tenant_id","id");--> statement-breakpoint
-CREATE INDEX "payment_events_tenant_received_idx" ON "payment_events" USING btree ("tenant_id","received_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "payments_tenant_id_id_idx" ON "payments" USING btree ("tenant_id","id");--> statement-breakpoint
+ALTER TABLE "payment_connections" ADD CONSTRAINT "payment_connections_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "payment_events" ADD CONSTRAINT "payment_events_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "payments" ADD CONSTRAINT "payments_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+CREATE UNIQUE INDEX "payment_connections_tenant_id_id_idx" ON "payment_connections" USING btree ("tenant_id","id");
+--> statement-breakpoint
+CREATE INDEX "payment_events_tenant_received_idx" ON "payment_events" USING btree ("tenant_id","received_at");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "payments_tenant_id_id_idx" ON "payments" USING btree ("tenant_id","id");
+--> statement-breakpoint
 CREATE INDEX "payments_tenant_order_idx" ON "payments" USING btree ("tenant_id","order_id");
+--> statement-breakpoint
+ALTER TABLE "payments" ADD CONSTRAINT "payments_tenant_order_fk" FOREIGN KEY ("tenant_id","order_id") REFERENCES "public"."orders"("tenant_id","id") ON DELETE cascade ON UPDATE no action;

@@ -63,15 +63,26 @@ CREATE TABLE "meta_capi_connections" (
 	CONSTRAINT "meta_capi_connections_dataset_check" CHECK ("meta_capi_connections"."dataset_id" ~ '^[0-9]{5,32}$')
 );
 --> statement-breakpoint
-ALTER TABLE "ad_attributions" ADD CONSTRAINT "ad_attributions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ad_attributions" ADD CONSTRAINT "ad_attributions_tenant_contact_fk" FOREIGN KEY ("tenant_id","contact_id") REFERENCES "public"."contacts"("tenant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ad_attributions" ADD CONSTRAINT "ad_attributions_tenant_conversation_fk" FOREIGN KEY ("tenant_id","conversation_id") REFERENCES "public"."conversations"("tenant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ad_spend" ADD CONSTRAINT "ad_spend_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "capi_events" ADD CONSTRAINT "capi_events_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "capi_events" ADD CONSTRAINT "capi_events_tenant_contact_fk" FOREIGN KEY ("tenant_id","contact_id") REFERENCES "public"."contacts"("tenant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "capi_events" ADD CONSTRAINT "capi_events_tenant_order_fk" FOREIGN KEY ("tenant_id","order_id") REFERENCES "public"."orders"("tenant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "meta_capi_connections" ADD CONSTRAINT "meta_capi_connections_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "ad_attributions_tenant_id_id_idx" ON "ad_attributions" USING btree ("tenant_id","id");--> statement-breakpoint
-CREATE INDEX "ad_attributions_tenant_source_idx" ON "ad_attributions" USING btree ("tenant_id","source_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "ad_spend_tenant_id_id_idx" ON "ad_spend" USING btree ("tenant_id","id");--> statement-breakpoint
+ALTER TABLE "ad_attributions" ADD CONSTRAINT "ad_attributions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "ad_spend" ADD CONSTRAINT "ad_spend_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "capi_events" ADD CONSTRAINT "capi_events_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "meta_capi_connections" ADD CONSTRAINT "meta_capi_connections_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+CREATE UNIQUE INDEX "ad_attributions_tenant_id_id_idx" ON "ad_attributions" USING btree ("tenant_id","id");
+--> statement-breakpoint
+CREATE INDEX "ad_attributions_tenant_source_idx" ON "ad_attributions" USING btree ("tenant_id","source_id");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "ad_spend_tenant_id_id_idx" ON "ad_spend" USING btree ("tenant_id","id");
+--> statement-breakpoint
 CREATE INDEX "capi_events_tenant_due_idx" ON "capi_events" USING btree ("tenant_id","status","next_attempt_at");
+--> statement-breakpoint
+ALTER TABLE "ad_attributions" ADD CONSTRAINT "ad_attributions_tenant_contact_fk" FOREIGN KEY ("tenant_id","contact_id") REFERENCES "public"."contacts"("tenant_id","id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "ad_attributions" ADD CONSTRAINT "ad_attributions_tenant_conversation_fk" FOREIGN KEY ("tenant_id","conversation_id") REFERENCES "public"."conversations"("tenant_id","id") ON DELETE set null ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "capi_events" ADD CONSTRAINT "capi_events_tenant_contact_fk" FOREIGN KEY ("tenant_id","contact_id") REFERENCES "public"."contacts"("tenant_id","id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "capi_events" ADD CONSTRAINT "capi_events_tenant_order_fk" FOREIGN KEY ("tenant_id","order_id") REFERENCES "public"."orders"("tenant_id","id") ON DELETE cascade ON UPDATE no action;

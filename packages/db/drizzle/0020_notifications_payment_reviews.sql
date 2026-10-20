@@ -53,39 +53,57 @@ CREATE TABLE "payment_reviews" (
 	CONSTRAINT "payment_reviews_reviewed_check" CHECK ("payment_reviews"."status" = 'pending' OR ("payment_reviews"."reviewed_at" IS NOT NULL))
 );
 --> statement-breakpoint
-ALTER TABLE "notification_reads" ADD CONSTRAINT "notification_reads_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notification_reads" ADD CONSTRAINT "notification_reads_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notification_reads" ADD CONSTRAINT "notification_reads_tenant_notification_fk" FOREIGN KEY ("tenant_id","notification_id") REFERENCES "public"."notifications"("tenant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notifications" ADD CONSTRAINT "notifications_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payment_reviews" ADD CONSTRAINT "payment_reviews_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payment_reviews" ADD CONSTRAINT "payment_reviews_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payment_reviews" ADD CONSTRAINT "payment_reviews_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payment_reviews" ADD CONSTRAINT "payment_reviews_reviewed_by_users_id_fk" FOREIGN KEY ("reviewed_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "payment_reviews" ADD CONSTRAINT "payment_reviews_tenant_order_fk" FOREIGN KEY ("tenant_id","order_id") REFERENCES "public"."orders"("tenant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "notification_reads_tenant_user_idx" ON "notification_reads" USING btree ("tenant_id","user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "notifications_tenant_id_id_idx" ON "notifications" USING btree ("tenant_id","id");--> statement-breakpoint
-CREATE INDEX "notifications_tenant_created_idx" ON "notifications" USING btree ("tenant_id","created_at");--> statement-breakpoint
-CREATE INDEX "notifications_undispatched_idx" ON "notifications" USING btree ("tenant_id") WHERE "notifications"."dispatched_at" IS NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "payment_reviews_tenant_id_id_idx" ON "payment_reviews" USING btree ("tenant_id","id");--> statement-breakpoint
-CREATE INDEX "payment_reviews_tenant_status_idx" ON "payment_reviews" USING btree ("tenant_id","status","created_at");--> statement-breakpoint
-
+ALTER TABLE "notification_reads" ADD CONSTRAINT "notification_reads_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "notification_reads" ADD CONSTRAINT "notification_reads_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "payment_reviews" ADD CONSTRAINT "payment_reviews_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "payment_reviews" ADD CONSTRAINT "payment_reviews_conversation_id_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."conversations"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "payment_reviews" ADD CONSTRAINT "payment_reviews_message_id_messages_id_fk" FOREIGN KEY ("message_id") REFERENCES "public"."messages"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "payment_reviews" ADD CONSTRAINT "payment_reviews_reviewed_by_users_id_fk" FOREIGN KEY ("reviewed_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+--> statement-breakpoint
+CREATE INDEX "notification_reads_tenant_user_idx" ON "notification_reads" USING btree ("tenant_id","user_id");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "notifications_tenant_id_id_idx" ON "notifications" USING btree ("tenant_id","id");
+--> statement-breakpoint
+CREATE INDEX "notifications_tenant_created_idx" ON "notifications" USING btree ("tenant_id","created_at");
+--> statement-breakpoint
+CREATE INDEX "notifications_undispatched_idx" ON "notifications" USING btree ("tenant_id") WHERE "notifications"."dispatched_at" IS NULL;
+--> statement-breakpoint
+CREATE UNIQUE INDEX "payment_reviews_tenant_id_id_idx" ON "payment_reviews" USING btree ("tenant_id","id");
+--> statement-breakpoint
+CREATE INDEX "payment_reviews_tenant_status_idx" ON "payment_reviews" USING btree ("tenant_id","status","created_at");
+--> statement-breakpoint
 -- Row Level Security (ADR 0002), same conventions as 0014/0018: tenant_isolation + system_owner.
-ALTER TABLE "notifications" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "notifications" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "notifications" ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE "notifications" FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
 CREATE POLICY "tenant_isolation" ON "notifications"
   USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
-  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
-ALTER TABLE "notification_reads" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "notification_reads" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
+--> statement-breakpoint
+ALTER TABLE "notification_reads" ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE "notification_reads" FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
 CREATE POLICY "tenant_isolation" ON "notification_reads"
   USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
-  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
-ALTER TABLE "payment_reviews" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "payment_reviews" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
+--> statement-breakpoint
+ALTER TABLE "payment_reviews" ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE "payment_reviews" FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
 CREATE POLICY "tenant_isolation" ON "payment_reviews"
   USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
-  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
-
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
+--> statement-breakpoint
 DO $$
 DECLARE
   t text;
@@ -102,8 +120,8 @@ BEGIN
     EXECUTE format('CREATE POLICY "system_owner" ON public.%I AS PERMISSIVE FOR ALL TO %I USING (true) WITH CHECK (true)', t, v_owner);
   END LOOP;
 END
-$$;--> statement-breakpoint
-
+$$;
+--> statement-breakpoint
 -- Reviews are an audit trail: the app role may not delete them (only cascades from the order).
 DO $$
 BEGIN
@@ -112,8 +130,8 @@ BEGIN
     REVOKE TRUNCATE ON public."notifications" FROM crmwsp_app;
   END IF;
 END
-$$;--> statement-breakpoint
-
+$$;
+--> statement-breakpoint
 -- Notification tick enumeration (same pattern as follow_up_tenant_ids in 0019): ONLY the ids of
 -- active tenants with undispatched notifications. Everything else runs inside withTenant.
 CREATE FUNCTION public."notification_tenant_ids"()
@@ -127,8 +145,10 @@ AS $fn$
   JOIN public."tenants" t ON t."id" = n."tenant_id"
   WHERE n."dispatched_at" IS NULL AND t."status" = 'active'
   ORDER BY n."tenant_id";
-$fn$;--> statement-breakpoint
-REVOKE ALL ON FUNCTION public."notification_tenant_ids"() FROM PUBLIC;--> statement-breakpoint
+$fn$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public."notification_tenant_ids"() FROM PUBLIC;
+--> statement-breakpoint
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'crmwsp_app') THEN
@@ -136,3 +156,7 @@ BEGIN
   END IF;
 END
 $$;
+--> statement-breakpoint
+ALTER TABLE "notification_reads" ADD CONSTRAINT "notification_reads_tenant_notification_fk" FOREIGN KEY ("tenant_id","notification_id") REFERENCES "public"."notifications"("tenant_id","id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "payment_reviews" ADD CONSTRAINT "payment_reviews_tenant_order_fk" FOREIGN KEY ("tenant_id","order_id") REFERENCES "public"."orders"("tenant_id","id") ON DELETE cascade ON UPDATE no action;

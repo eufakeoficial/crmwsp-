@@ -58,21 +58,38 @@ CREATE TABLE "external_sales" (
 	CONSTRAINT "external_sales_order_needs_hmac_check" CHECK ("external_sales"."order_id" IS NULL OR "external_sales"."verification" = 'hmac_body')
 );
 --> statement-breakpoint
-ALTER TABLE "product_variants" ADD COLUMN "external_source" text;--> statement-breakpoint
-ALTER TABLE "product_variants" ADD COLUMN "external_id" text;--> statement-breakpoint
-ALTER TABLE "products" ADD COLUMN "external_source" text;--> statement-breakpoint
-ALTER TABLE "products" ADD COLUMN "external_id" text;--> statement-breakpoint
-ALTER TABLE "commerce_connections" ADD CONSTRAINT "commerce_connections_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "commerce_events" ADD CONSTRAINT "commerce_events_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "external_sales" ADD CONSTRAINT "external_sales_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "external_sales" ADD CONSTRAINT "external_sales_tenant_contact_fk" FOREIGN KEY ("tenant_id","contact_id") REFERENCES "public"."contacts"("tenant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "external_sales" ADD CONSTRAINT "external_sales_tenant_order_fk" FOREIGN KEY ("tenant_id","order_id") REFERENCES "public"."orders"("tenant_id","id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "commerce_connections_tenant_id_id_idx" ON "commerce_connections" USING btree ("tenant_id","id");--> statement-breakpoint
-CREATE INDEX "commerce_events_tenant_received_idx" ON "commerce_events" USING btree ("tenant_id","received_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "external_sales_tenant_id_id_idx" ON "external_sales" USING btree ("tenant_id","id");--> statement-breakpoint
-CREATE INDEX "external_sales_tenant_contact_idx" ON "external_sales" USING btree ("tenant_id","contact_id");--> statement-breakpoint
-CREATE INDEX "external_sales_tenant_occurred_idx" ON "external_sales" USING btree ("tenant_id","occurred_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "product_variants_tenant_external_unique" ON "product_variants" USING btree ("tenant_id","external_source","external_id") WHERE "product_variants"."external_source" IS NOT NULL;--> statement-breakpoint
-CREATE UNIQUE INDEX "products_tenant_external_unique" ON "products" USING btree ("tenant_id","external_source","external_id") WHERE "products"."external_source" IS NOT NULL;--> statement-breakpoint
-ALTER TABLE "product_variants" ADD CONSTRAINT "product_variants_external_pair_check" CHECK (("product_variants"."external_source" IS NULL) = ("product_variants"."external_id" IS NULL));--> statement-breakpoint
+ALTER TABLE "product_variants" ADD COLUMN "external_source" text;
+--> statement-breakpoint
+ALTER TABLE "product_variants" ADD COLUMN "external_id" text;
+--> statement-breakpoint
+ALTER TABLE "products" ADD COLUMN "external_source" text;
+--> statement-breakpoint
+ALTER TABLE "products" ADD COLUMN "external_id" text;
+--> statement-breakpoint
+ALTER TABLE "commerce_connections" ADD CONSTRAINT "commerce_connections_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "commerce_events" ADD CONSTRAINT "commerce_events_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "external_sales" ADD CONSTRAINT "external_sales_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+CREATE UNIQUE INDEX "commerce_connections_tenant_id_id_idx" ON "commerce_connections" USING btree ("tenant_id","id");
+--> statement-breakpoint
+CREATE INDEX "commerce_events_tenant_received_idx" ON "commerce_events" USING btree ("tenant_id","received_at");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "external_sales_tenant_id_id_idx" ON "external_sales" USING btree ("tenant_id","id");
+--> statement-breakpoint
+CREATE INDEX "external_sales_tenant_contact_idx" ON "external_sales" USING btree ("tenant_id","contact_id");
+--> statement-breakpoint
+CREATE INDEX "external_sales_tenant_occurred_idx" ON "external_sales" USING btree ("tenant_id","occurred_at");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "product_variants_tenant_external_unique" ON "product_variants" USING btree ("tenant_id","external_source","external_id") WHERE "product_variants"."external_source" IS NOT NULL;
+--> statement-breakpoint
+CREATE UNIQUE INDEX "products_tenant_external_unique" ON "products" USING btree ("tenant_id","external_source","external_id") WHERE "products"."external_source" IS NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "product_variants" ADD CONSTRAINT "product_variants_external_pair_check" CHECK (("product_variants"."external_source" IS NULL) = ("product_variants"."external_id" IS NULL));
+--> statement-breakpoint
 ALTER TABLE "products" ADD CONSTRAINT "products_external_pair_check" CHECK (("products"."external_source" IS NULL) = ("products"."external_id" IS NULL));
+--> statement-breakpoint
+ALTER TABLE "external_sales" ADD CONSTRAINT "external_sales_tenant_contact_fk" FOREIGN KEY ("tenant_id","contact_id") REFERENCES "public"."contacts"("tenant_id","id") ON DELETE set null ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "external_sales" ADD CONSTRAINT "external_sales_tenant_order_fk" FOREIGN KEY ("tenant_id","order_id") REFERENCES "public"."orders"("tenant_id","id") ON DELETE set null ON UPDATE no action;
