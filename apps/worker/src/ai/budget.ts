@@ -1,47 +1,9 @@
-import { auditEvents, withTenant, type LlmConnection, type Transaction } from "@crmwsp/db";
+import { auditEvents, readBudget, withTenant, type BudgetState, type LlmConnection } from "@crmwsp/db";
 import { and, eq, sql } from "drizzle-orm";
 import { publishEvents, silent, type AiDeps } from "./common.js";
 
-/**
- * Units: `usage_ledger.cost_minor` stores what `estimateCost` returns (USD micro-cents,
- * 1e-8 USD, flagged with `meta.unit = "usd_microcents"`) because per-call costs are far below one
- * cent. `llm_connections.monthly_budget_minor` is in minor units (cents) of `budget_currency`, so a
- * USD budget is compared as `budget_cents * 1_000_000` micro-cents (1 cent = 1e-2 USD = 1e6 * 1e-8).
- * Only the AI kinds (`llm_tokens`, `embedding_tokens`, `transcription_seconds`) in USD count.
- *
- * Non-USD budgets: there is no FX source yet and prices are estimates, so the worker is
- * conservative the other way round: it does NOT stop the AI for budget (no conversion = no
- * comparison) and reports `currencyMismatch` so callers log a warning. Debt: add an FX source
- * (or force USD budgets in the API) before enforcing non-USD budgets.
- */
-const MICRO_PER_MINOR = 1_000_000n;
-const BUDGET_CURRENCY = "USD";
-
-export interface BudgetState {
-  exceeded: boolean;
-  /** Spend reached 80 % of the budget. */
-  warn: boolean;
-  /** Budget set in a currency other than USD: not enforced (see above). */
-  currencyMismatch?: boolean;
-}
-
-/** Month spend vs. budget, read with `tenant_monthly_spend` (RLS-scoped). */
-export async function readBudget(
-  tx: Transaction,
-  conn: Pick<LlmConnection, "monthlyBudgetMinor" | "budgetCurrency">,
-): Promise<BudgetState> {
-  if (conn.monthlyBudgetMinor === null) return { exceeded: false, warn: false };
-  if ((conn.budgetCurrency ?? "").trim().toUpperCase() !== BUDGET_CURRENCY) {
-    return { exceeded: false, warn: false, currencyMismatch: true };
-  }
-  const rows = await tx.execute<{ cost_minor: string | null }>(
-    sql`select cost_minor from tenant_monthly_spend(now()) where currency = ${BUDGET_CURRENCY} and kind in ('llm_tokens', 'embedding_tokens', 'transcription_seconds')`,
-  );
-  let spentMicro = 0n;
-  for (const r of rows) spentMicro += BigInt(String(r.cost_minor ?? "0").split(".")[0] || "0");
-  const budgetMicro = conn.monthlyBudgetMinor * MICRO_PER_MINOR;
-  return { exceeded: spentMicro >= budgetMicro, warn: spentMicro * 100n >= budgetMicro * 80n };
-}
+/** Shared with the API simulator (packages/db/src/ai-budget.ts). */
+export { readBudget, type BudgetState };
 
 /**
  * Emits `ai.budget_warning` at most once per tenant-month. The marker is an `audit_events` row

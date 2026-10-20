@@ -16,3 +16,4 @@ export type { OutboundWebhookEventType } from "./webhook-events.js";
 export type { SQL } from "drizzle-orm";
 export { not, exists } from "drizzle-orm";
 export { renderSql } from "./render-sql.js";
+export { readBudget, type BudgetState } from "./ai-budget.js";

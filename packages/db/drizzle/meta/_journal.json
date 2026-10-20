@@ -274,6 +274,20 @@
       "when": 1792520011785,
       "tag": "0040_rls_inbox_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792520021785,
+      "tag": "0041_ai_scenarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792520031785,
+      "tag": "0042_rls_ai_scenarios",
+      "breakpoints": true
     }
   ]
 }
