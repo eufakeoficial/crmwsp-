@@ -12,3 +12,4 @@ export * from "./templates/index.js";
 export * from "./profitability/index.js";
 export * from "./contacts/index.js";
 export * from "./inbox/index.js";
+export * from "./owner-mode/index.js";

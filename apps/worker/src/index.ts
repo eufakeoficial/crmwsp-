@@ -13,6 +13,7 @@ import { CAPI_QUEUE_NAME, createCapiWorker, scheduleCapiTick, type FetchLike } f
 import { BROADCAST_QUEUE_NAME, createBroadcastWorker, scheduleBroadcastTick } from "./broadcasts/index.js";
 import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
 import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotificationTick } from "./notifications/index.js";
+import { OWNER_MODE_QUEUE_NAME, createOwnerInterpreter, createOwnerModeWorker, createOwnerSender } from "./owner-mode/index.js";
 import { WEBHOOK_QUEUE_NAME, createWebhookSender, createWebhookWorker, scheduleWebhookTick } from "./webhooks/index.js";
 
 export * from "./queue.js";
@@ -26,6 +27,7 @@ export * from "./notifications/index.js";
 export * from "./media/index.js";
 export * from "./webhooks/index.js";
 export * from "./broadcasts/index.js";
+export * from "./owner-mode/index.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -54,6 +56,9 @@ function main(): void {
   const mediaStore = mediaStoreFromEnv();
   const mediaQueue = mediaStore ? new Queue(MEDIA_QUEUE_NAME, { connection: createRedis(redisUrl) }) : undefined;
 
+  // Producer for owner-mode commands (F9): inbound from verified owner phones.
+  const ownerQueue = new Queue(OWNER_MODE_QUEUE_NAME, { connection: createRedis(redisUrl) });
+
   const worker = createInboundWorker({
     connection,
     concurrency: Number.isInteger(concurrency) && concurrency > 0 ? concurrency : 5,
@@ -61,6 +66,7 @@ function main(): void {
     provider: new GupshupProvider(),
     publisher,
     aiQueue,
+    ownerQueue,
     ...(mediaQueue ? { mediaQueue } : {}),
     logger,
   });
@@ -85,6 +91,7 @@ function main(): void {
   let webhookQueue: Queue | undefined;
   let broadcastWorker: ReturnType<typeof createBroadcastWorker> | undefined;
   let broadcastQueue: Queue | undefined;
+  let ownerWorker: ReturnType<typeof createOwnerModeWorker> | undefined;
   try {
     const keys = loadMasterKeysFromEnv(process.env);
     const cipher = createCipherBox(keys);
@@ -142,7 +149,14 @@ function main(): void {
     );
     // Owner notifications: SSE fan-out + optional owner WhatsApp through the outbound queue.
     notificationQueue = new Queue(NOTIFICATION_QUEUE_NAME, { connection: createRedis(redisUrl) });
-    notificationsWorker = createNotificationWorker({ connection: createRedis(redisUrl), db: db.db, publisher, outboundQueue, logger });
+    notificationsWorker = createNotificationWorker({
+      connection: createRedis(redisUrl),
+      db: db.db,
+      publisher,
+      outboundQueue,
+      sendOwnerText: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
+      logger,
+    });
     void scheduleNotificationTick(notificationQueue).catch((err: unknown) =>
       logger.warn(`notification scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
     );
@@ -165,6 +179,19 @@ function main(): void {
     void scheduleWebhookTick(webhookQueue).catch((err: unknown) =>
       logger.warn(`webhook scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
     );
+    // Owner mode (F9): replies through the tenant channel; LLM key and BSP key need the master keys.
+    ownerWorker = createOwnerModeWorker({
+      connection: createRedis(redisUrl),
+      db: db.db,
+      send: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
+      interpret: createOwnerInterpreter({ db: db.db, cipher, logger }),
+      aiQueue,
+      outboundQueue,
+      logger,
+    });
+    ownerWorker.on("failed", (job, err) =>
+      logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
+    );
     outbound.on("failed", (job, err) =>
       logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
     );
@@ -177,8 +204,8 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close()])
-      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), webhookQueue?.close(), broadcastQueue?.close()]))
+    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close()])
+      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));
   };

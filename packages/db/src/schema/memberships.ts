@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, pgEnum, pgTable, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { index, pgEnum, pgTable, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
@@ -21,7 +21,8 @@ export const memberships = pgTable(
   },
   (t) => [
     unique("memberships_tenant_user_unique").on(t.tenantId, t.userId),
-    index("memberships_tenant_id_id_idx").on(t.tenantId, t.id),
+    // UNIQUE (tenant_id, id): target of composite FKs (owner_phones, 0043).
+    uniqueIndex("memberships_tenant_id_id_idx").on(t.tenantId, t.id),
     index("memberships_user_id_idx").on(t.userId),
   ],
 );

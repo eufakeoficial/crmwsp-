@@ -8,19 +8,17 @@ import {
   type AiActionItemList,
 } from "@crmwsp/contracts";
 import {
-  actionApprovals,
   aiActions,
   and,
   contacts,
   conversations,
+  decideAiActionAsUser,
   desc,
   eq,
   inArray,
   isUuid,
-  sql,
   knowledgeChunks,
   knowledgeSources,
-  quotes,
   type AiAction,
   type Transaction,
 } from "@crmwsp/db";
@@ -30,7 +28,6 @@ import { TenantGuard } from "../auth/tenant.guard.js";
 import type { HttpRequest } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
-import { writeAudit } from "../inbox/audit.js";
 import { AI_JOB_OPTIONS, AI_QUEUE, EXECUTE_AI_ACTION_JOB, type ExecuteAiActionJobData } from "./ai.constants.js";
 
 const LIST_LIMIT = 200;
@@ -111,41 +108,17 @@ export class AiActionsController {
     return this.decide(db, id, "rejected", body, req);
   }
 
-  /** Same rules for both: only `pending_approval` can be decided (409 otherwise); decision + status + audit in one transaction. */
+  /** Same rules for both (shared with owner mode): only `pending_approval` can be decided (409 otherwise). */
   private async decide(db: TenantDb, id: string, decision: Decision, body: unknown, req: HttpRequest): Promise<{ id: string; status: string }> {
     if (!isUuid(id)) throw new NotFoundError();
     const { note } = parseOrThrow(aiActionDecisionRequestSchema, body ?? {});
-    return db.run(async (tx) => {
-      const [action] = await tx.select().from(aiActions).where(eq(aiActions.id, id)).for("update");
-      if (!action) throw new NotFoundError();
-      if (action.status !== "pending_approval") throw new ConflictError(`Action is ${action.status}, not pending approval`);
-      await tx.insert(actionApprovals).values({
-        tenantId: db.tenantId,
-        actionId: id,
-        decidedBy: db.userId,
-        decision,
-        note: note ?? null,
-      });
-      await tx.update(aiActions).set({ status: decision }).where(eq(aiActions.id, id));
-      // Quote approval records (POST /quotes/:id/submit) carry the quote id: a rejection here rejects the quote too.
-      // An approval is applied to the quote by the worker (execute-ai-action).
-      const quoteId = action.type === "create_quote_draft" ? action.payload["quoteId"] : undefined;
-      if (decision === "rejected" && isUuid(quoteId)) {
-        await tx
-          .update(quotes)
-          .set({ status: "rejected", lockVersion: sql`${quotes.lockVersion} + 1`, updatedAt: new Date() })
-          .where(and(eq(quotes.id, quoteId), eq(quotes.status, "pending_approval")));
-      }
-      await writeAudit(tx, {
-        tenantId: db.tenantId,
-        userId: db.userId,
-        entity: "ai_action",
-        entityId: id,
-        action: decision === "approved" ? "ai_action.approved" : "ai_action.rejected",
-        diff: { status: { from: "pending_approval", to: decision }, type: action.type, ...(note ? { note } : {}) },
-        ip: req.ip,
-      });
-      return { id, status: decision };
-    });
+    const res = await db.run((tx) =>
+      decideAiActionAsUser(tx, { tenantId: db.tenantId, actionId: id, userId: db.userId, decision, note: note ?? null, source: "web", ip: req.ip }),
+    );
+    if (!res.ok) {
+      if (res.reason === "not_found") throw new NotFoundError();
+      throw new ConflictError(`Action is ${res.status ?? "decided"}, not pending approval`);
+    }
+    return { id, status: decision };
   }
 }
