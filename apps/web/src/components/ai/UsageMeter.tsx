@@ -1,7 +1,7 @@
 import { budgetLevel, budgetPercent } from "@/lib/ai-validation";
-import type { AiUsage } from "@/lib/ai-schemas";
+import type { AiUsage } from "@crmwsp/contracts";
 import { cn } from "@/lib/cn";
-import { formatMoney } from "@/lib/format";
+import { formatMoneyMinor } from "@/lib/format";
 
 const BAR = { ok: "bg-success", warn: "bg-amber-ink", exceeded: "bg-danger" } as const;
 const MESSAGE = {
@@ -18,9 +18,9 @@ export function UsageMeter({ usage }: { usage: AiUsage | null }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-        <span><b>{formatMoney(usage.spentMinor / 100, usage.currency)}</b> gastados este mes</span>
+        <span><b>{formatMoneyMinor(usage.spentMinor, usage.currency)}</b> gastados este mes</span>
         <span className="text-muted">
-          {usage.budgetMinor ? `de ${formatMoney(usage.budgetMinor / 100, usage.currency)} (${pct} %)` : "Sin límite fijado"}
+          {usage.budgetMinor ? `de ${formatMoneyMinor(usage.budgetMinor, usage.currency)} (${pct} %)` : "Sin límite fijado"}
         </span>
       </div>
       <div
@@ -33,6 +33,14 @@ export function UsageMeter({ usage }: { usage: AiUsage | null }) {
       >
         <div className={cn("h-full rounded-full transition-[width]", BAR[level])} style={{ width: `${Math.min(pct ?? 0, 100)}%` }} />
       </div>
+      {usage.estimated ? (
+        <p className="m-0 text-xs text-muted">Importe estimado: algunos precios de modelo aún no están verificados.</p>
+      ) : null}
+      {usage.currencyMismatch ? (
+        <p role="status" className="m-0 text-xs font-semibold text-warning">
+          Tu límite está en {usage.currency}, pero el consumo de IA se mide en USD y no se convierte: el gasto mostrado no incluye ese consumo. Fija el límite en USD para ver el total.
+        </p>
+      ) : null}
       {MESSAGE[level] ? <p role="status" className="m-0 text-sm font-semibold text-warning">{MESSAGE[level]}</p> : null}
       <p className="m-0 text-xs text-muted">Al 80 % avisamos; al 100 % la IA automática se apaga, el inbox nunca.</p>
     </div>

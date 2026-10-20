@@ -5,7 +5,7 @@ import { useState } from "react";
 import { EmptyState } from "@/components/app/EmptyState";
 import { Button, Card, Modal, StatusChip, type Tone } from "@/components/ui";
 import { knowledgeApi } from "@/lib/ai-api";
-import type { KnowledgeSource } from "@/lib/ai-schemas";
+import type { KnowledgeSource } from "@crmwsp/contracts";
 import { formatRelative } from "@/lib/format";
 import { errorMessage } from "@/lib/messages";
 

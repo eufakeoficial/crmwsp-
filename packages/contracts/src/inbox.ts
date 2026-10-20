@@ -196,9 +196,36 @@ export type UpdateConversationRequest = z.infer<typeof updateConversationRequest
 
 // --- Realtime (SSE /events) ---------------------------------------------------
 
-export const inboxEventSchema = z.object({
+/** Thread-scoped inbox events (best effort; clients refetch on receipt). */
+export const threadEventSchema = z.object({
   type: z.enum(["message.received", "message.created", "message.status", "conversation.updated"]),
   conversationId: uuidSchema,
   messageId: uuidSchema.optional(),
 });
+export type ThreadEvent = z.infer<typeof threadEventSchema>;
+
+/** AI events published by apps/worker (F2-F). Ids only. */
+export const aiConversationEventSchema = z.object({
+  type: z.enum(["ai.reply_drafted", "ai.action_pending", "ai.handoff"]),
+  conversationId: uuidSchema,
+  actionId: uuidSchema,
+});
+export const aiBudgetWarningEventSchema = z.object({
+  type: z.literal("ai.budget_warning"),
+  connectionId: uuidSchema,
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+});
+
+/** Everything the realtime hub forwards; anything else is dropped. */
+export const inboxEventSchema = z.union([threadEventSchema, aiConversationEventSchema, aiBudgetWarningEventSchema]);
 export type InboxEvent = z.infer<typeof inboxEventSchema>;
+export const INBOX_EVENT_TYPES = [
+  "message.received",
+  "message.created",
+  "message.status",
+  "conversation.updated",
+  "ai.reply_drafted",
+  "ai.action_pending",
+  "ai.handoff",
+  "ai.budget_warning",
+] as const satisfies readonly InboxEvent["type"][];

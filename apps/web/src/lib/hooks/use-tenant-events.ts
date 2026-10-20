@@ -1,11 +1,12 @@
 "use client";
 
-import { type InboxEvent, inboxEventSchema } from "@crmwsp/contracts";
+import { INBOX_EVENT_TYPES, type InboxEvent, inboxEventSchema } from "@crmwsp/contracts";
 import { useEffect, useRef, useState } from "react";
 
 export type EventsStatus = "idle" | "connecting" | "open" | "reconnecting" | "limited" | "unauthorized";
 
-const EVENT_TYPES: readonly InboxEvent["type"][] = ["message.received", "message.created", "message.status", "conversation.updated"];
+/** Thread events plus the AI events the worker publishes (ai.reply_drafted, ai.action_pending, ai.handoff, ai.budget_warning). */
+const EVENT_TYPES: readonly InboxEvent["type"][] = INBOX_EVENT_TYPES;
 const BASE_DELAY_MS = 1_000;
 const MAX_DELAY_MS = 30_000;
 

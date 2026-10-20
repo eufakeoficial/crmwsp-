@@ -1,5 +1,5 @@
 import { ExternalLink } from "lucide-react";
-import type { AiProvider } from "@/lib/ai-schemas";
+import type { AiProvider } from "@crmwsp/contracts";
 import { PROVIDER_GUIDES } from "./provider-guides";
 
 /** Step 2: numbered guide to get an API key for the chosen provider. */

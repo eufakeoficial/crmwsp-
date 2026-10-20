@@ -1,5 +1,5 @@
 import { Input, Label } from "@/components/ui";
-import type { AiUsage } from "@/lib/ai-schemas";
+import type { AiUsage } from "@crmwsp/contracts";
 import { UsageMeter } from "./UsageMeter";
 
 export const CURRENCIES = ["EUR", "USD", "GBP", "MXN", "ARS", "COP", "CLP"] as const;

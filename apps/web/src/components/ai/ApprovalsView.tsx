@@ -7,16 +7,16 @@ import { useSession } from "@/components/app/SessionProvider";
 import { Alert, Button, Label, Modal, Textarea, Toast } from "@/components/ui";
 import { APPROVALS_CHANGED } from "@/lib/ai-actions";
 import { aiApi } from "@/lib/ai-api";
-import type { AiAction } from "@/lib/ai-schemas";
+import type { AiActionItem } from "@crmwsp/contracts";
 import { useToast } from "@/lib/hooks/use-toast";
 import { errorMessage } from "@/lib/messages";
 import { SettingsFrame } from "./AccessGate";
 import { ActionCard } from "./ActionCard";
 
-type Decision = { action: AiAction; kind: "approve" | "reject" };
+type Decision = { action: AiActionItem; kind: "approve" | "reject" };
 
 function Body({ canDecide }: { canDecide: boolean }) {
-  const [items, setItems] = useState<AiAction[] | null>(null);
+  const [items, setItems] = useState<AiActionItem[] | null>(null);
   const [error, setError] = useState<string>();
   const [decision, setDecision] = useState<Decision | null>(null);
   const [note, setNote] = useState("");

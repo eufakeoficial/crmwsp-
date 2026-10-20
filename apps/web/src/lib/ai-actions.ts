@@ -1,4 +1,4 @@
-import type { AiAction } from "./ai-schemas";
+import type { AiActionItem } from "@crmwsp/contracts";
 
 export const APPROVALS_CHANGED = "crmwsp:approvals-changed";
 
@@ -14,7 +14,7 @@ export function actionTypeLabel(type: string): string {
 }
 
 /** One-line "key: value" summary entries of an action payload (scalars only). */
-export function payloadSummary(payload: AiAction["payload"]): { label: string; value: string }[] {
+export function payloadSummary(payload: AiActionItem["payload"]): { label: string; value: string }[] {
   return Object.entries(payload)
     .filter(([, v]) => ["string", "number", "boolean"].includes(typeof v))
     .map(([k, v]) => ({ label: k.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase()), value: String(v) }));

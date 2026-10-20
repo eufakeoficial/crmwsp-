@@ -1,6 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import { OptionCard } from "@/components/ui";
-import { AI_PROVIDERS, type AiProvider } from "@/lib/ai-schemas";
+import { AI_PROVIDERS, type AiProvider } from "@crmwsp/contracts";
 import { PROVIDER_GUIDES } from "./provider-guides";
 
 /** Step 1: provider cards, the (disabled) SaaS credits alternative and the OpenCode Go warning. */

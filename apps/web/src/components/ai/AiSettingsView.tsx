@@ -5,7 +5,7 @@ import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { Alert } from "@/components/ui";
 import { aiApi } from "@/lib/ai-api";
-import type { AgentConfig, AiConnection, AiUsage } from "@/lib/ai-schemas";
+import type { AgentConfig, AiConnection, AiUsage } from "@crmwsp/contracts";
 import { errorMessage } from "@/lib/messages";
 import { SettingsFrame } from "./AccessGate";
 import { AgentBehavior } from "./AgentBehavior";

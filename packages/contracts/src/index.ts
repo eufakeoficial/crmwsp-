@@ -5,3 +5,4 @@ export * from "./auth.js";
 export * from "./channels.js";
 export * from "./inbox.js";
 export * from "./ai.js";
+export * from "./ai-settings.js";

@@ -1,12 +1,15 @@
 "use client";
 
-import type { InboxEvent } from "@crmwsp/contracts";
+import type { InboxEvent, ThreadEvent } from "@crmwsp/contracts";
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { type EventsStatus, useTenantEvents } from "@/lib/hooks/use-tenant-events";
+import { APPROVALS_CHANGED } from "@/lib/ai-actions";
 import { conversationsApi } from "@/lib/inbox-api";
 import { useSession } from "./SessionProvider";
 
-type Listener = (event: InboxEvent | { type: "resync" }) => void;
+/** Inbox listeners get thread events (incl. ai.reply_drafted / ai.handoff, which carry conversationId) and resyncs. */
+export type ThreadOrResync = ThreadEvent | Extract<InboxEvent, { conversationId: string }> | { type: "resync" };
+type Listener = (event: ThreadOrResync) => void;
 
 interface EventsValue {
   status: EventsStatus;
@@ -71,7 +74,11 @@ export function TenantEventsProvider({ children }: { children: ReactNode }) {
 
   const dispatch = useCallback(
     (event: InboxEvent | { type: "resync" }) => {
+      // Approvals badge (usePendingApprovals listens to this window event).
+      if (event.type === "ai.action_pending" && typeof window !== "undefined") window.dispatchEvent(new Event(APPROVALS_CHANGED));
+      if (event.type === "ai.budget_warning") return;
       refreshCount();
+      // message.created / ai.reply_drafted refresh the open thread and the list in the inbox.
       for (const l of listeners.current) l(event);
     },
     [refreshCount],

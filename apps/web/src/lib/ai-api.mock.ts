@@ -1,5 +1,5 @@
 import type { AiApi, KnowledgeApi } from "./ai-api";
-import type { AgentConfig, AiAction, AiConnection, KnowledgeConflict, KnowledgeSource } from "./ai-schemas";
+import type { AgentConfig, AiActionItem, AiConnection, KnowledgeConflict, KnowledgeSource } from "@crmwsp/contracts";
 
 // In-memory stand-in for the F2-E API. Only wired when NEXT_PUBLIC_AI_API_MOCK=1 outside production.
 
@@ -29,7 +29,7 @@ const conflicts: KnowledgeConflict[] = [
   },
 ];
 
-let actions: AiAction[] = [
+let actions: AiActionItem[] = [
   {
     id: "act-1", type: "apply_discount", status: "pending_approval", conversationId: "conv-1", contactName: "María López",
     payload: { descuento: "15 %", presupuesto: "Q-0042", importe: "1.280,00 EUR" },
@@ -85,7 +85,7 @@ export const mockAiApi: AiApi = {
     storedKeyHint = null;
     return delay(undefined);
   },
-  usage: () => delay({ spentMinor: 8_400, currency: connection?.budgetCurrency ?? "EUR", budgetMinor: connection?.monthlyBudgetMinor ?? null, byKind: [{ kind: "reply", costMinor: 6_100 }, { kind: "embedding", costMinor: 1_500 }, { kind: "transcription", costMinor: 800 }] }),
+  usage: () => delay({ spentMinor: 8_400, currency: connection?.budgetCurrency ?? "EUR", budgetMinor: connection?.monthlyBudgetMinor ?? null, currencyMismatch: false, estimated: true, byKind: [{ kind: "reply", costMinor: 6_100 }, { kind: "embedding", costMinor: 1_500 }, { kind: "transcription", costMinor: 800 }] }),
   getAgentConfig: () => delay(agent),
   saveAgentConfig: (input) => {
     agent = input;

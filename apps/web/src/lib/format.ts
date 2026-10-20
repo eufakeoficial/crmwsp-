@@ -1,8 +1,48 @@
 /** Locale-aware formatters. Default locale is neutral Spanish; currency is always explicit (per tenant). */
 const LOCALE = "es";
 
+/** Amount in major units (e.g. 12.5 EUR). The currency decides the decimals (CLP 0, EUR 2, KWD 3). */
 export function formatMoney(amount: number, currency: string, locale = LOCALE): string {
-  return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
+  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
+}
+
+/** ISO 4217 decimals of a currency (CLP/JPY: 0, EUR/USD: 2, KWD/BHD: 3); 2 for unknown codes. */
+export function currencyDecimals(currency: string): number {
+  try {
+    return new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch {
+    return 2;
+  }
+}
+
+/** Minor units (what the API stores) to major units, using the currency's decimals. Never divide by 100 by hand. */
+export function minorToMajor(minor: number, currency: string): number {
+  return minor / 10 ** currencyDecimals(currency);
+}
+
+/** Formats an amount in minor units: 1250 EUR -> "12,50 €", 1250 CLP -> "$1.250". */
+export function formatMoneyMinor(minor: number, currency: string, locale = LOCALE): string {
+  return formatMoney(minorToMajor(minor, currency), currency, locale);
+}
+
+/**
+ * Money typed by the user ("12,50") to minor units of `currency`. Returns undefined for
+ * invalid input, negatives, or more decimals than the currency has ("12,5" in CLP).
+ * Digit-string arithmetic: no floating point rounding surprises.
+ */
+export function majorToMinor(input: string, currency: string): number | undefined {
+  const m = /^(\d+)(?:[.,](\d+))?$/.exec(input.trim());
+  if (!m) return undefined;
+  const decimals = currencyDecimals(currency);
+  const frac = m[2] ?? "";
+  if (frac.length > decimals && /[1-9]/.test(frac.slice(decimals))) return undefined;
+  const minor = Number(`${m[1]}${frac.slice(0, decimals).padEnd(decimals, "0")}`);
+  return Number.isSafeInteger(minor) ? minor : undefined;
+}
+
+/** Minor units to the text shown in an input ("1250" -> "12.5" for EUR, "1250" for CLP). */
+export function minorToInput(minor: number, currency: string): string {
+  return String(minorToMajor(minor, currency));
 }
 
 export function formatNumber(value: number, locale = LOCALE): string {

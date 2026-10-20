@@ -1,4 +1,4 @@
-import type { AiProvider } from "@/lib/ai-schemas";
+import type { AiProvider } from "@crmwsp/contracts";
 
 export interface ProviderGuide {
   label: string;

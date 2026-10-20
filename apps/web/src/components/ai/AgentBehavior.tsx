@@ -3,7 +3,7 @@
 import { type FormEvent, useState } from "react";
 import { Alert, Button, Card, Input, Label, OptionCard, Spinner, Textarea, Toast } from "@/components/ui";
 import { aiApi } from "@/lib/ai-api";
-import { AI_MODES, type AgentConfig, type AiMode } from "@/lib/ai-schemas";
+import { AI_MODES, type AgentConfig, type AiMode } from "@crmwsp/contracts";
 import { fromMinor, toMinor } from "@/lib/ai-validation";
 import { useToast } from "@/lib/hooks/use-toast";
 import { errorMessage } from "@/lib/messages";
@@ -18,7 +18,7 @@ const MODE_LABELS: Record<AiMode, { title: string; hint: string }> = {
 export function AgentBehavior({ config, currency, canEdit, onSaved }: { config: AgentConfig; currency: string; canEdit: boolean; onSaved: (c: AgentConfig) => void }) {
   const [mode, setMode] = useState<AiMode>(config.aiModeDefault);
   const [confidence, setConfidence] = useState(config.confidenceThreshold);
-  const [approval, setApproval] = useState(fromMinor(config.approvalThresholdMinor));
+  const [approval, setApproval] = useState(fromMinor(config.approvalThresholdMinor, currency));
   const [prompt, setPrompt] = useState(config.systemPrompt);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -26,7 +26,8 @@ export function AgentBehavior({ config, currency, canEdit, onSaved }: { config: 
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    const minor = toMinor(approval);
+    // Empty = no approval threshold.
+    const minor = approval.trim() ? toMinor(approval, currency) : null;
     if (minor === undefined) return setError("El umbral de aprobación debe ser un importe válido.");
     setBusy(true);
     setError(undefined);

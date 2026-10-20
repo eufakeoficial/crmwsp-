@@ -56,7 +56,7 @@ describe("aiApi", () => {
   });
 
   it("queries usage by month and rejects malformed responses", async () => {
-    fetchMock.mockImplementation(() => Promise.resolve(json(200, { spentMinor: 10, currency: "EUR", budgetMinor: null, byKind: [] })));
+    fetchMock.mockImplementation(() => Promise.resolve(json(200, { spentMinor: 10, currency: "EUR", budgetMinor: null, currencyMismatch: false, estimated: false, byKind: [] })));
     await realAiApi.usage("2026-10");
     expect(last().url).toBe("/api/ai/usage?month=2026-10");
     fetchMock.mockImplementation(() => Promise.resolve(json(200, { spentMinor: "x" })));
@@ -148,9 +148,11 @@ describe("budget helpers", () => {
     expect(budgetLevel(null)).toBe("ok");
   });
   it("parses money to minor units", () => {
-    expect(toMinor("12,50")).toBe(1250);
-    expect(toMinor("abc")).toBeUndefined();
-    expect(toMinor("-1")).toBeUndefined();
+    expect(toMinor("12,50", "EUR")).toBe(1250);
+    expect(toMinor("12,50", "CLP")).toBeUndefined(); // CLP has no minor unit
+    expect(toMinor("1250", "CLP")).toBe(1250);
+    expect(toMinor("abc", "EUR")).toBeUndefined();
+    expect(toMinor("-1", "EUR")).toBeUndefined();
   });
 });
 
@@ -160,5 +162,14 @@ describe("AI roles", () => {
     expect(canManageAi("agent")).toBe(false);
     expect(canViewAi("agent")).toBe(true);
     expect(canViewAi("viewer")).toBe(false);
+  });
+});
+
+describe("usage flags", () => {
+  it("parses estimated and currencyMismatch from the API", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(json(200, { spentMinor: 10, currency: "EUR", budgetMinor: 100, currencyMismatch: true, estimated: true, byKind: [] })),
+    );
+    await expect(realAiApi.usage("2026-10")).resolves.toMatchObject({ currencyMismatch: true, estimated: true });
   });
 });

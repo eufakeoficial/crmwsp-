@@ -1,10 +1,8 @@
-import type { AiProvider } from "./ai-schemas";
+import { AI_PROVIDER_BASE_URLS, type AiProvider } from "@crmwsp/contracts";
+import { majorToMinor, minorToInput } from "./format";
 
-export const PROVIDER_BASE_URLS: Readonly<Record<Exclude<AiProvider, "custom">, string>> = {
-  openai: "https://api.openai.com/v1",
-  openrouter: "https://openrouter.ai/api/v1",
-  deepseek: "https://api.deepseek.com/v1",
-};
+/** Same fixed URLs the API uses (shared in contracts). */
+export const PROVIDER_BASE_URLS: Readonly<Record<Exclude<AiProvider, "custom">, string>> = AI_PROVIDER_BASE_URLS;
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "0.0.0.0"]);
 
@@ -43,12 +41,11 @@ export function budgetLevel(percent: number | null): BudgetLevel {
   return percent >= 100 ? "exceeded" : "warn";
 }
 
-/** Money typed by the user ("12,50") to minor units. NaN-safe: returns undefined if invalid. */
-export function toMinor(input: string): number | undefined {
-  const n = Number(input.trim().replace(",", "."));
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : undefined;
+/** Money typed by the user ("12,50") to minor units of `currency`; undefined if invalid. */
+export function toMinor(input: string, currency: string): number | undefined {
+  return majorToMinor(input, currency);
 }
 
-export function fromMinor(minor: number): string {
-  return String(minor / 100);
+export function fromMinor(minor: number | null | undefined, currency: string): string {
+  return minor === null || minor === undefined ? "" : minorToInput(minor, currency);
 }

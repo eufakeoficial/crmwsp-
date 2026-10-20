@@ -1,5 +1,5 @@
 import { Check, X } from "lucide-react";
-import type { AiTestResult } from "@/lib/ai-schemas";
+import type { AiTestResult } from "@crmwsp/contracts";
 
 const ROWS = [
   { key: "structuredOutput", label: "Salida estructurada", off: "Sin ella la IA no puede proponer acciones (presupuestos, etiquetas): solo redactará respuestas." },

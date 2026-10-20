@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  INBOX_EVENT_TYPES,
   OutsideServiceWindowError,
+  inboxEventSchema,
   listConversationsQuerySchema,
   listMessagesQuerySchema,
   sendMessageRequestSchema,
@@ -52,5 +54,30 @@ describe("OutsideServiceWindowError", () => {
     const err = new OutsideServiceWindowError();
     expect(err.httpStatus).toBe(422);
     expect(toErrorResponse(err).code).toBe("OUTSIDE_SERVICE_WINDOW");
+  });
+});
+
+describe("inboxEventSchema (realtime, incl. AI events from the worker)", () => {
+  const ids = { c: id, a: "7d1c2b8e-9a4d-4c1e-8b2a-1d2e3f4a5b6c" };
+  it("accepts the thread events", () => {
+    for (const type of ["message.received", "message.created", "message.status", "conversation.updated"]) {
+      expect(inboxEventSchema.safeParse({ type, conversationId: ids.c, messageId: ids.a }).success).toBe(true);
+    }
+    expect(inboxEventSchema.safeParse({ type: "message.created", conversationId: ids.c }).success).toBe(true);
+  });
+  it("accepts ai.reply_drafted, ai.action_pending and ai.handoff with conversationId + actionId", () => {
+    for (const type of ["ai.reply_drafted", "ai.action_pending", "ai.handoff"]) {
+      expect(inboxEventSchema.safeParse({ type, conversationId: ids.c, actionId: ids.a }).success).toBe(true);
+      expect(inboxEventSchema.safeParse({ type, conversationId: ids.c }).success).toBe(false);
+    }
+  });
+  it("accepts ai.budget_warning with connectionId + month", () => {
+    expect(inboxEventSchema.safeParse({ type: "ai.budget_warning", connectionId: ids.a, month: "2026-10" }).success).toBe(true);
+    expect(inboxEventSchema.safeParse({ type: "ai.budget_warning", connectionId: ids.a, month: "2026-13" }).success).toBe(false);
+    expect(inboxEventSchema.safeParse({ type: "ai.budget_warning", conversationId: ids.c }).success).toBe(false);
+  });
+  it("rejects unknown types and the event list covers every type", () => {
+    expect(inboxEventSchema.safeParse({ type: "ai.unknown", conversationId: ids.c }).success).toBe(false);
+    expect(INBOX_EVENT_TYPES).toHaveLength(8);
   });
 });

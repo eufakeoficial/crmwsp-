@@ -4,7 +4,7 @@ import { Plug, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Alert, Button, Card, Input, Label, Modal, Spinner, Toast } from "@/components/ui";
 import { aiApi } from "@/lib/ai-api";
-import type { AiConnection, AiProvider, AiTestResult, AiUsage } from "@/lib/ai-schemas";
+import type { AiConnection, AiProvider, AiTestResult, AiUsage } from "@crmwsp/contracts";
 import { PROVIDER_BASE_URLS, fromMinor, toMinor, validateBaseUrl } from "@/lib/ai-validation";
 import { useToast } from "@/lib/hooks/use-toast";
 import { errorMessage } from "@/lib/messages";
@@ -33,7 +33,7 @@ export function ConnectionSection({ connection, usage, canEdit, onChanged }: { c
   const [apiKey, setApiKey] = useState("");
   const [cheap, setCheap] = useState(connection?.modelCheap ?? "");
   const [strong, setStrong] = useState(connection?.modelStrong ?? "");
-  const [budget, setBudget] = useState(connection?.monthlyBudgetMinor ? fromMinor(connection.monthlyBudgetMinor) : "");
+  const [budget, setBudget] = useState(connection?.monthlyBudgetMinor ? fromMinor(connection.monthlyBudgetMinor, connection.budgetCurrency ?? "EUR") : "");
   const [currency, setCurrency] = useState(connection?.budgetCurrency ?? "EUR");
   const [busy, setBusy] = useState<"save" | "test" | null>(null);
   const [error, setError] = useState<string>();
@@ -66,7 +66,7 @@ export function ConnectionSection({ connection, usage, canEdit, onChanged }: { c
     } else url = PROVIDER_BASE_URLS[provider];
     if (!connection && !apiKey.trim()) return (setError("Pega tu API key para conectar."), false);
     if (!cheap.trim() || !strong.trim()) return (setError("Indica el modelo barato y el modelo potente."), false);
-    const budgetMinor = budget.trim() ? toMinor(budget) : undefined;
+    const budgetMinor = budget.trim() ? toMinor(budget, currency) : undefined;
     if (budget.trim() && budgetMinor === undefined) return (setError("El límite mensual debe ser un número."), false);
     try {
       await aiApi.saveConnection({ provider, baseUrl: url, ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}), modelCheap: cheap.trim(), modelStrong: strong.trim(), ...(budgetMinor !== undefined ? { monthlyBudgetMinor: budgetMinor, budgetCurrency: currency } : {}) });

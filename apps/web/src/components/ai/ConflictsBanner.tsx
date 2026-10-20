@@ -1,6 +1,6 @@
 import { AlertTriangle } from "lucide-react";
-import type { KnowledgeConflict } from "@/lib/ai-schemas";
-import { formatMoney } from "@/lib/format";
+import type { KnowledgeConflict } from "@crmwsp/contracts";
+import { formatMoneyMinor } from "@/lib/format";
 
 /** Same item with different prices across sources: the AI hands those quotes to a human. */
 export function ConflictsBanner({ conflicts }: { conflicts: KnowledgeConflict[] }) {
@@ -17,7 +17,7 @@ export function ConflictsBanner({ conflicts }: { conflicts: KnowledgeConflict[] 
             <b className="block">{c.key}</b>
             <ul className="m-0 mt-1 list-none p-0 text-sm text-ink-3">
               {c.sources.map((s) => (
-                <li key={s.sourceId}>{s.title}: <b>{formatMoney(s.priceMinor / 100, s.currency)}</b></li>
+                <li key={s.sourceId}>{s.title}: <b>{formatMoneyMinor(s.priceMinor, s.currency)}</b></li>
               ))}
             </ul>
           </li>

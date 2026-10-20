@@ -6,7 +6,7 @@ import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { Alert, Banner, Toast, UploadTile } from "@/components/ui";
 import { knowledgeApi } from "@/lib/ai-api";
-import type { KnowledgeConflict, KnowledgeSource } from "@/lib/ai-schemas";
+import type { KnowledgeConflict, KnowledgeSource } from "@crmwsp/contracts";
 import { useToast } from "@/lib/hooks/use-toast";
 import { errorMessage } from "@/lib/messages";
 import { SettingsFrame } from "./AccessGate";

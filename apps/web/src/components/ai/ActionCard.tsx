@@ -1,11 +1,11 @@
 import { Check, X } from "lucide-react";
 import { Button, LeadCard, StatusChip } from "@/components/ui";
 import { actionTypeLabel, payloadSummary } from "@/lib/ai-actions";
-import type { AiAction } from "@/lib/ai-schemas";
+import type { AiActionItem } from "@crmwsp/contracts";
 import { formatRelative } from "@/lib/format";
 
 /** One AI action waiting for a human decision. */
-export function ActionCard({ action, canDecide, busy, onDecide }: { action: AiAction; canDecide: boolean; busy: boolean; onDecide: (kind: "approve" | "reject") => void }) {
+export function ActionCard({ action, canDecide, busy, onDecide }: { action: AiActionItem; canDecide: boolean; busy: boolean; onDecide: (kind: "approve" | "reject") => void }) {
   const summary = payloadSummary(action.payload);
   return (
     <LeadCard

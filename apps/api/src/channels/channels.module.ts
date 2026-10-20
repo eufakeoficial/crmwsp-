@@ -24,5 +24,7 @@ function cipherFromEnv(): CipherBox | null {
   imports: [AuthModule],
   controllers: [ChannelsController],
   providers: [{ provide: CIPHER_BOX, useFactory: cipherFromEnv }],
+  // Shared with AiModule (same crypto box, other AAD purpose).
+  exports: [CIPHER_BOX],
 })
 export class ChannelsModule {}
