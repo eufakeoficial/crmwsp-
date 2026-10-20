@@ -32,6 +32,7 @@ export const NAV_MAIN: readonly NavItem[] = [
   { key: "analytics", label: "Rentabilidad", href: "/app/analytics", icon: TrendingUp },
   { key: "broadcasts", label: "Campañas", href: "/app/broadcasts", icon: Megaphone },
   { key: "products", label: "Productos", href: "/app/products", icon: Package },
+  { key: "ai", label: "IA", href: "/app/ai", icon: Sparkles },
   { key: "channels", label: "Canales", href: "/app/channels", icon: Plug },
   { key: "team", label: "Equipo", href: "/app/team", icon: Users },
 ];
