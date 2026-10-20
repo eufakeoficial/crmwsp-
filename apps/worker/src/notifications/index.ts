@@ -3,9 +3,12 @@ import {
   channelConnections,
   contacts,
   conversations,
+  findVerifiedOwner,
   messages,
   notifications,
+  ownerCommands,
   tenants,
+  users,
   withTenant,
   type Database,
   type Transaction,
@@ -14,7 +17,11 @@ import { UnrecoverableError, Worker, type ConnectionOptions, type Job, type Queu
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { tenantChannel, type EventPublisher, type Logger } from "../processors.js";
 import { SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS, type SendMessageJobData } from "../queue.js";
-import { dispatchNotifications, type NotificationStore } from "./engine.js";
+import type { OwnerSender } from "../owner-mode/ports.js";
+import { dispatchNotifications, type EmailFallback, type NotificationStore } from "./engine.js";
+
+/** Emails a notification to the owner when WhatsApp cannot be used. No mailer exists in the worker yet. */
+export type OwnerEmailSender = (msg: { tenantId: string } & EmailFallback) => Promise<void>;
 
 export * from "./engine.js";
 export * from "./notify.js";
@@ -28,6 +35,10 @@ export interface NotificationTickDeps {
   db: Database;
   publisher: EventPublisher;
   outboundQueue: Pick<Queue, "add">;
+  /** Direct sends to verified owner-mode phones (F9). Absent: those notifications are logged only. */
+  sendOwnerText?: OwnerSender;
+  /** Email fallback when the owner's 24 h window is closed. Absent: logged. */
+  sendOwnerEmail?: OwnerEmailSender;
   logger?: Logger;
   now?: () => Date;
 }
@@ -62,6 +73,20 @@ export function createPgNotificationStore(tx: Transaction, tenantId: string): No
       return row
         ? { conversationId: row.conversationId, lastInboundAt: row.lastInboundAt, channelActive: row.channelStatus !== "disabled" }
         : null;
+    },
+    async ownerDirect(phoneE164) {
+      const owner = await findVerifiedOwner(tx, phoneE164);
+      if (!owner) return null;
+      const [last] = await tx
+        .select({ at: ownerCommands.createdAt, channelConnectionId: ownerCommands.channelConnectionId, channelStatus: channelConnections.status })
+        .from(ownerCommands)
+        .innerJoin(channelConnections, eq(channelConnections.id, ownerCommands.channelConnectionId))
+        .where(eq(ownerCommands.ownerPhoneId, owner.ownerPhoneId))
+        .orderBy(desc(ownerCommands.createdAt))
+        .limit(1);
+      const [u] = await tx.select({ email: users.email }).from(users).where(eq(users.id, owner.userId)).limit(1);
+      if (!last) return { channelConnectionId: "", lastInboundAt: null, channelActive: true, email: u?.email ?? null };
+      return { channelConnectionId: last.channelConnectionId, lastInboundAt: last.at, channelActive: last.channelStatus !== "disabled", email: u?.email ?? null };
     },
     async insertOwnerMessage(n, conversationId, body) {
       const [ins] = await tx
@@ -127,6 +152,30 @@ export async function runNotificationTick(deps: NotificationTickDeps): Promise<N
       for (const messageId of out.messageIds) {
         const data: SendMessageJobData = { tenantId, messageId };
         await deps.outboundQueue.add(SEND_MESSAGE_JOB, data, { ...SEND_MESSAGE_JOB_OPTIONS, jobId: messageId });
+      }
+      for (const d of out.directSends) {
+        if (!deps.sendOwnerText) {
+          logger.warn(`owner notification ${d.notificationId}: owner-mode sender unavailable`);
+          continue;
+        }
+        try {
+          await deps.sendOwnerText({ tenantId, channelConnectionId: d.channelConnectionId, toE164: d.toE164, text: d.text });
+          res.sent++;
+        } catch (err) {
+          logger.warn(`owner notification ${d.notificationId} not sent (${err instanceof Error ? err.name : "unknown"})`);
+        }
+      }
+      for (const e of out.emailFallbacks) {
+        if (!deps.sendOwnerEmail || !e.to) {
+          logger.info(`owner notification ${e.notificationId}: whatsapp window closed; email fallback unavailable`);
+          continue;
+        }
+        try {
+          await deps.sendOwnerEmail({ tenantId, ...e });
+          logger.info(`owner notification ${e.notificationId}: whatsapp window closed; sent by email`);
+        } catch (err) {
+          logger.warn(`owner notification ${e.notificationId} email failed (${err instanceof Error ? err.name : "unknown"})`);
+        }
       }
       for (const n of out.notificationIds) {
         const event: NotificationEvent = { type: "notification.created", notificationId: n.id, kind: n.kind };

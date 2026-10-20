@@ -350,11 +350,14 @@ export async function processOwnerCommand(deps: OwnerModeDeps, data: unknown): P
   const body = peek.body ?? "";
   const replyParse = parseOwnerReply(body);
   let interpretation: OwnerCommandInterpretation | null = null;
+  let limitReached = false;
   if (replyParse.kind === "other") {
     interpretation = parseOwnerShortcut(body);
     if (!interpretation && deps.interpret) {
       try {
-        interpretation = await deps.interpret(tenantId, body);
+        const r = await deps.interpret(tenantId, commandId, body);
+        if (r.kind === "limit") limitReached = true;
+        else if (r.kind === "ok") interpretation = r.value;
       } catch (err) {
         log.warn(`owner-mode interpreter failed (${err instanceof Error ? err.name : "unknown"})`);
       }
@@ -451,6 +454,11 @@ export async function processOwnerCommand(deps: OwnerModeDeps, data: unknown): P
       return { res: { outcome: "confirmed", intent: target.intent as OwnerIntent, pendingId: target.id } as OwnerCommandOutcome, reply, to };
     }
 
+    if (limitReached) {
+      const reply = "Límite de IA alcanzado. Los atajos (/resumen, /ayuda…) siguen funcionando.";
+      await finish("answered", reply, "ai_limit");
+      return { res: { outcome: "answered", intent: "unknown" } as OwnerCommandOutcome, reply, to };
+    }
     const c = interpretation as OwnerCommandInterpretation;
     const planned = await plan(tx, cmd, c, now);
     if ("pending" in planned && isMutatingIntent(c.intent)) {

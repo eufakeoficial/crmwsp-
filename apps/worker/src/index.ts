@@ -149,7 +149,14 @@ function main(): void {
     );
     // Owner notifications: SSE fan-out + optional owner WhatsApp through the outbound queue.
     notificationQueue = new Queue(NOTIFICATION_QUEUE_NAME, { connection: createRedis(redisUrl) });
-    notificationsWorker = createNotificationWorker({ connection: createRedis(redisUrl), db: db.db, publisher, outboundQueue, logger });
+    notificationsWorker = createNotificationWorker({
+      connection: createRedis(redisUrl),
+      db: db.db,
+      publisher,
+      outboundQueue,
+      sendOwnerText: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
+      logger,
+    });
     void scheduleNotificationTick(notificationQueue).catch((err: unknown) =>
       logger.warn(`notification scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
     );
@@ -177,7 +184,7 @@ function main(): void {
       connection: createRedis(redisUrl),
       db: db.db,
       send: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
-      interpret: createOwnerInterpreter({ db: db.db, cipher }),
+      interpret: createOwnerInterpreter({ db: db.db, cipher, logger }),
       aiQueue,
       outboundQueue,
       logger,

@@ -6,9 +6,13 @@ import {
   auditEvents,
   contacts,
   dangerouslyWithoutTenant,
+  llmConnections,
+  notifications,
+  tenants,
   memberships,
   ownerCommands,
   ownerPhones,
+  usageLedger,
   users,
   withTenant,
   type DbHandle,
@@ -18,6 +22,10 @@ import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { processOwnerCommand, type OwnerModeDeps } from "../owner-mode/handler.js";
 import { OWNER_COMMAND_JOB } from "../owner-mode/queue.js";
+import { createOwnerInterpreter } from "../owner-mode/ports.js";
+import { runNotificationTick } from "../notifications/index.js";
+import type { CipherBox } from "@crmwsp/crypto";
+import type { LLMProvider } from "@crmwsp/ai";
 import { processIngestMessage, type ProcessorDeps } from "../processors.js";
 import { APP_URL, MIGRATOR_URL, createDb, dropTenants, ingest, seedTenants, textPayload, type SeedTenant } from "./helpers.js";
 
@@ -51,6 +59,17 @@ describe.skipIf(!hasDb)("owner mode (F9) inbound routing and commands", () => {
   const outJobs: QueuedJob[] = [];
   const sent: Array<{ tenantId: string; toE164: string; text: string }> = [];
   let ingestDeps: ProcessorDeps;
+  let llmCalls = 0;
+  const mockLlm = {
+    name: "mock",
+    chat: async (req: { messages: Array<{ content: string }> }) => {
+      llmCalls++;
+      const text = req.messages.at(-1)?.content ?? "";
+      const intent = /vend/iu.test(text) ? "sales_week" : "unknown";
+      return { content: "{}", parsed: { intent, actionRef: null, query: null, replyText: null }, usage: { inputTokens: 120, outputTokens: 30 }, model: "gpt-5-mini", finishReason: "stop" };
+    },
+  } as unknown as LLMProvider;
+  let llmConnectionId = "";
   let ownerDeps: OwnerModeDeps;
 
   async function addOwner(tenantId: string, phone: string, status: "pending" | "verified", role: "owner" | "agent" = "owner"): Promise<string> {
@@ -100,6 +119,21 @@ describe.skipIf(!hasDb)("owner mode (F9) inbound routing and commands", () => {
     await addOwner(A.tenantId, OWNER_A, "verified");
     await addOwner(A.tenantId, PENDING_A, "pending");
     await addOwner(B.tenantId, OWNER_B, "verified");
+    const [llm] = await dangerouslyWithoutTenant(migrator.db, (tx) =>
+      tx
+        .insert(llmConnections)
+        .values({
+          tenantId: A.tenantId,
+          provider: "openai",
+          baseUrl: "https://api.openai.com/v1",
+          apiKeyEncrypted: Buffer.from("ciphertext"),
+          modelCheap: "gpt-5-mini",
+          isActive: true,
+          lastTestOk: true,
+        })
+        .returning({ id: llmConnections.id }),
+    );
+    llmConnectionId = llm?.id ?? "";
     ingestDeps = {
       db: app.db,
       provider: new GupshupProvider(),
@@ -112,8 +146,12 @@ describe.skipIf(!hasDb)("owner mode (F9) inbound routing and commands", () => {
         sent.push({ tenantId: m.tenantId, toE164: m.toE164, text: m.text });
       },
       // Mock LLM: natural language is classified by this stub (Structured Outputs contract shape).
-      interpret: async (_tenantId, text) =>
-        /vend/iu.test(text) ? { intent: "sales_week", actionRef: null, query: null, replyText: null } : null,
+      // Real interpreter (spend gates + ledger) over a mocked LLM provider; the key "decrypts" to a stub.
+      interpret: createOwnerInterpreter({
+        db: app.db,
+        cipher: { decrypt: () => "sk-test" } as unknown as CipherBox,
+        buildProvider: () => mockLlm,
+      }),
       aiQueue: fakeQueue(aiJobs),
       outboundQueue: fakeQueue(outJobs),
     };
@@ -162,10 +200,32 @@ describe.skipIf(!hasDb)("owner mode (F9) inbound routing and commands", () => {
     expect(c).toHaveLength(0);
   });
 
-  it("natural language goes through the (mocked) tenant LLM", async () => {
-    const { outcome, reply } = await ownerSays(A, OWNER_A, "¿cuánto vendí esta semana?");
+  it("natural language goes through the (mocked) tenant LLM and is metered", async () => {
+    const calls = llmCalls;
+    const { outcome, reply, commandId } = await ownerSays(A, OWNER_A, "¿cuánto vendí esta semana?");
     expect(outcome).toEqual({ outcome: "answered", intent: "sales_week" });
     expect(reply).toContain("Últimos 7 días");
+    expect(llmCalls).toBe(calls + 1);
+    const ledger = await withTenant(app.db, A.tenantId, (tx) =>
+      tx.select().from(usageLedger).where(and(eq(usageLedger.refType, "owner_command"), eq(usageLedger.refId, commandId))),
+    );
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0]?.kind).toBe("llm_tokens");
+  });
+
+  it("over the monthly budget the LLM is not called; shortcuts still work", async () => {
+    await dangerouslyWithoutTenant(migrator.db, (tx) =>
+      tx.update(llmConnections).set({ monthlyBudgetMinor: 0n, budgetCurrency: "USD" }).where(eq(llmConnections.id, llmConnectionId)),
+    );
+    const calls = llmCalls;
+    const limited = await ownerSays(A, OWNER_A, "¿cuánto vendí hoy?");
+    expect(limited.reply).toContain("Límite de IA alcanzado");
+    expect(llmCalls).toBe(calls);
+    const shortcut = await ownerSays(A, OWNER_A, "/ventas");
+    expect(shortcut.outcome).toEqual({ outcome: "answered", intent: "sales_week" });
+    await dangerouslyWithoutTenant(migrator.db, (tx) =>
+      tx.update(llmConnections).set({ monthlyBudgetMinor: null, budgetCurrency: null }).where(eq(llmConnections.id, llmConnectionId)),
+    );
   });
 
   it("a mutating command without confirmation does nothing", async () => {
@@ -232,6 +292,41 @@ describe.skipIf(!hasDb)("owner mode (F9) inbound routing and commands", () => {
     expect(after.audit[0]?.diff["source"]).toBe("owner_whatsapp");
     expect(after.audit[0]?.actorId).toBe(after.approvals[0]?.decidedBy);
     expect(aiJobs.at(-1)).toMatchObject({ data: { tenantId: A.tenantId, actionId: action.id } });
+  });
+
+  it("T7 notifications reach the verified owner phone directly; window closed falls back to email", async () => {
+    await dangerouslyWithoutTenant(migrator.db, async (tx) => {
+      await tx.update(tenants).set({ settings: { notifications: { ownerPhoneE164: `+${OWNER_A}` } } }).where(eq(tenants.id, A.tenantId));
+      await tx.insert(notifications).values({ tenantId: A.tenantId, kind: "order_paid", title: "Pedido pagado", dedupeKey: `t7-a-${suffix}` });
+    });
+    const direct: Array<{ toE164: string; text: string; channelConnectionId: string }> = [];
+    const emails: Array<{ to: string | null }> = [];
+    const tickDeps = {
+      db: app.db,
+      publisher: { publish: async () => 0 },
+      outboundQueue: fakeQueue(outJobs),
+      sendOwnerText: async (m: { toE164: string; text: string; channelConnectionId: string }) => {
+        direct.push(m);
+      },
+      sendOwnerEmail: async (m: { to: string | null }) => {
+        emails.push(m);
+      },
+    };
+    const outBefore = outJobs.length;
+    await runNotificationTick(tickDeps);
+    expect(direct).toEqual([expect.objectContaining({ toE164: `+${OWNER_A}`, text: "Pedido pagado", channelConnectionId: A.connectionId })]);
+    expect(outJobs.length).toBe(outBefore);
+    const c = await withTenant(app.db, A.tenantId, (tx) => tx.select().from(contacts).where(eq(contacts.phoneE164, `+${OWNER_A}`)));
+    expect(c).toHaveLength(0);
+
+    // 25 h later the owner has not written: no WhatsApp, email fallback instead.
+    await dangerouslyWithoutTenant(migrator.db, (tx) =>
+      tx.insert(notifications).values({ tenantId: A.tenantId, kind: "order_paid", title: "Otro pago", dedupeKey: `t7-b-${suffix}` }),
+    );
+    await runNotificationTick({ ...tickDeps, now: () => new Date(Date.now() + 25 * 3600_000) });
+    expect(direct).toHaveLength(1);
+    expect(emails).toHaveLength(1);
+    expect(emails[0]?.to).toContain("@example.test");
   });
 
   it("a demoted member loses owner mode even with a verified phone", async () => {
