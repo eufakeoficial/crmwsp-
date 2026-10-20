@@ -92,6 +92,27 @@
       "when": 1792455621447,
       "tag": "0012_tenant_scoped_fks",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792462437401,
+      "tag": "0013_sales_catalog_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792462457613,
+      "tag": "0014_rls_sales_catalog_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792462458608,
+      "tag": "0015_sales_functions",
+      "breakpoints": true
     }
   ]
 }

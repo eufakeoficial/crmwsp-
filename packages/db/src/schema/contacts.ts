@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 
 export const contacts = pgTable(
@@ -18,7 +18,7 @@ export const contacts = pgTable(
   },
   (t) => [
     unique("contacts_tenant_phone_unique").on(t.tenantId, t.phoneE164),
-    index("contacts_tenant_id_id_idx").on(t.tenantId, t.id),
+    uniqueIndex("contacts_tenant_id_id_idx").on(t.tenantId, t.id),
   ],
 );
 

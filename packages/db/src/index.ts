@@ -8,3 +8,4 @@ export type { ChunkHit, SearchChunksParams, SearchChunksTextParams } from "./kno
 // Query operators re-exported so consumers (e.g. the CJS API) share this
 // package's drizzle-orm instance and types instead of resolving their own.
 export { and, asc, desc, eq, gt, ilike, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+export { computeLineTotal, divRoundHalfEven } from "./line-total.js";

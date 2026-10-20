@@ -78,7 +78,7 @@ export const knowledgeChunks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    index("knowledge_chunks_tenant_id_id_idx").on(t.tenantId, t.id),
+    uniqueIndex("knowledge_chunks_tenant_id_id_idx").on(t.tenantId, t.id),
     index("knowledge_chunks_tenant_source_idx").on(t.tenantId, t.sourceId),
     foreignKey({
       name: "knowledge_chunks_tenant_source_fk",

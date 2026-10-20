@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { customType, index, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { customType, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 
 /** Raw binary column (postgres.js returns Buffer). */
@@ -29,7 +29,7 @@ export const channelConnections = pgTable(
   },
   (t) => [
     unique("channel_connections_tenant_phone_unique").on(t.tenantId, t.phoneE164),
-    index("channel_connections_tenant_id_id_idx").on(t.tenantId, t.id),
+    uniqueIndex("channel_connections_tenant_id_id_idx").on(t.tenantId, t.id),
   ],
 );
 

@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
-import { bigint, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import type { PgTableExtraConfigValue } from "drizzle-orm/pg-core";
+import { bigint, foreignKey, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { aiActions } from "./ai-actions.js";
 import { conversations } from "./conversations.js";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
@@ -38,12 +40,20 @@ export const messages = pgTable(
     authorUserId: uuid("author_user_id").references(() => users.id, { onDelete: "set null" }),
     /** Client-generated idempotency key for outbound messages sent from the inbox. */
     clientMessageId: uuid("client_message_id"),
+    /** AI action that produced this message (composite FK to ai_actions below). */
+    aiActionId: uuid("ai_action_id"),
     error: jsonb("error").$type<Record<string, unknown>>(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [
+  // Explicit return type breaks the messages <-> ai_actions type inference cycle.
+  (t): PgTableExtraConfigValue[] => [
     uniqueIndex("messages_tenant_id_id_idx").on(t.tenantId, t.id),
+    foreignKey({
+      name: "messages_tenant_ai_action_fk",
+      columns: [t.tenantId, t.aiActionId],
+      foreignColumns: [aiActions.tenantId, aiActions.id],
+    }).onDelete("set null"),
     index("messages_tenant_conversation_created_idx").on(t.tenantId, t.conversationId, t.createdAt),
     uniqueIndex("messages_tenant_external_id_unique")
       .on(t.tenantId, t.externalId)
