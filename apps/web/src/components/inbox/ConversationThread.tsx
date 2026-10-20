@@ -1,48 +1,70 @@
 "use client";
 
-import type { Conversation, ConversationStatus, Message, TenantMember } from "@crmwsp/contracts";
-import { isOutsideServiceWindow } from "@/lib/service-window";
+import type { ConversationNote, InboxConversation, Message, TagDto, TenantMember } from "@crmwsp/contracts";
+import type { ReactNode } from "react";
 import { Alert } from "@/components/ui";
+import { isOutsideServiceWindow } from "@/lib/service-window";
 import { Composer } from "./Composer";
-import { ConversationHeader } from "./ConversationHeader";
+import { ConversationHeader, type ReminderInput } from "./ConversationHeader";
 import { MessageTimeline } from "./MessageTimeline";
+
+export interface ThreadActions {
+  onBack: () => void;
+  onTogglePanel: () => void;
+  onAssign: (assignee: string | null) => void;
+  onToggleTag: (name: string, on: boolean) => void;
+  onCreateTag: (input: { name: string; emoji: string | null; color: string | null }) => Promise<boolean>;
+  onRemind: (input: ReminderInput) => void;
+  onToggleStatus: () => void;
+  onMarkUnread: () => void;
+  onPause: (minutes: number | null) => void;
+}
 
 export function ConversationThread({
   conversationId,
   conversation,
   messages,
+  notes,
   members,
   meId,
+  tags,
   hasOlder,
   loadingOlder,
   loading,
   blocked,
   busy,
+  panelOpen,
+  hideSystem,
   error,
-  onBack,
-  onInfo,
-  onAssign,
-  onStatus,
+  composerSlot,
+  actions,
+  onHideSystem,
   onSend,
+  onSendNote,
   onSendTemplate,
   onLoadOlder,
 }: {
   conversationId: string;
-  conversation: Conversation | null;
+  conversation: InboxConversation | null;
   messages: readonly Message[];
+  notes: readonly ConversationNote[];
   members: readonly TenantMember[] | null;
   meId: string;
+  tags: readonly TagDto[];
   hasOlder: boolean;
   loadingOlder: boolean;
   loading: boolean;
   blocked: boolean;
   busy: boolean;
+  panelOpen: boolean;
+  hideSystem: boolean;
   error: string | undefined;
-  onBack: () => void;
-  onInfo: () => void;
-  onAssign: (userId: string | null) => void;
-  onStatus: (s: ConversationStatus) => void;
+  /** Rendered above the composer (e.g. `OrderExtractionCard`). */
+  composerSlot?: ReactNode;
+  actions: ThreadActions;
+  onHideSystem: (hide: boolean) => void;
   onSend: (text: string) => Promise<void>;
+  onSendNote: (text: string) => Promise<boolean>;
   onSendTemplate: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
   onLoadOlder: () => void;
 }) {
@@ -53,23 +75,26 @@ export function ConversationThread({
           conversation={conversation}
           members={members}
           meId={meId}
+          tags={tags}
           busy={busy}
-          onBack={onBack}
-          onInfo={onInfo}
-          onAssign={onAssign}
-          onStatus={onStatus}
+          panelOpen={panelOpen}
+          hideSystem={hideSystem}
+          onHideSystem={onHideSystem}
+          {...actions}
         />
       ) : (
         <div className="border-b border-line p-3 text-sm text-muted" aria-busy={loading}>{loading ? "Cargando conversación…" : " "}</div>
       )}
       {error ? <div className="p-3"><Alert>{error}</Alert></div> : null}
-      <MessageTimeline conversationId={conversationId} messages={messages} hasOlder={hasOlder} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
+      <MessageTimeline conversationId={conversationId} messages={messages} notes={notes} hideSystem={hideSystem} hasOlder={hasOlder} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
       {conversation ? (
         <Composer
           key={conversationId}
           blocked={blocked}
           windowWarning={isOutsideServiceWindow(conversation.lastInboundAt)}
+          slot={composerSlot}
           onSend={onSend}
+          onSendNote={onSendNote}
           channelConnectionId={conversation.channelConnectionId}
           onSendTemplate={onSendTemplate}
         />

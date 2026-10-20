@@ -1,8 +1,8 @@
 import type { Message } from "@crmwsp/contracts";
-import { AlertCircle, Check, CheckCheck, Clock, Paperclip } from "lucide-react";
+import { AlertCircle, Bot, Check, CheckCheck, Clock, Paperclip } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { formatTime } from "@/lib/format";
+import { formatDateTime, formatTime } from "@/lib/format";
 import { AttachmentView, attachmentKind } from "./AttachmentView";
 import { ATTACHMENT_LABELS, deliveryErrorText } from "@/lib/inbox-state";
 
@@ -79,7 +79,13 @@ export function MessageBubble({ message }: { message: Message }) {
         ) : null}
         {message.body ? <p className="m-0 whitespace-pre-wrap">{message.body}</p> : null}
         <div className={cn("mt-0.5 flex items-center justify-end gap-1 text-[11px]", out ? "text-subtle" : "text-muted")}>
-          <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>
+          {message.author === "ai" ? (
+            <span title="Mensaje escrito por la IA" className="inline-flex items-center gap-0.5">
+              <Bot aria-hidden className="size-3.5" />
+              <span className="sr-only">Escrito por la IA</span>
+            </span>
+          ) : null}
+          <time dateTime={message.createdAt} title={formatDateTime(message.createdAt)}>{formatTime(message.createdAt)}</time>
           {out ? <StatusIcon message={message} /> : null}
         </div>
       </div>

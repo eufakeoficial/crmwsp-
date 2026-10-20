@@ -1,56 +1,147 @@
 "use client";
 
-import type { Contact, ConversationStatus, TenantMember } from "@crmwsp/contracts";
-import { MessageSquare } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useInboxEvents } from "@/components/app/TenantEventsProvider";
+import {
+  type Contact,
+  type ContactFilter,
+  type ContactPanel as ContactPanelDto,
+  type ConversationNote,
+  EMPTY_CONTACT_FILTER,
+  type InboxConversation,
+  type TagDto,
+  type TenantMember,
+} from "@crmwsp/contracts";
+import { MessageSquare, Search, Settings } from "lucide-react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "@/components/app/SessionProvider";
-import { Alert, SidePanel, Toast } from "@/components/ui";
+import { useInboxEvents } from "@/components/app/TenantEventsProvider";
+import { Alert, Toast } from "@/components/ui";
 import { api } from "@/lib/api";
-import { useConversationList } from "@/lib/hooks/use-conversation-list";
+import { contactBookApi } from "@/lib/contacts-api";
 import { useThread } from "@/lib/hooks/use-thread";
 import { useToast } from "@/lib/hooks/use-toast";
-import { type AssigneeFilter, contactsApi } from "@/lib/inbox-api";
+import { contactsApi } from "@/lib/inbox-api";
+import { inboxV2Api } from "@/lib/inbox-v2-api";
 import { errorMessage } from "@/lib/messages";
-import { ContactPanel, contactFields } from "./ContactPanel";
-import { ConversationList } from "./ConversationList";
+import { ContactPanel } from "./ContactPanel";
+import { AUTO_ASSIGN, type ReminderInput } from "./ConversationHeader";
+import { type BulkAction, ConversationList, type ListControls } from "./ConversationList";
 import { ConversationThread } from "./ConversationThread";
+import { FolderSidebar } from "./FolderSidebar";
+import { useContactFilterIds } from "./InboxFilter";
+import { InboxSettingsDrawer } from "./InboxSettingsDrawer";
+import { type FolderId, folderParams } from "./inbox-meta";
+import { useInboxCounts, useInboxList } from "./use-inbox-list";
 
 const REFRESH_DEBOUNCE_MS = 250;
+const SEARCH_DEBOUNCE_MS = 400;
 
-export function InboxView() {
+const FOLDER_OPTIONS: { id: FolderId; label: string }[] = [
+  { id: "all", label: "Todos los chats" },
+  { id: "open", label: "Abiertos" },
+  { id: "closed", label: "Cerrados" },
+  { id: "mine", label: "Asignados a mí" },
+  { id: "unassigned", label: "Sin asignar" },
+  { id: "reminders", label: "Recordatorios" },
+];
+
+/** Picks the agent with the fewest open chats among the loaded list (client-side heuristic). */
+export function pickAutoAssignee(members: readonly TenantMember[], items: readonly InboxConversation[]): string | null {
+  const agents = members.filter((m) => m.role !== "viewer");
+  if (agents.length === 0) return null;
+  const load = new Map(agents.map((m) => [m.userId, 0]));
+  for (const c of items) {
+    if (c.inboxStatus === "open" && c.assignee && load.has(c.assignee.id)) load.set(c.assignee.id, (load.get(c.assignee.id) ?? 0) + 1);
+  }
+  return [...agents].sort((a, b) => (load.get(a.userId) ?? 0) - (load.get(b.userId) ?? 0))[0]?.userId ?? null;
+}
+
+export function InboxView({ composerSlot }: { composerSlot?: (conversation: InboxConversation) => ReactNode } = {}) {
   const { me, tenant } = useSession();
   const tenantId = tenant?.id ?? null;
-  const [status, setStatus] = useState<ConversationStatus>("open");
-  const [scope, setScope] = useState<AssigneeFilter | "all">("all");
+  const canConfigure = tenant?.role === "owner" || tenant?.role === "admin";
+
+  const [folder, setFolder] = useState<FolderId>("all");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [controls, setControls] = useState<ListControls>({ status: "open", unread: false, sort: "newest" });
+  const [searchDraft, setSearchDraft] = useState("");
   const [query, setQuery] = useState("");
-  const [matchIds, setMatchIds] = useState<ReadonlySet<string> | null>(null);
+  const [filter, setFilter] = useState<ContactFilter>(EMPTY_CONTACT_FILTER);
+  const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [mobilePanel, setMobilePanel] = useState(false);
+  const [hideSystem, setHideSystem] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [members, setMembers] = useState<TenantMember[] | null>(null);
+  const [tags, setTags] = useState<TagDto[]>([]);
+  const [detail, setDetail] = useState<InboxConversation | null>(null);
+  const [notes, setNotes] = useState<ConversationNote[]>([]);
   const [contact, setContact] = useState<Contact | null>(null);
-  const [infoOpen, setInfoOpen] = useState(false);
+  const [panel, setPanel] = useState<ContactPanelDto | null>(null);
   const [busy, setBusy] = useState(false);
   const { message: toast, show } = useToast(3500);
 
-  const list = useConversationList(tenantId, { status, assignedTo: scope === "all" ? undefined : scope });
+  const listParams = useMemo(
+    () => ({ ...folderParams(folder, controls.status), sort: controls.sort, ...(controls.unread ? { unread: true } : {}), ...(query ? { q: query } : {}) }),
+    [folder, controls, query],
+  );
+  const list = useInboxList(tenantId, listParams);
   const { refresh: refreshList } = list;
-  const thread = useThread(selectedId, me.user.id, refreshList);
-  const { refresh: refreshThread, conversation } = thread;
+  const { counts, refresh: refreshCounts } = useInboxCounts(tenantId);
+  const filterInfo = useContactFilterIds(filter);
+  const thread = useThread(selectedId, me.user.id, () => {
+    void refreshList();
+    void refreshCounts();
+  });
+  const { refresh: refreshThread } = thread;
 
-  // Debounced refresh from SSE: several events in a burst cause one reload.
+  const loadDetail = useCallback(async (id: string) => {
+    try {
+      const d = await inboxV2Api.get(id);
+      setDetail((prev) => (prev === null || prev.id === id ? d : prev));
+    } catch {
+      /* the thread hook reports load errors */
+    }
+  }, []);
+  const loadNotes = useCallback(async (id: string) => {
+    try {
+      const res = await inboxV2Api.notes(id);
+      setNotes((prev) => (res.items.length === 0 && prev.length === 0 ? prev : res.items));
+    } catch {
+      /* notes are best effort */
+    }
+  }, []);
+  const loadTags = useCallback(async () => {
+    try {
+      setTags((await inboxV2Api.tags()).items);
+    } catch {
+      /* the folder list just shows no tags */
+    }
+  }, []);
+  const refreshAll = useCallback(() => {
+    void refreshList();
+    void refreshCounts();
+  }, [refreshList, refreshCounts]);
+
+  // Debounced refresh from SSE: several events in a burst cause one reload. Counts refetch on every event.
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // The timer must call the latest callbacks: filters may change while it is pending.
-  const latest = useRef({ selectedId, refreshList, refreshThread });
+  const latest = useRef({ selectedId, refreshAll, refreshThread, loadDetail, loadNotes });
   useEffect(() => {
-    latest.current = { selectedId, refreshList, refreshThread };
+    latest.current = { selectedId, refreshAll, refreshThread, loadDetail, loadNotes };
   });
   useEffect(() => () => clearTimeout(timer.current), []);
   const eventsStatus = useInboxEvents((event) => {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       const cur = latest.current;
-      void cur.refreshList();
-      if (event.type === "resync" || event.conversationId === cur.selectedId) void cur.refreshThread();
+      cur.refreshAll();
+      const current = event.type === "resync" || event.conversationId === cur.selectedId;
+      if (current && cur.selectedId) {
+        void cur.refreshThread();
+        void cur.loadDetail(cur.selectedId);
+        void cur.loadNotes(cur.selectedId);
+      }
     }, REFRESH_DEBOUNCE_MS);
   });
 
@@ -58,7 +149,7 @@ export function InboxView() {
     let cancelled = false;
     api.members().then(
       (res) => !cancelled && setMembers(res.items),
-      // The agent role gets 403 (or any failure): fall back to "Asignarme a mí".
+      // The agent role gets 403 (or any failure): only "Yo" / "Sin asignar" are offered.
       () => !cancelled && setMembers(null),
     );
     return () => {
@@ -68,52 +159,207 @@ export function InboxView() {
 
   useEffect(() => {
     setSelectedId(null);
-  }, [tenantId]);
+    setTags([]);
+    if (tenantId !== null) void loadTags();
+  }, [tenantId, loadTags]);
 
-  // Contact search through GET /contacts?q=; conversations are filtered by contact id.
+  // Opening a conversation: detail + notes. The thread hook loads the messages.
   useEffect(() => {
-    if (!query) {
-      setMatchIds(null);
-      return;
-    }
-    let cancelled = false;
-    contactsApi.list({ q: query, limit: 100 }).then(
-      (res) => !cancelled && setMatchIds(new Set(res.items.map((c) => c.id))),
-      () => !cancelled && setMatchIds(new Set()),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [query]);
+    setDetail(null);
+    setNotes([]);
+    setMobilePanel(false);
+    if (!selectedId) return;
+    void loadDetail(selectedId);
+    void loadNotes(selectedId);
+  }, [selectedId, loadDetail, loadNotes]);
 
-  const contactId = conversation?.contact.id;
+  const contactId = detail?.contact.id;
+  const loadPanel = useCallback(async (id: string) => {
+    try {
+      setPanel(await inboxV2Api.contactPanel(id));
+    } catch {
+      setPanel(null);
+    }
+  }, []);
   useEffect(() => {
     setContact(null);
+    setPanel(null);
     if (!contactId) return;
     let cancelled = false;
     contactsApi.get(contactId).then((c) => !cancelled && setContact(c), () => undefined);
+    inboxV2Api.contactPanel(contactId).then((p) => !cancelled && setPanel(p), () => undefined);
     return () => {
       cancelled = true;
     };
   }, [contactId]);
 
+  // Global search: debounce typing, submit applies at once.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(searchDraft.trim().slice(0, 100)), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [searchDraft]);
+  const submitSearch = (e: FormEvent) => {
+    e.preventDefault();
+    setQuery(searchDraft.trim().slice(0, 100));
+  };
+
+  // Changing the view invalidates the bulk selection.
+  useEffect(() => {
+    setChecked(new Set());
+  }, [listParams, filter, tenantId]);
+
   const visible = useMemo(
-    () => (matchIds ? list.items.filter((c) => matchIds.has(c.contact.id)) : list.items),
-    [list.items, matchIds],
+    () => (filterInfo.ids ? list.items.filter((c) => filterInfo.ids?.has(c.contact.id)) : list.items),
+    [list.items, filterInfo.ids],
+  );
+  const tagMeta = useMemo(() => new Map(tags.map((t) => [t.name, { emoji: t.emoji, color: t.color }])), [tags]);
+
+  /** Runs an action with the busy flag; failures show a toast. */
+  const act = useCallback(
+    async (fn: () => Promise<void>, failure: string) => {
+      setBusy(true);
+      try {
+        await fn();
+      } catch {
+        show(failure);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [show],
   );
 
-  const mutate = useCallback(
-    async (patch: Parameters<typeof thread.update>[0]) => {
-      setBusy(true);
-      const result = await thread.update(patch);
-      setBusy(false);
-      if (result === "conflict") show("Otra persona cambió esta conversación");
-      else if (result === "error") show("No se pudo guardar el cambio");
+  const applyDetail = useCallback(
+    (d: InboxConversation) => {
+      setDetail(d);
+      refreshAll();
     },
-    [thread.update, show],
+    [refreshAll],
   );
+
+  const assign = (value: string | null) => {
+    if (!selectedId) return;
+    let assignee = value;
+    if (value === AUTO_ASSIGN) {
+      assignee = members ? pickAutoAssignee(members, list.items) : null;
+      if (!assignee) {
+        show("No hay agentes disponibles para asignar");
+        return;
+      }
+    }
+    void act(async () => applyDetail(await inboxV2Api.assign(selectedId, assignee)), "No se pudo asignar la conversación");
+  };
+
+  const toggleStatus = () => {
+    if (!selectedId || !detail) return;
+    const next = detail.inboxStatus === "closed" ? "open" : "closed";
+    void act(async () => applyDetail(await inboxV2Api.setStatus(selectedId, next)), "No se pudo cambiar el estado");
+  };
+
+  const markUnread = () => {
+    if (!selectedId) return;
+    void act(async () => {
+      await inboxV2Api.markUnread(selectedId);
+      setSelectedId(null);
+      refreshAll();
+    }, "No se pudo marcar como no leído");
+  };
+
+  const remind = (input: ReminderInput) => {
+    if (!selectedId) return;
+    void act(async () => {
+      await inboxV2Api.addReminder(selectedId, input);
+      await loadDetail(selectedId);
+      refreshAll();
+      show("Te lo recordaremos");
+    }, "No se pudo crear el recordatorio");
+  };
+
+  const pause = (minutes: number | null) => {
+    if (!contactId || !selectedId) return;
+    void act(async () => {
+      await inboxV2Api.pauseAutomations(contactId, minutes);
+      await Promise.all([loadDetail(selectedId), loadPanel(contactId)]);
+      show(minutes === null ? "Automatizaciones reanudadas" : "Automatizaciones en pausa");
+    }, "No se pudo cambiar la pausa de automatizaciones");
+  };
+
+  const setContactTag = (name: string, on: boolean) => {
+    if (!detail) return;
+    const current = detail.contactTags;
+    const next = on ? (current.includes(name) ? current : [...current, name]) : current.filter((t) => t !== name);
+    void act(async () => {
+      await contactBookApi.setTags(detail.contact.id, next);
+      await Promise.all([loadDetail(detail.id), loadPanel(detail.contact.id)]);
+      refreshAll();
+      void loadTags();
+    }, "No se pudo actualizar las etiquetas");
+  };
+
+  const createTag = async (input: { name: string; emoji: string | null; color: string | null }) => {
+    try {
+      await inboxV2Api.createTag(input);
+      await loadTags();
+      return true;
+    } catch (err) {
+      show(errorMessage(err));
+      return false;
+    }
+  };
+
+  const sendNote = async (text: string) => {
+    if (!selectedId) return false;
+    try {
+      const note = await inboxV2Api.addNote(selectedId, text);
+      setNotes((prev) => (prev.some((n) => n.id === note.id) ? prev : [...prev, note]));
+      return true;
+    } catch {
+      show("No se pudo guardar la nota");
+      return false;
+    }
+  };
+
+  const bulk = (action: BulkAction) => {
+    const ids = [...checked];
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    const byId = new Map(list.items.map((c) => [c.id, c]));
+    const run = (id: string): Promise<unknown> => {
+      if (action.type === "close") return inboxV2Api.setStatus(id, "closed");
+      if (action.type === "assign") return inboxV2Api.assign(id, action.assignee === me.user.id ? "me" : action.assignee);
+      const c = byId.get(id);
+      if (!c) return Promise.resolve();
+      const next = c.contactTags.includes(action.tag) ? c.contactTags : [...c.contactTags, action.tag];
+      return contactBookApi.setTags(c.contact.id, next);
+    };
+    void Promise.allSettled(ids.map(run))
+      .then((results) => {
+        const failed = results.filter((r) => r.status === "rejected").length;
+        show(failed ? `${failed} de ${ids.length} cambios fallaron` : `${ids.length} conversaciones actualizadas`);
+        setChecked(new Set());
+        refreshAll();
+        if (selectedId && ids.includes(selectedId)) void loadDetail(selectedId);
+        if (action.type === "tag") void loadTags();
+      })
+      .finally(() => setBulkBusy(false));
+  };
+
+  const toggleChecked = (id: string) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  const selectFolder = (f: FolderId) => {
+    setFolder(f);
+    setSelectedId(null);
+  };
 
   const listError = list.error ? errorMessage(list.error) : undefined;
+  const cols = panelOpen && selectedId
+    ? "desk:grid-cols-[auto_340px_minmax(0,1fr)_300px]"
+    : "desk:grid-cols-[auto_340px_minmax(0,1fr)]";
   return (
     <div className="-mb-16 flex h-[calc(100dvh-120px)] min-h-[420px] flex-col gap-2">
       <h1 className="sr-only">Inbox</h1>
@@ -122,61 +368,136 @@ export function InboxView() {
       ) : eventsStatus === "reconnecting" ? (
         <Alert tone="info">Reconectando el tiempo real…</Alert>
       ) : null}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 desk:grid-cols-[320px_minmax(0,1fr)_280px]">
+
+      <div className="flex items-center gap-2">
+        <form onSubmit={submitSearch} role="search" className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full border border-line bg-white pl-4 pr-1 focus-within:outline-3 focus-within:outline-focus">
+          <Search aria-hidden className="size-4 flex-none text-muted" />
+          <input
+            type="search"
+            aria-label="Buscar en conversaciones"
+            placeholder="Buscar en conversaciones"
+            value={searchDraft}
+            maxLength={100}
+            onChange={(e) => setSearchDraft(e.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-muted"
+          />
+        </form>
+        <select
+          aria-label="Carpeta"
+          value={folder.startsWith("tag:") ? "" : folder}
+          onChange={(e) => selectFolder(e.target.value as FolderId)}
+          className="h-10 cursor-pointer rounded-full border border-line bg-white px-3 text-[13px] font-bold desk:hidden"
+        >
+          {folder.startsWith("tag:") ? <option value="">Etiqueta: {folder.slice(4)}</option> : null}
+          {FOLDER_OPTIONS.map((f) => (
+            <option key={f.id} value={f.id}>{f.label}</option>
+          ))}
+        </select>
+        {canConfigure ? (
+          <button type="button" onClick={() => setSettingsOpen(true)} aria-label="Ajustes de la bandeja" title="Ajustes de la bandeja" className="grid size-10 flex-none cursor-pointer place-items-center rounded-full border border-line bg-white text-ink hover:bg-paper">
+            <Settings aria-hidden className="size-[18px]" />
+          </button>
+        ) : null}
+      </div>
+
+      <div className={`grid min-h-0 flex-1 grid-cols-1 gap-3 ${cols}`}>
+        <div className="hidden min-h-0 desk:flex [&>nav]:flex-1">
+          <FolderSidebar folder={folder} counts={counts} tags={tags} collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} onSelect={selectFolder} onCreateTag={createTag} />
+        </div>
         <div className={`min-h-0 flex-col [&>section]:flex-1 ${selectedId ? "hidden desk:flex" : "flex"}`}>
           <ConversationList
             items={visible}
+            folder={folder}
+            controls={controls}
+            onControls={setControls}
+            filter={filter}
+            onFilter={setFilter}
+            filterInfo={filterInfo}
             selectedId={selectedId}
-            status={status}
-            scope={scope}
-            query={query}
-            loading={list.loading}
+            checked={checked}
+            onCheck={toggleChecked}
+            onCheckAll={(all) => setChecked(all ? new Set(visible.map((c) => c.id)) : new Set())}
+            members={members}
+            meId={me.user.id}
+            tags={tags}
+            tagMeta={tagMeta}
+            bulkBusy={bulkBusy}
+            onBulk={bulk}
+            loading={list.loading || filterInfo.loading}
             loadingMore={list.loadingMore}
             hasMore={list.nextCursor !== null}
             error={listError}
-            onStatus={setStatus}
-            onScope={setScope}
-            onQuery={setQuery}
             onSelect={setSelectedId}
             onLoadMore={() => void list.loadMore()}
           />
         </div>
         {selectedId ? (
           <>
-            <div className="flex min-h-0 min-w-0 flex-col [&>section]:flex-1">
+            <div className={`min-h-0 min-w-0 flex-col [&>section]:flex-1 ${mobilePanel ? "hidden desk:flex" : "flex"}`}>
               <ConversationThread
                 conversationId={selectedId}
-                conversation={thread.conversation}
+                conversation={detail}
                 messages={thread.messages}
+                notes={notes}
                 members={members}
                 meId={me.user.id}
+                tags={tags}
                 hasOlder={thread.hasOlder}
                 loadingOlder={thread.loadingOlder}
                 loading={thread.loading}
                 blocked={thread.blocked}
                 busy={busy}
+                panelOpen={panelOpen}
+                hideSystem={hideSystem}
                 error={thread.error ? errorMessage(thread.error) : undefined}
-                onBack={() => setSelectedId(null)}
-                onInfo={() => setInfoOpen(true)}
-                onAssign={(userId) => void mutate({ assignedUserId: userId })}
-                onStatus={(s) => void mutate({ status: s })}
+                composerSlot={detail && composerSlot ? composerSlot(detail) : undefined}
+                actions={{
+                  onBack: () => setSelectedId(null),
+                  onTogglePanel: () => {
+                    setPanelOpen((v) => !v);
+                    setMobilePanel((v) => !v);
+                  },
+                  onAssign: assign,
+                  onToggleTag: setContactTag,
+                  onCreateTag: createTag,
+                  onRemind: remind,
+                  onToggleStatus: toggleStatus,
+                  onMarkUnread: markUnread,
+                  onPause: pause,
+                }}
+                onHideSystem={setHideSystem}
                 onSend={thread.send}
+                onSendNote={sendNote}
                 onSendTemplate={thread.sendTemplate}
                 onLoadOlder={() => void thread.loadOlder()}
               />
             </div>
-            {conversation ? <ContactPanel summary={conversation.contact} contact={contact} /> : <div className="hidden desk:block" />}
+            <div className={`min-h-0 flex-col ${mobilePanel ? "flex" : "hidden"} ${panelOpen ? "desk:flex" : "desk:hidden"}`}>
+              {detail ? (
+                <ContactPanel
+                  conversation={detail}
+                  contact={contact}
+                  panel={panel}
+                  tags={tags}
+                  busy={busy}
+                  onToggleTag={setContactTag}
+                  onPause={pause}
+                  onClose={() => {
+                    setMobilePanel(false);
+                    setPanelOpen(true);
+                  }}
+                />
+              ) : null}
+            </div>
           </>
         ) : (
-          <div className="col-span-2 hidden min-h-0 flex-col items-center justify-center gap-2 rounded-[22px] border border-dashed border-line-2 text-center text-muted desk:flex">
+          <div className="hidden min-h-0 flex-col items-center justify-center gap-2 rounded-[22px] border border-dashed border-line-2 text-center text-muted desk:flex">
             <MessageSquare aria-hidden className="size-8" />
             <p className="m-0 font-bold">Elige una conversación</p>
           </div>
         )}
       </div>
-      {infoOpen && conversation ? (
-        <SidePanel title="Ficha del contacto" fields={contactFields(conversation.contact, contact)} onClose={() => setInfoOpen(false)} />
-      ) : null}
+      {settingsOpen ? <InboxSettingsDrawer onClose={() => setSettingsOpen(false)} onSaved={() => { show("Ajustes guardados"); refreshAll(); }} /> : null}
       <Toast message={toast} tone="warn" />
     </div>
   );
