@@ -127,19 +127,7 @@ export class StripeProvider implements PaymentProvider {
   }
 
   parseWebhook(rawBody: Uint8Array, headers: WebhookHeaders): VerifiedPaymentEvent[] {
-    verifyStripeSignature({
-      rawBody,
-      header: headerValue(headers, "stripe-signature"),
-      secret: this.#webhookSecret,
-      nowMs: this.#now(),
-    });
-    let json: unknown;
-    try {
-      json = JSON.parse(new TextDecoder().decode(rawBody));
-    } catch {
-      throw new PaymentProviderError("stripe", "Webhook body is not valid JSON", false);
-    }
-    return [normalizeStripeEvent(json)];
+    return parseStripeWebhook(rawBody, headers, this.#webhookSecret, this.#now());
   }
 
   async getPayment(providerRef: string): Promise<PaymentSnapshot> {
@@ -218,6 +206,28 @@ export class StripeProvider implements PaymentProvider {
       throw new PaymentProviderError("stripe", "Invalid JSON response from Stripe", true, { status: res.status });
     }
   }
+}
+
+/**
+ * Verifies the `Stripe-Signature` over the RAW body and normalizes the event. Standalone so a
+ * webhook receiver only needs the webhook secret (not the API key). Throws InvalidSignatureError
+ * before the body is parsed.
+ */
+export function parseStripeWebhook(
+  rawBody: Uint8Array,
+  headers: WebhookHeaders,
+  webhookSecret: string,
+  nowMs: number = Date.now(),
+): VerifiedPaymentEvent[] {
+  if (!webhookSecret) throw new ValidationError("Stripe webhook secret is required");
+  verifyStripeSignature({ rawBody, header: headerValue(headers, "stripe-signature"), secret: webhookSecret, nowMs });
+  let json: unknown;
+  try {
+    json = JSON.parse(new TextDecoder().decode(rawBody));
+  } catch {
+    throw new PaymentProviderError("stripe", "Webhook body is not valid JSON", false);
+  }
+  return [normalizeStripeEvent(json)];
 }
 
 function isHttpsUrl(u: string): boolean {

@@ -4,7 +4,10 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { AppModule } from "./app.module.js";
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
+    // Exact request bytes on req.rawBody: the Stripe webhook signature is computed over them.
+    rawBody: true,
+  });
   // Close Redis/DB/SSE cleanly on SIGTERM (container stop).
   app.enableShutdownHooks();
   const port = Number(process.env["API_PORT"] ?? process.env["PORT"] ?? 4000);

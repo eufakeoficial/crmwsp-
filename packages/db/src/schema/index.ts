@@ -18,3 +18,4 @@ export * from "./sales.js";
 export * from "./quotes.js";
 export * from "./engagement.js";
 export * from "./commerce.js";
+export * from "./payments.js";
