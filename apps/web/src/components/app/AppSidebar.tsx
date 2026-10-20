@@ -62,7 +62,7 @@ export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNa
   );
 }
 
-/** Reserved card for the AI assistant. Not interactive until the feature exists. */
+/** AI assistant card: links to the AI settings, where the assist mode (draft, human sends) is chosen. */
 export function AssistantCard() {
   return (
     <div className="mt-auto flex flex-col items-start gap-2 rounded-[22px] bg-ink-2 p-3.5 text-white">
@@ -70,7 +70,10 @@ export function AssistantCard() {
         <Sparkles aria-hidden className="size-5" />
       </span>
       <b className="text-[15px]">Asistente de IA</b>
-      <span className="text-[13px] text-subtle">Próximamente: respuestas sugeridas con citas a tu catálogo.</span>
+      <span className="text-[13px] text-subtle">Modo asistente: la IA redacta y tú envías.</span>
+      <Link href="/app/settings/ai" className="text-[13px] font-bold text-lime no-underline hover:underline">
+        Configurar la IA
+      </Link>
     </div>
   );
 }
