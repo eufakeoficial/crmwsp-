@@ -23,6 +23,7 @@ import {
   type InboundJobData,
 } from "./queue.js";
 import { previousStatusesFor } from "./status.js";
+import { applyBroadcastStatus, recordMarketingOptOut } from "./broadcasts/consent.js";
 import { cancelFollowUpsForConversation } from "./followups/pg-store.js";
 import { STORE_MEDIA_JOB, STORE_MEDIA_JOB_OPTIONS, storeMediaJobId, type StoreMediaJobData } from "./media/job.js";
 
@@ -169,6 +170,8 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
         name: m.contactName ?? null,
       });
     }
+    // "BAJA" / "STOP": revoke marketing consent (broadcast audiences exclude the contact).
+    await recordMarketingOptOut(tx, tenantId, contact.id, messageBody(m), m.externalId);
 
     // Serialise conversation creation per (tenant, contact, connection): concurrent messages
     // from the same contact would otherwise race on conversations_one_unresolved_unique.
@@ -345,6 +348,7 @@ export async function processIngestStatus(deps: ProcessorDeps, data: unknown): P
         })
         .where(and(eq(messages.externalId, s.externalId), inArray(messages.status, allowed)))
         .returning({ id: messages.id, conversationId: messages.conversationId });
+      if (updated) await applyBroadcastStatus(tx, updated.id, s.status);
     }
     if (!updated) {
       const [exists] = await tx

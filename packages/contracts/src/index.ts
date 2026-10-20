@@ -18,3 +18,4 @@ export * from "./billing.js";
 export * from "./ads.js";
 export * from "./developers.js";
 export * from "./voice-settings.js";
+export * from "./broadcasts.js";

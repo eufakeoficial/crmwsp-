@@ -2,6 +2,8 @@ import type { CipherBox } from "@crmwsp/crypto";
 import { shouldSendVoiceReply } from "@crmwsp/domain";
 import {
   attachments,
+  broadcastRecipients,
+  broadcasts,
   channelConnections,
   contacts,
   conversations,
@@ -17,7 +19,7 @@ import {
 } from "@crmwsp/db";
 import type { SendResult, WhatsAppConnection, WhatsAppProvider } from "@crmwsp/whatsapp";
 import { UnrecoverableError, Worker, type ConnectionOptions, type Job } from "bullmq";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { TTS_API_KEY_PURPOSE, sendVoiceOrText, type VoiceDeps } from "./voice.js";
 import { tenantChannel, type EventPublisher, type InboxEvent, type Logger } from "./processors.js";
 import {
@@ -93,6 +95,8 @@ export interface OutboundPayload {
   body: string | null;
   contactName: string | null;
   template: OutboundTemplate | null;
+  /** Pre-resolved template params (broadcast recipients); otherwise derived from `template.variables`. */
+  params?: string[] | null;
 }
 
 /** Fills template params from the variable names stored on message_templates.variables. */
@@ -118,7 +122,7 @@ export async function dispatchOutbound(
     if (!t) throw new UnrecoverableError("template message without template");
     if (t.status !== "approved") throw new UnrecoverableError("template is not approved");
     if (!t.externalId) throw new UnrecoverableError("template has no external id");
-    const params = resolveTemplateParams(Array.isArray(t.variables) ? t.variables : [], { contactName: msg.contactName });
+    const params = msg.params ?? resolveTemplateParams(Array.isArray(t.variables) ? t.variables : [], { contactName: msg.contactName });
     return provider.sendTemplate(conn, to, t.externalId, params);
   }
   if (!msg.body) throw new UnrecoverableError("message has no text");
@@ -245,6 +249,9 @@ export async function processSendMessage(
         appName: channelConnections.externalAppId,
         connectionStatus: channelConnections.status,
         credentials: channelConnections.credentialsEncrypted,
+        recipientId: broadcastRecipients.id,
+        recipientParams: broadcastRecipients.params,
+        broadcastStatus: broadcasts.status,
       })
       .from(messages)
       .innerJoin(conversations, eq(conversations.id, messages.conversationId))
@@ -252,9 +259,15 @@ export async function processSendMessage(
       .innerJoin(channelConnections, eq(channelConnections.id, conversations.channelConnectionId))
       // Template messages come from follow-ups: follow_ups.sent_message_id -> message, template_id -> template.
       .leftJoin(followUps, eq(followUps.sentMessageId, messages.id))
+      // Broadcast messages: broadcast_recipients.message_id -> message, broadcasts.template_id -> template.
+      .leftJoin(broadcastRecipients, eq(broadcastRecipients.messageId, messages.id))
+      .leftJoin(broadcasts, eq(broadcasts.id, broadcastRecipients.broadcastId))
       .leftJoin(
         messageTemplates,
-        and(eq(messageTemplates.id, followUps.templateId), eq(messageTemplates.channelConnectionId, channelConnections.id)),
+        and(
+          eq(messageTemplates.id, sql`coalesce(${followUps.templateId}, ${broadcasts.templateId})`),
+          eq(messageTemplates.channelConnectionId, channelConnections.id),
+        ),
       )
       .where(eq(messages.id, messageId))
       .limit(1)
@@ -271,6 +284,7 @@ export async function processSendMessage(
     }
 
     try {
+      if (loaded.broadcastStatus === "cancelled") throw new UnrecoverableError("broadcast cancelled");
       if (loaded.connectionStatus === "disabled") throw new UnrecoverableError("channel is disabled");
       if (!loaded.credentials || !loaded.appName) throw new UnrecoverableError("channel has no credentials");
       const apiKey = deps.cipher.decrypt(loaded.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
@@ -300,6 +314,7 @@ export async function processSendMessage(
           type: loaded.type,
           body: loaded.body,
           contactName: loaded.contactName,
+          params: loaded.recipientId ? (loaded.recipientParams ?? []) : null,
           template:
             loaded.tplName !== null
               ? {
@@ -316,6 +331,12 @@ export async function processSendMessage(
         .update(messages)
         .set({ externalId, status: "sent", sentAt: new Date(), error: null })
         .where(and(eq(messages.id, messageId), eq(messages.status, "queued")));
+      if (loaded.recipientId) {
+        await tx
+          .update(broadcastRecipients)
+          .set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(broadcastRecipients.id, loaded.recipientId), eq(broadcastRecipients.status, "pending")));
+      }
       return { res: { outcome: "sent", externalId } as SendMessageResult, conversationId: loaded.conversationId };
     } catch (err) {
       const lastAttempt = attempt.attemptsMade + 1 >= attempt.maxAttempts;
@@ -327,6 +348,13 @@ export async function processSendMessage(
         .update(messages)
         .set({ status: "failed", error: sanitizeError(err) })
         .where(and(eq(messages.id, messageId), eq(messages.status, "queued")));
+      if (loaded.recipientId) {
+        const cancelled = loaded.broadcastStatus === "cancelled";
+        await tx
+          .update(broadcastRecipients)
+          .set({ status: cancelled ? "skipped" : "failed", error: sanitizeError(err), updatedAt: new Date() })
+          .where(and(eq(broadcastRecipients.id, loaded.recipientId), eq(broadcastRecipients.status, "pending")));
+      }
       (deps.logger ?? silent).warn(`send-message ${messageId} failed permanently`);
       return { res: { outcome: "failed" } as SendMessageResult, conversationId: loaded.conversationId };
     }

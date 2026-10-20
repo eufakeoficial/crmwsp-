@@ -225,6 +225,20 @@
       "when": 1792502730000,
       "tag": "0033_rls_voice_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792502740000,
+      "tag": "0034_broadcasts",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792502750000,
+      "tag": "0035_rls_broadcasts",
+      "breakpoints": true
     }
   ]
 }
