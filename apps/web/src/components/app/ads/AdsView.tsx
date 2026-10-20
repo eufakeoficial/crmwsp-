@@ -8,12 +8,16 @@ import { SettingsFrame } from "@/components/ai/AccessGate";
 import { Alert, Button, Card, Chip, Input, Label } from "@/components/ui";
 import { MetaAdsCard, RecommendationSettingsCard } from "./MetaAdsCard";
 import { adsApi } from "@/lib/ads-api";
+import { defaultCurrency, useCurrencySettings } from "@/lib/currency-api";
 import { formatMoneyMinor, majorToMinor } from "@/lib/format";
 import { errorMessage } from "@/lib/messages";
 
 function SpendForm({ onSaved }: { onSaved: () => void }) {
   const [sourceId, setSourceId] = useState("");
-  const [currency, setCurrency] = useState("EUR");
+  const currencySettings = useCurrencySettings();
+  // Untouched by the user, the field follows the tenant base currency once settings load.
+  const [currencyInput, setCurrency] = useState<string>();
+  const currency = currencyInput ?? defaultCurrency(currencySettings);
   const [amount, setAmount] = useState("");
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
