@@ -12,15 +12,18 @@ import {
   type Database,
   type Transaction,
 } from "@crmwsp/db";
+import type { PaymentProviderName } from "@crmwsp/db";
 import { insertNotification } from "../notifications/notify.js";
+
+const PROVIDER_LABEL: Record<PaymentProviderName, string> = { stripe: "Stripe", mercadopago: "Mercado Pago" };
 import type { MarkPaidInput, OrderRecord, PaymentEventOutcome, PaymentLedger, PaymentLedgerTx, PaymentRecord } from "./payment-ledger.js";
 
 /** Drizzle implementation; every call runs under withTenant (RLS, ADR 0002). */
 export class PgPaymentLedger implements PaymentLedger {
   constructor(private readonly db: Database) {}
 
-  inTenant<T>(tenantId: string, fn: (tx: PaymentLedgerTx) => Promise<T>): Promise<T> {
-    return withTenant(this.db, tenantId, (tx) => fn(new PgLedgerTx(tx, tenantId)));
+  inTenant<T>(tenantId: string, fn: (tx: PaymentLedgerTx) => Promise<T>, provider: PaymentProviderName = "stripe"): Promise<T> {
+    return withTenant(this.db, tenantId, (tx) => fn(new PgLedgerTx(tx, tenantId, provider)));
   }
 }
 
@@ -28,6 +31,7 @@ class PgLedgerTx implements PaymentLedgerTx {
   constructor(
     private readonly tx: Transaction,
     private readonly tenantId: string,
+    private readonly provider: PaymentProviderName,
   ) {}
 
   async recordEvent(e: { eventId: string; eventType: string; providerRef: string | null; payload: unknown }): Promise<string | null> {
@@ -35,7 +39,7 @@ class PgLedgerTx implements PaymentLedgerTx {
       .insert(paymentEvents)
       .values({
         tenantId: this.tenantId,
-        provider: "stripe",
+        provider: this.provider,
         eventId: e.eventId.slice(0, 255),
         eventType: e.eventType.slice(0, 120),
         providerRef: e.providerRef,
@@ -55,7 +59,7 @@ class PgLedgerTx implements PaymentLedgerTx {
     const [p] = await this.tx
       .select()
       .from(payments)
-      .where(and(eq(payments.provider, "stripe"), eq(payments.providerRef, providerRef)))
+      .where(and(eq(payments.provider, this.provider), eq(payments.providerRef, providerRef)))
       .for("update");
     return p ? { id: p.id, orderId: p.orderId, amountMinor: p.amountMinor, currency: p.currency, status: p.status } : null;
   }
@@ -92,21 +96,21 @@ class PgLedgerTx implements PaymentLedgerTx {
       action: "order.mark_paid",
       diff: {
         status: { from: i.fromStatus, to: "paid" },
-        method: "stripe",
+        method: this.provider,
         verifiedBy: "webhook",
         paymentId: i.paymentId,
         eventId: i.eventId,
         amountMinor: i.amountMinor.toString(),
         currency: i.currency,
       },
-      reason: "pago verificado por webhook de Stripe",
+      reason: `pago verificado por webhook de ${PROVIDER_LABEL[this.provider]}`,
     });
     // Team notification, atomic with the payment (delivered by the worker notification tick).
     const [o] = await this.tx.select({ number: orders.number, conversationId: orders.conversationId }).from(orders).where(eq(orders.id, i.orderId));
     await insertNotification(this.tx, this.tenantId, {
       kind: "order_paid",
       title: `Pedido ${o?.number ?? ""} pagado`.replace("  ", " "),
-      body: `Pago verificado por Stripe: ${(Number(i.amountMinor) / 100).toFixed(2)} ${i.currency.toUpperCase()}.`,
+      body: `Pago verificado por ${PROVIDER_LABEL[this.provider]}: ${(Number(i.amountMinor) / 100).toFixed(2)} ${i.currency.toUpperCase()}.`,
       entity: "order",
       entityId: i.orderId,
       conversationId: o?.conversationId ?? null,

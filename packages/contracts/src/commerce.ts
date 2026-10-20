@@ -284,7 +284,7 @@ export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
 export const paymentLinkSchema = z.object({
   paymentId: uuidSchema,
   orderId: uuidSchema,
-  provider: z.literal("stripe"),
+  provider: z.enum(["stripe", "mercadopago"]),
   providerRef: z.string(),
   url: z.string().url(),
   amountMinor: z.number().int(),
@@ -295,7 +295,11 @@ export const paymentLinkSchema = z.object({
 export type PaymentLinkResponse = z.infer<typeof paymentLinkSchema>;
 
 export const createPaymentLinkRequestSchema = z
-  .object({ successUrl: z.string().url().startsWith("https://").max(2000).optional() })
+  .object({
+    successUrl: z.string().url().startsWith("https://").max(2000).optional(),
+    /** Defaults to Stripe (backwards compatible). */
+    provider: z.enum(["stripe", "mercadopago"]).optional(),
+  })
   .strict();
 export type CreatePaymentLinkRequest = z.infer<typeof createPaymentLinkRequestSchema>;
 
@@ -316,3 +320,21 @@ export const stripeConnectionSchema = z.object({
   updatedAt: isoDateTimeSchema,
 });
 export type StripeConnection = z.infer<typeof stripeConnectionSchema>;
+
+/** BYOK Mercado Pago credentials (access token + webhook signature secret). Stored encrypted. */
+export const upsertMercadoPagoConnectionRequestSchema = z
+  .object({
+    accessToken: z.string().trim().regex(/^(APP_USR|TEST)-[A-Za-z0-9-]{10,250}$/, "Invalid Mercado Pago access token"),
+    webhookSecret: z.string().trim().regex(/^[A-Za-z0-9]{16,250}$/, "Invalid Mercado Pago webhook secret"),
+  })
+  .strict();
+export type UpsertMercadoPagoConnectionRequest = z.infer<typeof upsertMercadoPagoConnectionRequestSchema>;
+
+export const mercadoPagoConnectionSchema = z.object({
+  provider: z.literal("mercadopago"),
+  status: z.enum(["active", "disabled"]),
+  secretKeyHint: z.string().nullable(),
+  webhookUrl: z.string(),
+  updatedAt: isoDateTimeSchema,
+});
+export type MercadoPagoConnection = z.infer<typeof mercadoPagoConnectionSchema>;

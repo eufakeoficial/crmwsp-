@@ -3,21 +3,27 @@ import { isoDateTimeSchema } from "./common.js";
 
 // --- Commerce / infoproduct integrations ---------------------------------------------------
 
-export const commerceProviderSchema = z.enum(["shopify", "hotmart", "kiwify", "eduzz", "gumroad", "payhip"]);
+export const commerceProviderSchema = z.enum(["shopify", "hotmart", "kiwify", "eduzz", "gumroad", "payhip", "tiendanube", "woocommerce"]);
 export type CommerceProviderId = z.infer<typeof commerceProviderSchema>;
 
-const SHOP_DOMAIN_RE = /^[a-z0-9][a-z0-9-]{0,60}\.myshopify\.com$/;
+/** Store platforms with catalog sync. */
+export const catalogProviderSchema = z.enum(["shopify", "tiendanube", "woocommerce"]);
 
 /**
  * BYOK credentials. `webhookSecret` is: Shopify app client secret, Hotmart hottok, Kiwify token,
- * Eduzz webhook secret, Gumroad seller id, Payhip API key. Stored encrypted; never returned.
- * Shopify additionally needs `shopDomain` + `accessToken` (Admin API) for catalog sync.
+ * Eduzz webhook secret, Gumroad seller id, Payhip API key, Tiendanube app client secret,
+ * WooCommerce webhook secret. Stored encrypted; never returned.
+ * Catalog sync: `shopDomain` is the store locator (Shopify `x.myshopify.com`, Tiendanube store
+ * id, WooCommerce https site URL; validated per provider by the API) plus `accessToken`
+ * (Shopify / Tiendanube) or `consumerKey` + `consumerSecret` (WooCommerce REST API).
  */
 export const upsertCommerceConnectionRequestSchema = z
   .object({
     webhookSecret: z.string().trim().min(6).max(500),
     accessToken: z.string().trim().min(10).max(500).optional(),
-    shopDomain: z.string().trim().toLowerCase().regex(SHOP_DOMAIN_RE, "Use your-shop.myshopify.com").optional(),
+    shopDomain: z.string().trim().min(1).max(300).optional(),
+    consumerKey: z.string().trim().regex(/^ck_[A-Za-z0-9]{8,100}$/, "Invalid WooCommerce consumer key").optional(),
+    consumerSecret: z.string().trim().regex(/^cs_[A-Za-z0-9]{8,100}$/, "Invalid WooCommerce consumer secret").optional(),
   })
   .strict();
 export type UpsertCommerceConnectionRequest = z.infer<typeof upsertCommerceConnectionRequestSchema>;

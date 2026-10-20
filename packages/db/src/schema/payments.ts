@@ -17,7 +17,7 @@ import { bytea } from "./channel-connections.js";
 import { orders } from "./commerce.js";
 import { tenants } from "./tenants.js";
 
-export const paymentProviders = ["stripe"] as const;
+export const paymentProviders = ["stripe", "mercadopago"] as const;
 export type PaymentProviderName = (typeof paymentProviders)[number];
 
 /**
@@ -45,7 +45,7 @@ export const paymentConnections = pgTable(
   (t) => [
     unique("payment_connections_tenant_provider_unique").on(t.tenantId, t.provider),
     uniqueIndex("payment_connections_tenant_id_id_idx").on(t.tenantId, t.id),
-    check("payment_connections_provider_check", sql`${t.provider} IN ('stripe')`),
+    check("payment_connections_provider_check", sql`${t.provider} IN ('stripe', 'mercadopago')`),
     check("payment_connections_status_check", sql`${t.status} IN ('active', 'disabled')`),
   ],
 );

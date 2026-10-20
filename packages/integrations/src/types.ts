@@ -5,7 +5,7 @@
  * (different contract, different trust model) that reuses the payments currency helpers.
  */
 
-export const commerceProviders = ["shopify", "hotmart", "kiwify", "eduzz", "gumroad", "payhip"] as const;
+export const commerceProviders = ["shopify", "hotmart", "kiwify", "eduzz", "gumroad", "payhip", "tiendanube", "woocommerce"] as const;
 export type CommerceProvider = (typeof commerceProviders)[number];
 
 export type CommerceEventType =
@@ -98,8 +98,12 @@ export interface VerifyContext {
 }
 
 export interface CatalogSource {
-  /** e.g. `my-shop.myshopify.com`. */
+  /**
+   * Store locator: Shopify `my-shop.myshopify.com`, Tiendanube numeric store id, WooCommerce
+   * https site URL.
+   */
   shopDomain: string;
+  /** Shopify / Tiendanube API token; WooCommerce `consumer_key:consumer_secret`. */
   accessToken: string;
 }
 

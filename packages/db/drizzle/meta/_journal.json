@@ -162,6 +162,13 @@
       "when": 1792499199926,
       "tag": "0022_rls_commerce_integrations",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792499206926,
+      "tag": "0029_latam_connectors",
+      "breakpoints": true
     }
   ]
 }

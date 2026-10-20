@@ -1,5 +1,6 @@
 import type { VerifiedPaymentEvent } from "@crmwsp/payments";
 import { transitionOrder, type OrderFulfillment, type OrderStatus } from "@crmwsp/domain";
+import type { PaymentProviderName } from "@crmwsp/db";
 
 /*
  * Applies signature-verified Stripe events to payments/orders. The ONLY code path that moves an
@@ -64,27 +65,38 @@ export interface PaymentLedgerTx {
 }
 
 export interface PaymentLedger {
-  inTenant<T>(tenantId: string, fn: (tx: PaymentLedgerTx) => Promise<T>): Promise<T>;
+  /** `provider` scopes dedupe rows and payment lookups (default stripe). */
+  inTenant<T>(tenantId: string, fn: (tx: PaymentLedgerTx) => Promise<T>, provider?: PaymentProviderName): Promise<T>;
 }
 
 function eventTypeOf(e: VerifiedPaymentEvent): string {
   return e.type === "ignored" ? e.eventType : e.type;
 }
 
-export async function applyStripeEvent(
+export function applyStripeEvent(ledger: PaymentLedger, tenantId: string, event: VerifiedPaymentEvent, payload: unknown): Promise<PaymentEventOutcome> {
+  return applyPaymentEvent(ledger, tenantId, event, payload, "stripe");
+}
+
+/** Same rules for every provider whose events are signature-verified (and, for Mercado Pago, API-confirmed). */
+export async function applyPaymentEvent(
   ledger: PaymentLedger,
   tenantId: string,
   event: VerifiedPaymentEvent,
   payload: unknown,
+  provider: PaymentProviderName,
 ): Promise<PaymentEventOutcome> {
-  return ledger.inTenant(tenantId, async (tx) => {
-    const providerRef = event.type === "ignored" ? null : event.providerRef;
-    const rowId = await tx.recordEvent({ eventId: event.dedupeKey, eventType: eventTypeOf(event), providerRef, payload });
-    if (rowId === null) return "duplicate";
-    const { outcome, paymentId } = await decide(tx, tenantId, event);
-    await tx.setEventOutcome(rowId, outcome, paymentId);
-    return outcome;
-  });
+  return ledger.inTenant(
+    tenantId,
+    async (tx) => {
+      const providerRef = event.type === "ignored" ? null : event.providerRef;
+      const rowId = await tx.recordEvent({ eventId: event.dedupeKey, eventType: eventTypeOf(event), providerRef, payload });
+      if (rowId === null) return "duplicate";
+      const { outcome, paymentId } = await decide(tx, tenantId, event);
+      await tx.setEventOutcome(rowId, outcome, paymentId);
+      return outcome;
+    },
+    provider,
+  );
 }
 
 async function decide(
