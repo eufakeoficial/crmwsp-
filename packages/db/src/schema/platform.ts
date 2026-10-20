@@ -42,7 +42,7 @@ export const platformAuditEvents = pgTable(
     ip: inet("ip"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("platform_audit_events_tenant_idx").on(t.tenantId, t.createdAt)],
+  (t) => [index("platform_audit_events_tenant_idx").on(t.tenantId, t.createdAt), index("platform_audit_events_created_idx").on(t.createdAt)],
 );
 
 export const subscriptionPaymentMethods = ["transfer", "cash", "card_manual", "mercadopago", "stripe"] as const;
