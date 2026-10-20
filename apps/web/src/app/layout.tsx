@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
 import "./globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+// Self-hosted (SIL OFL 1.1, see src/fonts/OFL.txt) so builds never depend on Google Fonts at build time.
+const jakarta = localFont({
+  src: "../fonts/PlusJakartaSans-latin-var.woff2",
+  weight: "400 800",
   variable: "--font-jakarta",
   display: "swap",
 });
