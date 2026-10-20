@@ -89,7 +89,7 @@ export class TenantContextMissingError extends AppError {
   }
 }
 
-export type ExternalProvider = "gupshup" | "360dialog" | "openai" | "stripe" | "s3";
+export type ExternalProvider = "gupshup" | "360dialog" | "openai" | "stripe" | "mercadopago" | "s3";
 
 export class ExternalProviderError extends AppError {
   readonly provider: ExternalProvider;

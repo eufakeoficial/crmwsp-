@@ -5,7 +5,7 @@ import { orders } from "./commerce.js";
 import { contacts } from "./contacts.js";
 import { tenants } from "./tenants.js";
 
-export const commerceProviders = ["shopify", "hotmart", "kiwify", "eduzz", "gumroad", "payhip"] as const;
+export const commerceProviders = ["shopify", "hotmart", "kiwify", "eduzz", "gumroad", "payhip", "tiendanube", "woocommerce"] as const;
 export type CommerceProviderName = (typeof commerceProviders)[number];
 const providerList = sql.raw(commerceProviders.map((p) => `'${p}'`).join(", "));
 

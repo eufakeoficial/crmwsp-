@@ -3,7 +3,8 @@ import { publicApiUrl } from "../channels/channels.constants.js";
 
 /** AAD purposes (tenant-bound, see @crmwsp/crypto). One per provider so ciphertexts never cross. */
 export const commerceWebhookSecretPurpose = (p: CommerceProvider) => `commerce_webhook_secret:${p}`;
-export const SHOPIFY_ACCESS_TOKEN_PURPOSE = "commerce_access_token:shopify";
+export const commerceAccessTokenPurpose = (p: CommerceProvider) => `commerce_access_token:${p}`;
+export const SHOPIFY_ACCESS_TOKEN_PURPOSE = commerceAccessTokenPurpose("shopify");
 
 /** DI tokens (explicit, no reflection). */
 export const COMMERCE_LEDGER = Symbol("COMMERCE_LEDGER");

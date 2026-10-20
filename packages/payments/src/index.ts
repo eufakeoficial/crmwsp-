@@ -14,3 +14,21 @@ export type {
   ManualPaymentConfirmation,
   PaymentInstructions,
 } from "./manual.js";
+export {
+  MercadoPagoProvider,
+  MERCADOPAGO_DEFAULT_TOLERANCE_MS,
+  buildExternalReference,
+  majorToMinor,
+  mercadoPagoEvent,
+  minorToMajor,
+  parseExternalReference,
+  parseMercadoPagoNotification,
+  verifyMercadoPagoSignature,
+} from "./mercadopago/provider.js";
+export type {
+  MercadoPagoLinkInput,
+  MercadoPagoNotification,
+  MercadoPagoPayment,
+  MercadoPagoProviderOptions,
+  MercadoPagoSignatureInput,
+} from "./mercadopago/provider.js";

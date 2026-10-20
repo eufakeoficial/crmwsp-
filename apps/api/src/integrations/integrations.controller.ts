@@ -13,7 +13,7 @@ import {
 } from "@crmwsp/contracts";
 import { redact, type CipherBox } from "@crmwsp/crypto";
 import { and, commerceConnections, eq, type CommerceConnection } from "@crmwsp/db";
-import { connectorFor, type CommerceProvider, type FetchLike } from "@crmwsp/integrations";
+import { connectorFor, isCatalogProvider, type CommerceProvider, type FetchLike } from "@crmwsp/integrations";
 import { generateWebhookToken } from "@crmwsp/whatsapp";
 import { CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -23,7 +23,8 @@ import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { writeAudit } from "../inbox/audit.js";
 import { isCommerceProvider } from "./commerce-webhook.service.js";
-import { COMMERCE_FETCH, SHOPIFY_ACCESS_TOKEN_PURPOSE, commerceWebhookSecretPurpose, commerceWebhookUrlFor } from "./integrations.constants.js";
+import { COMMERCE_FETCH, commerceAccessTokenPurpose, commerceWebhookSecretPurpose, commerceWebhookUrlFor } from "./integrations.constants.js";
+import { resolveStoreCredentials } from "./store-credentials.js";
 import { PgCommerceTx } from "./pg-commerce-ledger.js";
 
 function toView(row: CommerceConnection): CommerceConnectionView {
@@ -66,11 +67,10 @@ export class IntegrationsController {
     const provider = providerOrNotFound(p);
     const input = parseOrThrow(upsertCommerceConnectionRequestSchema, body);
     if (!this.cipher) throw new EncryptionNotConfiguredError();
-    if (provider !== "shopify" && (input.accessToken || input.shopDomain)) throw new ValidationError("Only Shopify takes a shop domain and access token");
-    if (input.accessToken && !input.shopDomain) throw new ValidationError("A Shopify access token needs the shop domain");
+    const creds = resolveStoreCredentials(provider, input);
     const webhookSecretEncrypted = this.cipher.encrypt(input.webhookSecret, { tenantId: db.tenantId, purpose: commerceWebhookSecretPurpose(provider) });
-    const accessTokenEncrypted = input.accessToken
-      ? this.cipher.encrypt(input.accessToken, { tenantId: db.tenantId, purpose: SHOPIFY_ACCESS_TOKEN_PURPOSE })
+    const accessTokenEncrypted = creds.accessToken
+      ? this.cipher.encrypt(creds.accessToken, { tenantId: db.tenantId, purpose: commerceAccessTokenPurpose(provider) })
       : undefined;
     const hint = redact(input.webhookSecret);
     const row = await db.run(async (tx) => {
@@ -83,7 +83,7 @@ export class IntegrationsController {
           webhookSecretEncrypted,
           accessTokenEncrypted: accessTokenEncrypted ?? null,
           secretHint: hint,
-          shopDomain: input.shopDomain ?? null,
+          shopDomain: creds.shopDomain ?? null,
           webhookToken: generateWebhookToken(),
           status: "active",
         })
@@ -93,7 +93,7 @@ export class IntegrationsController {
           set: {
             webhookSecretEncrypted,
             ...(accessTokenEncrypted ? { accessTokenEncrypted } : {}),
-            ...(input.shopDomain ? { shopDomain: input.shopDomain } : {}),
+            ...(creds.shopDomain ? { shopDomain: creds.shopDomain } : {}),
             secretHint: hint,
             status: "active",
             updatedAt: now,
@@ -140,33 +140,35 @@ export class IntegrationsController {
     });
   }
 
-  /** Pulls the Shopify catalog into products/variants, idempotent by external id. */
-  @Post("shopify/sync")
+  /** Pulls a store catalog (Shopify, Tiendanube, WooCommerce) into products/variants, idempotent by external id. */
+  @Post(":provider/sync")
   @Roles("owner", "admin")
-  async syncShopify(@CurrentTenantDb() db: TenantDb, @Req() req: HttpRequest): Promise<CatalogSyncResult> {
+  async syncCatalog(@CurrentTenantDb() db: TenantDb, @Param("provider") p: string, @Req() req: HttpRequest): Promise<CatalogSyncResult> {
+    const provider = providerOrNotFound(p);
+    if (!isCatalogProvider(provider)) throw new NotFoundError();
     if (!this.cipher) throw new EncryptionNotConfiguredError();
     const [conn] = await db.run((tx) =>
       tx
         .select()
         .from(commerceConnections)
-        .where(and(eq(commerceConnections.provider, "shopify"), eq(commerceConnections.status, "active"))),
+        .where(and(eq(commerceConnections.provider, provider), eq(commerceConnections.status, "active"))),
     );
-    if (!conn) throw new ConflictError("Shopify is not connected");
-    if (!conn.accessTokenEncrypted || !conn.shopDomain) throw new ConflictError("Add the Shopify shop domain and Admin API access token first");
-    const accessToken = this.cipher.decrypt(conn.accessTokenEncrypted, { tenantId: db.tenantId, purpose: SHOPIFY_ACCESS_TOKEN_PURPOSE });
-    const listProducts = connectorFor("shopify").listProducts;
-    if (!listProducts) throw new Error("shopify connector without catalog");
+    if (!conn) throw new ConflictError(`${provider} is not connected`);
+    if (!conn.accessTokenEncrypted || !conn.shopDomain) throw new ConflictError("Add the store locator and API credentials first");
+    const accessToken = this.cipher.decrypt(conn.accessTokenEncrypted, { tenantId: db.tenantId, purpose: commerceAccessTokenPurpose(provider) });
+    const listProducts = connectorFor(provider).listProducts;
+    if (!listProducts) throw new Error(`${provider} connector without catalog`);
 
     // Network calls outside any DB transaction.
     let page;
     try {
       page = await listProducts({ shopDomain: conn.shopDomain, accessToken }, this.fetchImpl);
     } catch (err) {
-      throw new AppError(ErrorCode.ExternalProvider, `Shopify catalog pull failed (${err instanceof Error ? err.message : "unknown"})`, 502);
+      throw new AppError(ErrorCode.ExternalProvider, `${provider} catalog pull failed (${err instanceof Error ? err.message : "unknown"})`, 502);
     }
     const syncedAt = new Date();
     const counts = await db.run(async (tx) => {
-      const out = await new PgCommerceTx(tx, db.tenantId).upsertCatalog("shopify", page.currency, page.products);
+      const out = await new PgCommerceTx(tx, db.tenantId).upsertCatalog(provider, page.currency, page.products);
       await tx
         .update(commerceConnections)
         .set({ lastSyncedAt: syncedAt, shopCurrency: page.currency, updatedAt: syncedAt })
@@ -177,7 +179,7 @@ export class IntegrationsController {
         entity: "commerce_connection",
         entityId: conn.id,
         action: "commerce_connection.catalog_synced",
-        diff: { provider: "shopify", ...out, currency: page.currency },
+        diff: { provider, ...out, currency: page.currency },
         ip: req.ip,
       });
       return out;
