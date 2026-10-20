@@ -60,7 +60,7 @@ export async function fetchOnboardingStatus(): Promise<OnboardingStatus> {
     hasProducts: products.status === "fulfilled" && products.value.items.length > 0,
     hasKnowledge: sources.status === "fulfilled" && sources.value.length > 0,
     hasAiKey: connection.status === "fulfilled" && connection.value !== null,
-    hasChannel: channels.status === "fulfilled" && channels.value.items.length > 0,
+    hasChannel: channels.status === "fulfilled" && channels.value.items.some((c) => c.status === "active"),
   };
 }
 
