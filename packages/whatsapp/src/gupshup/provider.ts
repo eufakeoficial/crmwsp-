@@ -5,6 +5,7 @@ import type {
   InboundMedia,
   InboundWebhookResult,
   OutboundMedia,
+  ReactionRequest,
   SendOptions,
   SendResult,
   WhatsAppConnection,
@@ -102,6 +103,14 @@ export class GupshupProvider implements WhatsAppProvider {
     return this.post(conn, "/wa/api/v1/template/msg", {
       ...this.common(conn, to),
       template: JSON.stringify({ id: templateId, params }),
+    });
+  }
+
+  /** Session message of type "reaction" (https://docs.gupshup.io/docs/outbound-reactions). */
+  sendReaction(conn: WhatsAppConnection, req: ReactionRequest): Promise<SendResult> {
+    return this.post(conn, "/wa/api/v1/msg", {
+      ...this.common(conn, req.to),
+      message: JSON.stringify({ type: "reaction", msgId: req.messageExternalId, emoji: req.emoji }),
     });
   }
 

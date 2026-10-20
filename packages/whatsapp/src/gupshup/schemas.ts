@@ -86,6 +86,18 @@ export const v2InteractivePayloadSchema = z.object({
   postbackText: z.string().optional(),
 });
 
+/** Inbound reaction content. Field names vary between payload versions, so several are accepted. */
+export const v2ReactionPayloadSchema = z
+  .object({
+    emoji: z.string().max(32).optional(),
+    msgId: idSchema.optional(),
+    messageId: idSchema.optional(),
+    message_id: idSchema.optional(),
+    id: idSchema.optional(),
+    reactedMessageId: idSchema.optional(),
+  })
+  .loose();
+
 export const v2MessageEventSchema = z.object({
   app: z.string().optional(),
   timestamp: z.number().int().positive(),
@@ -138,6 +150,7 @@ export const v3MessageSchema = z.object({
     })
     .optional(),
   button: z.object({ text: z.string(), payload: z.string().optional() }).optional(),
+  reaction: z.object({ message_id: idSchema, emoji: z.string().max(32).optional() }).loose().optional(),
   referral: z.unknown().optional(),
 });
 export type V3Message = z.infer<typeof v3MessageSchema>;

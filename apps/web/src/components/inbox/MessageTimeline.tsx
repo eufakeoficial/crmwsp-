@@ -1,6 +1,6 @@
 "use client";
 
-import type { ConversationNote, Message } from "@crmwsp/contracts";
+import type { ConversationNote, Message, ReactionEmoji } from "@crmwsp/contracts";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { formatDayLabel } from "@/lib/format";
@@ -34,6 +34,7 @@ export function MessageTimeline({
   hasOlder,
   loadingOlder,
   onLoadOlder,
+  onReact,
 }: {
   conversationId: string;
   messages: readonly Message[];
@@ -42,6 +43,7 @@ export function MessageTimeline({
   hasOlder: boolean;
   loadingOlder: boolean;
   onLoadOlder: () => void;
+  onReact: (messageId: string, emoji: ReactionEmoji | null) => Promise<void>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -110,7 +112,7 @@ export function MessageTimeline({
           return (
             <div key={e.key} className="flex flex-col gap-2">
               {header ? <span className="self-center rounded-full bg-white px-3 py-0.5 text-xs font-bold text-muted">{header}</span> : null}
-              {"note" in e ? <NoteBubble note={e.note} /> : <MessageBubble message={e.message} />}
+              {"note" in e ? <NoteBubble note={e.note} /> : <MessageBubble message={e.message} onReact={onReact} />}
             </div>
           );
         })}

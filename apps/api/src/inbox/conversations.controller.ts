@@ -8,6 +8,7 @@ import {
   listConversationsQuerySchema,
   listMessagesQuerySchema,
   sendMessageRequestSchema,
+  setReactionRequestSchema,
   sendTemplateMessageRequestSchema,
   updateConversationRequestSchema,
   type Conversation,
@@ -44,7 +45,9 @@ import {
   OUTBOUND_QUEUE,
   SEND_MESSAGE_JOB,
   SEND_MESSAGE_JOB_OPTIONS,
+  SEND_REACTION_JOB,
   type SendMessageJobData,
+  type SendReactionJobData,
 } from "./outbound.constants.js";
 
 const MESSAGE_US = sql`(extract(epoch from ${messages.createdAt}) * 1000000)::bigint`;
@@ -60,6 +63,8 @@ const messageColumns = {
   authorUserId: messages.authorUserId,
   clientMessageId: messages.clientMessageId,
   error: messages.error,
+  reaction: messages.reaction,
+  reactionBy: messages.reactionBy,
   sentAt: messages.sentAt,
   createdAt: messages.createdAt,
 };
@@ -173,6 +178,46 @@ export class ConversationsController {
         nextCursor: rows.length > q.limit && last ? encodeCursor({ t: last.sortUs, id: last.id }) : null,
       };
     });
+  }
+
+  /** Agent reaction to a contact message (`emoji: null` removes it). Delivered by the worker. */
+  @Post(":id/messages/:messageId/reaction")
+  @HttpCode(200)
+  async react(
+    @CurrentTenantDb() db: TenantDb,
+    @CurrentTenant() tenant: RequestTenant,
+    @Param("id") id: string,
+    @Param("messageId") messageId: string,
+    @Body() body: unknown,
+  ): Promise<Message> {
+    if (!isUuid(id) || !isUuid(messageId)) throw new NotFoundError();
+    const input = parseOrThrow(setReactionRequestSchema, body);
+    const { row, changed } = await db.run(async (tx) => {
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
+      const [current] = await tx
+        .select(messageColumns)
+        .from(messages)
+        .where(and(eq(messages.id, messageId), eq(messages.conversationId, id), eq(messages.direction, "inbound")))
+        .for("update");
+      if (!current) throw new NotFoundError();
+      const next = input.emoji;
+      if ((current.reaction ?? null) === next) return { row: current, changed: false };
+      const [updated] = await tx
+        .update(messages)
+        .set(next ? { reaction: next, reactionBy: "user" } : { reaction: null, reactionBy: null })
+        .where(eq(messages.id, messageId))
+        .returning(messageColumns);
+      return { row: updated ?? current, changed: true };
+    });
+    if (changed) {
+      const data: SendReactionJobData = { tenantId: db.tenantId, messageId, emoji: input.emoji ?? "" };
+      // Unique id per change: an earlier completed job for the same message must not swallow it.
+      await this.queue.add(SEND_REACTION_JOB, data, { ...SEND_MESSAGE_JOB_OPTIONS, jobId: `send-reaction-${messageId}-${Date.now()}` });
+      await this.hub.publish(db.tenantId, { type: "message.status", conversationId: id, messageId });
+    }
+    const [dto] = await db.run((tx) => withAttachments(tx, [row]));
+    if (!dto) throw new NotFoundError();
+    return dto;
   }
 
   @Post(":id/read")

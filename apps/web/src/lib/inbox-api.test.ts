@@ -19,7 +19,7 @@ const conversation = {
 };
 const message = {
   id: ID(4), conversationId: ID(2), direction: "outbound", type: "text", body: "hola", status: "queued", author: "user",
-  authorUserId: ID(5), clientMessageId: ID(6), error: null, sentAt: null, createdAt: NOW, attachments: [],
+  authorUserId: ID(5), clientMessageId: ID(6), error: null, reaction: null, reactionBy: null, sentAt: null, createdAt: NOW, attachments: [],
 };
 
 const json = (status: number, body: unknown) =>

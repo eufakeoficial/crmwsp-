@@ -1,6 +1,6 @@
 "use client";
 
-import type { Conversation, Message, UpdateConversationRequest } from "@crmwsp/contracts";
+import type { Conversation, Message, ReactionEmoji, UpdateConversationRequest } from "@crmwsp/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "../api";
 import { conversationsApi, newClientMessageId } from "../inbox-api";
@@ -105,6 +105,24 @@ export function useThread(conversationId: string | null, userId: string, onChang
     [userId],
   );
 
+  /** Agent reaction (optimistic, rolled back by a refresh on error). */
+  const react = useCallback(
+    async (messageId: string, emoji: ReactionEmoji | null): Promise<void> => {
+      const id = idRef.current;
+      if (!id) return;
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, reaction: emoji, reactionBy: emoji ? ("user" as const) : null } : m)),
+      );
+      try {
+        const saved = await conversationsApi.react(id, messageId, emoji);
+        setMessages((prev) => mergeMessages(prev, [saved]));
+      } catch {
+        await refresh();
+      }
+    },
+    [refresh],
+  );
+
   /** Manual template send; resolves false on failure so the picker can keep its input. */
   const sendTemplate = useCallback(async (templateId: string, params: string[], clientMessageId: string): Promise<boolean> => {
     const id = idRef.current;
@@ -144,5 +162,5 @@ export function useThread(conversationId: string | null, userId: string, onChang
   const blocked =
     blockedAt !== null && blockedAt.id === conversationId && blockedAt.inbound === (conversation?.lastInboundAt ?? null);
 
-  return { conversation, messages, hasOlder: olderCursor !== null, loading, loadingOlder, error, blocked, refresh, loadOlder, send, sendTemplate, update };
+  return { conversation, messages, hasOlder: olderCursor !== null, loading, loadingOlder, error, blocked, refresh, loadOlder, send, sendTemplate, react, update };
 }

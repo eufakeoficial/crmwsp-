@@ -9,7 +9,7 @@ import {
   type PromptChunk,
   type PromptConversationMessage,
 } from "@crmwsp/ai";
-import { AI_ACTION_TYPES, aiActionSchema } from "@crmwsp/contracts";
+import { AI_ACTION_TYPES, aiActionSchema, normalizeReactionEmoji } from "@crmwsp/contracts";
 import type { AiActionType, AiDecision, AiTurnOutput } from "@crmwsp/contracts";
 import { checkLimit, resolveEffectivePlan } from "@crmwsp/billing";
 import {
@@ -37,9 +37,9 @@ import {
 } from "@crmwsp/db";
 import { evaluateTurn, type TenantAiPolicies } from "@crmwsp/domain";
 import { UnrecoverableError } from "bullmq";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { InboxEvent } from "../processors.js";
-import { AI_TURN_MAX_ATTEMPTS, SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS } from "../queue.js";
+import { AI_TURN_MAX_ATTEMPTS, SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS, SEND_REACTION_JOB, sendReactionJobId } from "../queue.js";
 import { insertNotification } from "../notifications/notify.js";
 import { contactAutomationsPaused, routeHandoff } from "../inbox/routing.js";
 import { applyConversationHandoff, runAction } from "./actions.js";
@@ -97,6 +97,8 @@ interface TurnTx {
   events: Array<AiEvent | InboxEvent>;
   /** Queued AI reply that must be handed to the `outbound` queue after commit. */
   enqueueMessageId?: string;
+  /** Emoji reaction stored on the trigger message; delivered through the `outbound` queue after commit. */
+  reaction?: { messageId: string; emoji: string };
   connection?: LlmConnection;
 }
 
@@ -213,6 +215,18 @@ export async function processAiTurn(
       { tenantId, messageId: out.enqueueMessageId },
       { ...SEND_MESSAGE_JOB_OPTIONS, jobId: out.enqueueMessageId },
     );
+  }
+  if (out.reaction) {
+    // Best effort: the reply (if any) is already queued and a lost reaction must not fail the turn.
+    try {
+      await deps.outboundQueue.add(
+        SEND_REACTION_JOB,
+        { tenantId, messageId: out.reaction.messageId, emoji: out.reaction.emoji },
+        { ...SEND_MESSAGE_JOB_OPTIONS, jobId: sendReactionJobId(out.reaction.messageId) },
+      );
+    } catch {
+      /* the inbox shows the stored reaction; the BSP send is retried only by a new enqueue */
+    }
   }
   await publishEvents(deps, tenantId, out.events);
   if (out.connection) await maybeWarnBudget(deps, tenantId, out.connection);
@@ -891,10 +905,35 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
     actionIds.push(await handoff.record(evaluation.reply.reason.slice(0, 200), modelUsed));
   }
 
+  // Reaction: low-risk and automatic, but only where the AI may act on its own (mode "auto" excludes
+  // ai_mode assist/off, assigned or closed conversations and paused contacts) and never on a turn
+  // that escalated to a human. Stored first (idempotent: at most one reaction per message).
+  let reaction: { messageId: string; emoji: string } | undefined;
+  const reactionEmoji = normalizeReactionEmoji(output.reaction?.emoji);
+  if (reactionEmoji && mode === "auto" && !handoff.handedOff() && sessionWindowOpen(conv.lastInboundAt, now)) {
+    const [reacted] = await tx
+      .update(messages)
+      .set({ reaction: reactionEmoji, reactionBy: "ai" })
+      .where(
+        and(
+          eq(messages.id, triggerMessageId),
+          eq(messages.direction, "inbound"),
+          isNull(messages.reaction),
+          isNotNull(messages.externalId),
+        ),
+      )
+      .returning({ id: messages.id });
+    if (reacted) {
+      reaction = { messageId: reacted.id, emoji: reactionEmoji };
+      events.push({ type: "message.status", conversationId, messageId: reacted.id });
+    }
+  }
+
   return {
     result: { outcome: "processed", replied, drafted, handoff: handoff.handedOff(), actionIds },
     events,
     connection: p.conn,
     ...(enqueueMessageId ? { enqueueMessageId } : {}),
+    ...(reaction ? { reaction } : {}),
   };
 }

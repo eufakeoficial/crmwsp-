@@ -145,6 +145,8 @@ export interface MessageRowLike {
   authorUserId: string | null;
   clientMessageId: string | null;
   error: Record<string, unknown> | null;
+  reaction: string | null;
+  reactionBy: Message["author"] | null;
   sentAt: Date | null;
   createdAt: Date;
 }
@@ -171,6 +173,8 @@ export async function withAttachments(tx: Transaction, rows: MessageRowLike[]): 
     authorUserId: r.authorUserId,
     clientMessageId: r.clientMessageId,
     error: r.error,
+    reaction: r.reaction,
+    reactionBy: r.reactionBy,
     sentAt: r.sentAt ? r.sentAt.toISOString() : null,
     createdAt: r.createdAt.toISOString(),
     attachments: atts

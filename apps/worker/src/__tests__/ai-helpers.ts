@@ -55,11 +55,13 @@ export interface TurnOut {
   confidence?: number;
   needsHuman?: boolean;
   reason?: string;
+  reaction?: { emoji: string } | null;
 }
 
 export function turnJson(o: TurnOut = {}): string {
   return JSON.stringify({
     reply: o.reply ?? null,
+    reaction: o.reaction ?? null,
     actions: o.actions ?? [],
     confidence: o.confidence ?? 0.9,
     needsHuman: o.needsHuman ?? false,

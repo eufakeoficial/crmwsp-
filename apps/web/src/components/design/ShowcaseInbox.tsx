@@ -12,7 +12,7 @@ const NOW = new Date().toISOString();
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const msg = (n: number, over: Partial<Message>): Message => ({
   id: id(n), conversationId: id(900), direction: "outbound", type: "text", body: "Hola, te envío el presupuesto.", status: "queued", author: "user",
-  authorUserId: null, clientMessageId: null, error: null, sentAt: null, createdAt: NOW, attachments: [], ...over,
+  authorUserId: null, clientMessageId: null, error: null, reaction: null, reactionBy: null, sentAt: null, createdAt: NOW, attachments: [], ...over,
 });
 const conv: Conversation = {
   id: id(901), status: "open", aiMode: "off", channelConnectionId: id(902), contact: { id: id(903), name: "Juan Pérez", phoneE164: "+5491155551234" },

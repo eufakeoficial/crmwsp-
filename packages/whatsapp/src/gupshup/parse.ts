@@ -7,6 +7,7 @@ import {
   v2LocationPayloadSchema,
   v2MediaPayloadSchema,
   v2MessageEventSchema,
+  v2ReactionPayloadSchema,
   v2TextPayloadSchema,
   v3EnvelopeSchema,
   v3MessageSchema,
@@ -128,6 +129,14 @@ function fillV2Content(message: NormalizedInboundMessage, p: V2InboundMessage["p
       message.location = { latitude: l.data.latitude, longitude: l.data.longitude };
       if (l.data.name) message.location.name = l.data.name;
       if (l.data.address) message.location.address = l.data.address;
+      return;
+    }
+    case "reaction": {
+      const r = v2ReactionPayloadSchema.safeParse(p.payload);
+      const target = r.success ? (r.data.msgId ?? r.data.messageId ?? r.data.message_id ?? r.data.reactedMessageId ?? r.data.id) : undefined;
+      if (!r.success || !target) return;
+      message.type = "reaction";
+      message.reaction = { targetExternalId: target, emoji: r.data.emoji ?? "" };
       return;
     }
     case "button_reply":
@@ -275,6 +284,12 @@ function fillV3Content(message: NormalizedInboundMessage, m: V3Message): void {
       }
       return;
     }
+    case "reaction":
+      if (m.reaction) {
+        message.type = "reaction";
+        message.reaction = { targetExternalId: m.reaction.message_id, emoji: m.reaction.emoji ?? "" };
+      }
+      return;
     case "button":
       if (m.button) {
         message.type = "interactive";

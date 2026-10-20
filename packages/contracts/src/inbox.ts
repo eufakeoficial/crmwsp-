@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reactionEmojiSchema } from "./ai.js";
 import { isoDateTimeSchema, uuidSchema } from "./common.js";
 import { ErrorCode } from "./errors.js";
 
@@ -107,11 +108,18 @@ export const messageSchema = z.object({
   clientMessageId: uuidSchema.nullable(),
   /** Sanitised delivery error ({ code?, message? }) when status = failed. */
   error: z.record(z.string(), z.unknown()).nullable(),
+  /** Emoji reaction on this message and who made it (contact | ai | user). */
+  reaction: z.string().nullable(),
+  reactionBy: messageAuthorSchema.nullable(),
   sentAt: isoDateTimeSchema.nullable(),
   createdAt: isoDateTimeSchema,
   attachments: z.array(attachmentSchema),
 });
 export type Message = z.infer<typeof messageSchema>;
+
+/** Agent reaction on a contact message; `null` removes the agent's reaction. */
+export const setReactionRequestSchema = z.object({ emoji: reactionEmojiSchema.nullable() });
+export type SetReactionRequest = z.infer<typeof setReactionRequestSchema>;
 
 export const listMessagesQuerySchema = z.object({
   /** Opaque cursor (nextCursor of the previous page): returns older messages. */

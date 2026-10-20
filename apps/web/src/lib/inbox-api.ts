@@ -1,6 +1,7 @@
 import {
   type ConversationStatus,
   type CreateGupshupChannelRequest,
+  type ReactionEmoji,
   type UpdateConversationRequest,
   attachmentUrlResponseSchema,
   channelListResponseSchema,
@@ -63,6 +64,13 @@ export const conversationsApi = {
     request(`/conversations/${id}/messages`, {
       method: "POST",
       body: { text, clientMessageId },
+      schema: messageSchema,
+    }),
+  /** Agent reaction to a contact message; `null` removes it. */
+  react: (id: string, messageId: string, emoji: ReactionEmoji | null) =>
+    request(`/conversations/${id}/messages/${messageId}/reaction`, {
+      method: "POST",
+      body: { emoji },
       schema: messageSchema,
     }),
   /** 202 with the queued template message (works outside the 24 h window). */

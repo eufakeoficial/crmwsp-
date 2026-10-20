@@ -90,8 +90,22 @@ export const AI_ACTION_TYPES = [
   "handoff",
 ] as const satisfies readonly AiActionType[];
 
+/** Emojis the assistant (or an agent) may use to react to a message. Anything else is dropped. */
+export const REACTION_EMOJIS = ["👍", "❤️", "😊", "🙌", "🎉", "🙏", "😂"] as const;
+export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
+export const reactionEmojiSchema = z.enum(REACTION_EMOJIS);
+/** Drops variation selectors differences ("❤" vs "❤️") and returns the allowed emoji, or null. */
+export function normalizeReactionEmoji(raw: unknown): ReactionEmoji | null {
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  const found = REACTION_EMOJIS.find((e) => e === t || e.replace(/️/g, "") === t.replace(/️/g, ""));
+  return found ?? null;
+}
+
 export const aiTurnOutputSchema = z.strictObject({
   reply: aiReplySchema.optional(),
+  /** Optional emoji reaction to the customer's message (validated against REACTION_EMOJIS server-side). */
+  reaction: z.strictObject({ emoji: z.string().max(32) }).optional(),
   actions: z.array(aiActionSchema).max(20),
   confidence: confidenceSchema,
   needsHuman: z.boolean(),

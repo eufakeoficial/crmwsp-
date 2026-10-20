@@ -344,6 +344,13 @@
       "when": 1792530010000,
       "tag": "0052_rls_platform_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792540000000,
+      "tag": "0053_message_reactions",
+      "breakpoints": true
     }
   ]
 }
