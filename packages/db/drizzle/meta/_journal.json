@@ -351,6 +351,19 @@
       "when": 1792540000000,
       "tag": "0053_message_reactions",
       "breakpoints": true
+    },
+    {
+      "when": 1792550000000,
+      "tag": "0055_meta_ads_sync",
+      "breakpoints": true,
+      "idx": 55
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792550010000,
+      "tag": "0056_rls_meta_ads_sync",
+      "breakpoints": true
     }
   ]
 }

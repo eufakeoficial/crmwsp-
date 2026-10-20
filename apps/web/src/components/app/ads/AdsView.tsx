@@ -1,11 +1,12 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import type { AdReportRow, MetaCapiState } from "@crmwsp/contracts";
+import type { AdRecommendation, AdReport, AdReportGroupBy, AdReportRow, MetaAdsState, MetaCapiState } from "@crmwsp/contracts";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { SettingsFrame } from "@/components/ai/AccessGate";
-import { Alert, Button, Card, Input, Label } from "@/components/ui";
+import { Alert, Button, Card, Chip, Input, Label } from "@/components/ui";
+import { MetaAdsCard, RecommendationSettingsCard } from "./MetaAdsCard";
 import { adsApi } from "@/lib/ads-api";
 import { formatMoneyMinor, majorToMinor } from "@/lib/format";
 import { errorMessage } from "@/lib/messages";
@@ -60,20 +61,50 @@ function SpendForm({ onSaved }: { onSaved: () => void }) {
   );
 }
 
+const ACTION_LABEL: Record<AdRecommendation["action"], string> = { scale: "Escalar", pause: "Pausar", observe: "Observar" };
+const ACTION_CLASS: Record<AdRecommendation["action"], string> = {
+  scale: "bg-lime text-ink",
+  pause: "bg-ink text-white",
+  observe: "border border-line bg-white text-ink",
+};
+
+function RecommendationChip({ rec }: { rec: AdRecommendation }) {
+  return (
+    <span title={rec.reason} aria-label={`${ACTION_LABEL[rec.action]}: ${rec.reason}`} className={`inline-flex cursor-help rounded-full px-2.5 py-0.5 text-xs font-bold whitespace-nowrap ${ACTION_CLASS[rec.action]}`}>
+      {ACTION_LABEL[rec.action]}
+    </span>
+  );
+}
+
+const GROUPS: { id: AdReportGroupBy; label: string }[] = [
+  { id: "campaign", label: "Campañas" },
+  { id: "adset", label: "Conjuntos" },
+  { id: "ad", label: "Anuncios" },
+];
+const money = (minor: number | null, currency: string) => (minor === null ? "—" : formatMoneyMinor(minor, currency));
+
+function rowTitle(r: AdReportRow): string {
+  if (r.sourceId === "unknown") return r.level === "ad" ? "Sin ID de anuncio" : "Sin datos de Meta (gasto manual o sin sincronizar)";
+  return r.label ?? r.headline ?? r.sourceId;
+}
+
 function ReportTable({ items }: { items: AdReportRow[] }) {
-  if (items.length === 0) return <p className="m-0 text-sm text-muted">Todavía no hay conversaciones que vengan de anuncios Click-to-WhatsApp.</p>;
+  if (items.length === 0) return <p className="m-0 text-sm text-muted">No hay conversaciones ni inversión de anuncios en este periodo.</p>;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead className="text-muted">
           <tr>
-            <th className="py-2 pr-3">Anuncio</th>
+            <th className="py-2 pr-3">Nombre</th>
             <th className="py-2 pr-3 text-right">Conversaciones</th>
             <th className="py-2 pr-3 text-right">Pedidos</th>
             <th className="py-2 pr-3 text-right">Pagados</th>
             <th className="py-2 pr-3 text-right">Ingresos verificados</th>
             <th className="py-2 pr-3 text-right">Inversión</th>
-            <th className="py-2 text-right">ROAS</th>
+            <th className="py-2 pr-3 text-right">ROAS</th>
+            <th className="py-2 pr-3 text-right">Coste / conversación</th>
+            <th className="py-2 pr-3 text-right">Coste / compra</th>
+            <th className="py-2">Recomendación</th>
           </tr>
         </thead>
         <tbody>
@@ -84,8 +115,14 @@ function ReportTable({ items }: { items: AdReportRow[] }) {
                 {i === 0 && (
                   <>
                     <td className="py-2 pr-3" rowSpan={lines.length}>
-                      <div className="font-medium">{r.label ?? r.headline ?? (r.sourceId === "unknown" ? "Sin ID de anuncio" : r.sourceId)}</div>
-                      {r.sourceId !== "unknown" && <div className="text-xs text-muted">{r.sourceId}</div>}
+                      <div className="font-medium">{rowTitle(r)}</div>
+                      {r.sourceId !== "unknown" && (
+                        <div className="text-xs text-muted">
+                          {r.sourceId}
+                          {r.level === "ad" && r.campaignName ? ` · ${r.campaignName}` : ""}
+                          {r.spendSource === "manual" ? " · inversión manual" : r.spendSource === "mixed" ? " · inversión manual y de Meta" : ""}
+                        </div>
+                      )}
                     </td>
                     <td className="py-2 pr-3 text-right" rowSpan={lines.length}>{r.conversations}</td>
                     <td className="py-2 pr-3 text-right" rowSpan={lines.length}>{r.orders}</td>
@@ -94,7 +131,14 @@ function ReportTable({ items }: { items: AdReportRow[] }) {
                 )}
                 <td className="py-2 pr-3 text-right">{c ? formatMoneyMinor(c.revenueMinor, c.currency) : "—"}</td>
                 <td className="py-2 pr-3 text-right">{c && c.spendMinor > 0 ? formatMoneyMinor(c.spendMinor, c.currency) : "—"}</td>
-                <td className="py-2 text-right">{c?.roas != null ? `${c.roas.toFixed(2)}×` : "—"}</td>
+                <td className="py-2 pr-3 text-right">{c?.roas != null && c.spendMinor > 0 ? `${c.roas.toFixed(2)}×` : "—"}</td>
+                <td className="py-2 pr-3 text-right">{c ? money(c.costPerConversationMinor, c.currency) : "—"}</td>
+                <td className="py-2 pr-3 text-right">{c ? money(c.costPerPurchaseMinor, c.currency) : "—"}</td>
+                {i === 0 && (
+                  <td className="py-2" rowSpan={lines.length}>
+                    <RecommendationChip rec={r.recommendation} />
+                  </td>
+                )}
               </tr>
             ));
           })}
@@ -188,34 +232,74 @@ function CapiCard({ state, canEdit, onChanged }: { state: MetaCapiState; canEdit
 }
 
 function Body({ canEdit }: { canEdit: boolean }) {
-  const [items, setItems] = useState<AdReportRow[]>();
+  const [report, setReport] = useState<AdReport>();
   const [capi, setCapi] = useState<MetaCapiState>();
+  const [metaAds, setMetaAds] = useState<MetaAdsState>();
+  const [groupBy, setGroupBy] = useState<AdReportGroupBy>("campaign");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [error, setError] = useState<string>();
   const load = useCallback(async () => {
     try {
-      const [r, c] = await Promise.all([adsApi.report(), adsApi.capi()]);
-      setItems(r.items);
+      const [r, c, m] = await Promise.all([
+        adsApi.report({ groupBy, ...(from ? { from } : {}), ...(to ? { to } : {}) }),
+        adsApi.capi(),
+        adsApi.metaAds(),
+      ]);
+      setReport(r);
       setCapi(c);
+      setMetaAds(m);
       setError(undefined);
     } catch (err) {
       setError(errorMessage(err));
     }
-  }, []);
+  }, [groupBy, from, to]);
   useEffect(() => {
     void load();
   }, [load]);
-  if (error) return <Alert>{error}</Alert>;
-  if (!items || !capi) return <p className="text-muted" aria-busy="true">Cargando anuncios…</p>;
+  if (error && !report) return <Alert>{error}</Alert>;
+  if (!report || !capi || !metaAds) return <p className="text-muted" aria-busy="true">Cargando anuncios…</p>;
   return (
-    <div className="flex max-w-[1100px] flex-col gap-4">
+    <div className="flex max-w-[1200px] flex-col gap-4">
       <Card className="flex flex-col gap-4 sm:p-6">
-        <h2 className="m-0 text-[19px]">Rendimiento por anuncio</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="m-0 text-[19px]">Rendimiento</h2>
+          <div className="flex gap-2" role="group" aria-label="Agrupar por">
+            {GROUPS.map((g) => (
+              <Chip key={g.id} active={groupBy === g.id} onClick={() => setGroupBy(g.id)}>
+                {g.label}
+              </Chip>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="ads-from">Desde</Label>
+            <Input id="ads-from" type="date" value={from || report.from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="ads-to">Hasta</Label>
+            <Input id="ads-to" type="date" value={to || report.to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+        </div>
+        {error && <Alert>{error}</Alert>}
         <p className="m-0 text-sm text-muted">
-          Atribución al primer anuncio por contacto. Los ingresos solo cuentan pedidos con pago verificado por la pasarela o conciliación.
+          Atribución al primer anuncio por contacto llegado en el periodo. Los ingresos solo cuentan pedidos con pago verificado por la pasarela o conciliación. Si la moneda de la
+          inversión y la de los ingresos difieren se muestran por separado y sin ROAS. Las recomendaciones son orientativas: nunca se cambia nada en Meta.
         </p>
-        <ReportTable items={items} />
+        <ReportTable items={report.items} />
         {canEdit && <SpendForm onSaved={() => void load()} />}
       </Card>
+      <MetaAdsCard key={metaAds.connection?.updatedAt ?? "none"} state={metaAds} canEdit={canEdit} onChanged={() => void load()} />
+      {metaAds.connection && (
+        <RecommendationSettingsCard
+          key={`rec-${metaAds.connection.updatedAt}`}
+          settings={metaAds.settings}
+          currency={metaAds.connection.currency ?? "EUR"}
+          canEdit={canEdit}
+          onChanged={() => void load()}
+        />
+      )}
       <CapiCard key={capi.connection?.updatedAt ?? "none"} state={capi} canEdit={canEdit} onChanged={() => void load()} />
     </div>
   );
@@ -224,7 +308,7 @@ function Body({ canEdit }: { canEdit: boolean }) {
 export function AdsView() {
   const { tenant } = useSession();
   return (
-    <SettingsFrame title="Anuncios" subtitle="Click-to-WhatsApp: conversaciones, ventas y ROAS por anuncio.">
+    <SettingsFrame title="Anuncios" subtitle="Click-to-WhatsApp: inversión, conversaciones, ventas, ROAS y recomendaciones por campaña, conjunto y anuncio.">
       {() => <Body canEdit={canManageAi(tenant?.role)} />}
     </SettingsFrame>
   );
