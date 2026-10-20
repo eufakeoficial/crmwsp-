@@ -1,4 +1,4 @@
-import { BookOpen, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { BookOpen, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -18,6 +18,7 @@ export const SETTINGS_SECTIONS: readonly NavItem[] = [
   { key: "settings-plan", label: "Plan y uso", href: "/app/settings/plan", icon: CreditCard },
   { key: "settings-ads", label: "Anuncios", href: "/app/settings/ads", icon: Megaphone },
   { key: "settings-developers", label: "Desarrolladores", href: "/app/settings/developers", icon: Code2 },
+  { key: "settings-owner-mode", label: "Modo dueño", href: "/app/settings/owner-mode", icon: Smartphone },
 ];
 
 export const NAV_MAIN: readonly NavItem[] = [

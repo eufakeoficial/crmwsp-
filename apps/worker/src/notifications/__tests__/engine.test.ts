@@ -61,4 +61,21 @@ describe("dispatchNotifications", () => {
   it("falls back to defaults on invalid settings", () => {
     expect(resolveNotificationSettings({ ownerPhoneE164: "12345" }).ownerPhoneE164).toBeNull();
   });
+  it("sends directly to a verified owner-mode phone inside the window (no conversation needed)", async () => {
+    const { store, marked, sent } = fakeStore([n("a")], null);
+    store.ownerDirect = async () => ({ channelConnectionId: "ch", lastInboundAt: new Date(NOW.getTime() - 3600_000), channelActive: true, email: "o@x.test" });
+    const res = await dispatchNotifications(store, resolveNotificationSettings({ ownerPhoneE164: "+5215512345678" }), NOW);
+    expect(sent).toEqual([]);
+    expect(res.directSends).toEqual([{ notificationId: "a", channelConnectionId: "ch", toE164: "+5215512345678", text: "t-a" }]);
+    expect(marked.get("a")).toEqual({ status: "sent", messageId: null });
+  });
+
+  it("falls back to email for a verified owner-mode phone when the window is closed", async () => {
+    const { store, marked } = fakeStore([n("a")], null);
+    store.ownerDirect = async () => ({ channelConnectionId: "ch", lastInboundAt: new Date(NOW.getTime() - 25 * 3600_000), channelActive: true, email: "o@x.test" });
+    const res = await dispatchNotifications(store, resolveNotificationSettings({ ownerPhoneE164: "+5215512345678" }), NOW);
+    expect(res.directSends).toEqual([]);
+    expect(res.emailFallbacks).toEqual([{ notificationId: "a", to: "o@x.test", title: "t-a", body: null }]);
+    expect(marked.get("a")).toEqual({ status: "skipped", reason: "window_closed" });
+  });
 });

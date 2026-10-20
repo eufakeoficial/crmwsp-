@@ -4,6 +4,8 @@ import { OpenAICompatibleProvider, type LLMProvider, type LookupFn } from "@crmw
 export interface LlmProviderParams {
   baseUrl: string;
   apiKey: string;
+  /** False when the connection test found no json_schema support (forces the json_object fallback). */
+  supportsJsonSchema?: boolean;
 }
 
 /**
@@ -20,6 +22,7 @@ export class LlmProviderFactory {
     return new OpenAICompatibleProvider({
       baseUrl: params.baseUrl,
       apiKey: params.apiKey,
+      ...(params.supportsJsonSchema === false ? { supportsJsonSchema: false } : {}),
       ...(this.fetchImpl ? { fetch: this.fetchImpl } : {}),
       ...(this.lookup ? { lookup: this.lookup } : {}),
     });

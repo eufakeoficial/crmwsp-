@@ -262,16 +262,58 @@
       "breakpoints": true
     },
     {
+      "idx": 39,
+      "version": "7",
+      "when": 1792520001785,
+      "tag": "0039_inbox_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792520011785,
+      "tag": "0040_rls_inbox_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792520021785,
+      "tag": "0041_ai_scenarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792520031785,
+      "tag": "0042_rls_ai_scenarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792520041785,
+      "tag": "0043_owner_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792520051785,
+      "tag": "0044_rls_owner_mode",
+      "breakpoints": true
+    },
+    {
       "idx": 49,
       "version": "7",
-      "when": 1792521385205,
+      "when": 1792522194015,
       "tag": "0049_team_invitations",
       "breakpoints": true
     },
     {
       "idx": 50,
       "version": "7",
-      "when": 1792521395948,
+      "when": 1792522223442,
       "tag": "0050_rls_team_invitations",
       "breakpoints": true
     }

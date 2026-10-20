@@ -7,6 +7,7 @@ export const notificationKindSchema = z.enum([
   "handoff",
   "approval_requested",
   "payment_review",
+  "reminder",
 ]);
 export type NotificationKind = z.infer<typeof notificationKindSchema>;
 

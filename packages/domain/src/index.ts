@@ -1,5 +1,6 @@
 export const packageName = "@crmwsp/domain" as const;
 export * from "./ai-policy/index.js";
+export * from "./ai-simulator/index.js";
 export * from "./orders/index.js";
 export * from "./followups/index.js";
 export * from "./bot-templates/index.js";
@@ -11,3 +12,5 @@ export * from "./templates/index.js";
 export * from "./profitability/index.js";
 export * from "./contacts/index.js";
 export * from "./team/index.js";
+export * from "./inbox/index.js";
+export * from "./owner-mode/index.js";

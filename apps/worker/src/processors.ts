@@ -5,6 +5,7 @@ import {
   contacts,
   conversations,
   inboundEvents,
+  isTenantAiPaused,
   isUuid,
   llmConnections,
   messages,
@@ -25,7 +26,9 @@ import {
 import { previousStatusesFor } from "./status.js";
 import { applyBroadcastStatus, recordMarketingOptOut } from "./broadcasts/consent.js";
 import { cancelFollowUpsForConversation } from "./followups/pg-store.js";
+import { contactAutomationsPaused, routeInbound } from "./inbox/routing.js";
 import { STORE_MEDIA_JOB, STORE_MEDIA_JOB_OPTIONS, storeMediaJobId, type StoreMediaJobData } from "./media/job.js";
+import { enqueueOwnerCommand, ownerModeHook } from "./owner-mode/ingest-hook.js";
 
 /** Minimal publisher (ioredis satisfies it). */
 export interface EventPublisher {
@@ -47,6 +50,8 @@ export interface ProcessorDeps {
   aiQueue?: Pick<Queue, "add">;
   /** `media` queue; when absent, inbound media is not copied to object storage. */
   mediaQueue?: Pick<Queue, "add">;
+  /** `owner-mode` queue (F9); messages from verified owner phones never enter the customer pipeline. */
+  ownerQueue?: Pick<Queue, "add">;
 }
 
 export type InboxEventType = "message.received" | "message.created" | "message.status" | "conversation.updated";
@@ -61,6 +66,8 @@ export interface IngestMessageResult {
   conversationId: string;
   messageId: string;
   duplicate: boolean;
+  /** Set when the message came from a verified owner phone (F9): no conversation was touched. */
+  ownerCommandId?: string;
 }
 
 interface IngestTxResult extends IngestMessageResult {
@@ -151,6 +158,12 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       return { conversationId: already.conversationId, messageId: already.id, duplicate: true, scheduleAiTurn: false };
     }
 
+    const owner = await ownerModeHook(tx, { tenantId, channelConnectionId: connectionId, fromE164: m.from, externalId: m.externalId, body: messageBody(m) });
+    if (owner) {
+      await markProcessed(tx, eventId);
+      return { conversationId: "", messageId: "", duplicate: owner.duplicate, scheduleAiTurn: false, ownerCommandId: owner.commandId };
+    }
+
     const [contact] = await tx
       .insert(contacts)
       .values({ tenantId, phoneE164: m.from, ...(m.contactName ? { name: m.contactName } : {}) })
@@ -188,6 +201,7 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       .from(conversations)
       .where(where)
       .limit(1);
+    const conversationCreated = !conversation;
     if (!conversation) {
       [conversation] = await tx
         .insert(conversations)
@@ -283,22 +297,36 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     // The contact replied: pending follow-ups of this conversation are no longer needed.
     await cancelFollowUpsForConversation(tx, conversation.id);
 
+    // Inbox v2: open/reopen for a human and (auto-)assign when no automation owns the chat.
+    await routeInbound(tx, {
+      tenantId,
+      conversationId: conversation.id,
+      contactId: contact.id,
+      channelConnectionId: connectionId,
+      created: conversationCreated,
+      now,
+    });
+
     // An AI turn is scheduled only when the conversation has AI enabled and the tenant has an
     // active LLM connection whose last connection test passed.
     let scheduleAiTurn = false;
-    if (deps.aiQueue && conversation.aiMode !== "off") {
+    if (deps.aiQueue && conversation.aiMode !== "off" && !(await contactAutomationsPaused(tx, contact.id, now))) {
       const [llm] = await tx
         .select({ id: llmConnections.id })
         .from(llmConnections)
         .where(and(eq(llmConnections.isActive, true), eq(llmConnections.lastTestOk, true)))
         .limit(1);
-      scheduleAiTurn = Boolean(llm);
+      scheduleAiTurn = Boolean(llm) && !(await isTenantAiPaused(tx));
     }
 
     await markProcessed(tx, eventId);
     return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn, attachmentId };
   });
   const { scheduleAiTurn, attachmentId, ...result } = out;
+  if (result.ownerCommandId) {
+    if (!result.duplicate) await enqueueOwnerCommand(deps.ownerQueue, tenantId, result.ownerCommandId, deps.logger ?? silent);
+    return result;
+  }
 
   if (!result.duplicate) {
     await publish(deps, tenantId, {
