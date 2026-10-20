@@ -11,6 +11,7 @@ import { FOLLOW_UP_QUEUE_NAME, createFollowUpWorker, scheduleFollowUpTick } from
 import { CAPI_QUEUE_NAME, createCapiWorker, scheduleCapiTick, type FetchLike } from "./meta-capi/index.js";
 import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
 import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotificationTick } from "./notifications/index.js";
+import { WEBHOOK_QUEUE_NAME, createWebhookSender, createWebhookWorker, scheduleWebhookTick } from "./webhooks/index.js";
 
 export * from "./queue.js";
 export * from "./processors.js";
@@ -21,6 +22,7 @@ export * from "./followups/index.js";
 export * from "./meta-capi/index.js";
 export * from "./notifications/index.js";
 export * from "./media/index.js";
+export * from "./webhooks/index.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -76,6 +78,8 @@ function main(): void {
   let mediaWorker: ReturnType<typeof createMediaWorker> | undefined;
   let capiWorker: ReturnType<typeof createCapiWorker> | undefined;
   let capiQueue: Queue | undefined;
+  let webhooksWorker: ReturnType<typeof createWebhookWorker> | undefined;
+  let webhookQueue: Queue | undefined;
   try {
     const keys = loadMasterKeysFromEnv(process.env);
     const cipher = createCipherBox(keys);
@@ -137,6 +141,18 @@ function main(): void {
     void scheduleCapiTick(capiQueue).catch((err: unknown) =>
       logger.warn(`capi scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
     );
+    // Outbound tenant webhooks (signed with the decrypted endpoint secret). http:// only outside production.
+    webhookQueue = new Queue(WEBHOOK_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    webhooksWorker = createWebhookWorker({
+      connection: createRedis(redisUrl),
+      db: db.db,
+      cipher,
+      send: createWebhookSender({ allowHttp: process.env["NODE_ENV"] !== "production" }),
+      logger,
+    });
+    void scheduleWebhookTick(webhookQueue).catch((err: unknown) =>
+      logger.warn(`webhook scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
     outbound.on("failed", (job, err) =>
       logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
     );
@@ -149,8 +165,8 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close()])
-      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close()]))
+    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), webhooksWorker?.close()])
+      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), webhookQueue?.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));
   };

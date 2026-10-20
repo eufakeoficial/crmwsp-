@@ -178,6 +178,20 @@
       "breakpoints": true
     },
     {
+      "idx": 25,
+      "version": "7",
+      "when": 1792502650000,
+      "tag": "0025_developer_platform",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792502660000,
+      "tag": "0026_rls_developer_platform",
+      "breakpoints": true
+    },
+    {
       "idx": 27,
       "version": "7",
       "when": 1792502700802,
