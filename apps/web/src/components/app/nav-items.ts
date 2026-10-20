@@ -1,4 +1,4 @@
-import { BookOpen, ClipboardCheck, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { BookOpen, Megaphone, ClipboardCheck, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Sparkles, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -25,6 +25,7 @@ export const NAV_MAIN: readonly NavItem[] = [
   { key: "quotes", label: "Presupuestos", href: "/app/quotes", icon: FileText },
   { key: "orders", label: "Pedidos", href: "/app/orders", icon: ShoppingBag },
   { key: "payment-reviews", label: "Comprobantes", href: "/app/payments/reviews", icon: Receipt },
+  { key: "broadcasts", label: "Campañas", href: "/app/broadcasts", icon: Megaphone },
   { key: "products", label: "Productos", href: "/app/products", icon: Package },
   { key: "channels", label: "Canales", href: "/app/channels", icon: Plug },
   { key: "team", label: "Equipo", href: "/app/team", icon: Users },

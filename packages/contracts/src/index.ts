@@ -15,3 +15,4 @@ export * from "./payment-reviews.js";
 export * from "./integrations.js";
 export * from "./bot-templates.js";
 export * from "./billing.js";
+export * from "./broadcasts.js";

@@ -8,6 +8,7 @@ import { AI_QUEUE_NAME, OUTBOUND_QUEUE_NAME, createRedis } from "./queue.js";
 import { createInboundWorker } from "./worker.js";
 import { createOutboundWorker } from "./outbound.js";
 import { FOLLOW_UP_QUEUE_NAME, createFollowUpWorker, scheduleFollowUpTick } from "./followups/index.js";
+import { BROADCAST_QUEUE_NAME, createBroadcastWorker, scheduleBroadcastTick } from "./broadcasts/index.js";
 import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
 import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotificationTick } from "./notifications/index.js";
 
@@ -19,6 +20,7 @@ export * from "./ai/index.js";
 export * from "./followups/index.js";
 export * from "./notifications/index.js";
 export * from "./media/index.js";
+export * from "./broadcasts/index.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -72,6 +74,8 @@ function main(): void {
   let notificationsWorker: ReturnType<typeof createNotificationWorker> | undefined;
   let notificationQueue: Queue | undefined;
   let mediaWorker: ReturnType<typeof createMediaWorker> | undefined;
+  let broadcastWorker: ReturnType<typeof createBroadcastWorker> | undefined;
+  let broadcastQueue: Queue | undefined;
   try {
     const keys = loadMasterKeysFromEnv(process.env);
     const cipher = createCipherBox(keys);
@@ -120,6 +124,12 @@ function main(): void {
     void scheduleFollowUpTick(followUpQueue).catch((err: unknown) =>
       logger.warn(`follow-up scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
     );
+    // Broadcast campaigns: rate-limited batches onto the outbound queue.
+    broadcastQueue = new Queue(BROADCAST_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    broadcastWorker = createBroadcastWorker({ connection: createRedis(redisUrl), db: db.db, outboundQueue, logger });
+    void scheduleBroadcastTick(broadcastQueue).catch((err: unknown) =>
+      logger.warn(`broadcast scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
     // Owner notifications: SSE fan-out + optional owner WhatsApp through the outbound queue.
     notificationQueue = new Queue(NOTIFICATION_QUEUE_NAME, { connection: createRedis(redisUrl) });
     notificationsWorker = createNotificationWorker({ connection: createRedis(redisUrl), db: db.db, publisher, outboundQueue, logger });
@@ -138,8 +148,8 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close()])
-      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close()]))
+    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), broadcastWorker?.close()])
+      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), broadcastQueue?.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));
   };
