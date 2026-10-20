@@ -71,7 +71,7 @@ export function AssistantCard() {
       </span>
       <b className="text-[13px]">Asistente de IA</b>
       <span className="text-[12px] text-subtle">Modo asistente: la IA redacta y tú envías.</span>
-      <Link href="/app/settings/ai" className="text-[13px] font-bold text-lime no-underline hover:underline">
+      <Link href="/app/ai" className="text-[13px] font-bold text-lime no-underline hover:underline">
         Configurar la IA
       </Link>
     </div>

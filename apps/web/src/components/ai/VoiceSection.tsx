@@ -73,7 +73,7 @@ export function VoiceSection({ canEdit }: { canEdit: boolean }) {
 
   if (!settings && !error) return <p className="text-muted" aria-busy="true">Cargando voz…</p>;
   return (
-    <Card className="sm:p-6">
+    <Card id="voz" className="scroll-mt-24 sm:p-6">
       <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
         <h2 className="m-0 text-[19px]">Respuestas por voz</h2>
         <p className="m-0 text-sm text-ink-3">
