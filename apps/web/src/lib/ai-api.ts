@@ -1,6 +1,8 @@
 import { request } from "./api";
 import {
   type AgentConfig,
+  type ImproveTextStyle,
+  improveTextResponseSchema,
   type AiActionItem,
   type AiConnection,
   type AiTestResult,
@@ -78,3 +80,9 @@ export const AI_MOCK_ENABLED = process.env.NODE_ENV !== "production" && process.
 export const aiApi: AiApi = AI_MOCK_ENABLED ? mockAiApi : realAiApi;
 export const knowledgeApi: KnowledgeApi = AI_MOCK_ENABLED ? mockKnowledgeApi : realKnowledgeApi;
 export { realAiApi, realKnowledgeApi };
+
+/** Composer "Mejorar texto": returns a rewritten draft; never sends anything. */
+export const improveTextApi = {
+  improve: (text: string, style: ImproveTextStyle) =>
+    request("/ai/improve-text", { method: "POST", body: { text, style }, schema: improveTextResponseSchema }),
+};
