@@ -176,6 +176,20 @@
       "when": 1792502627686,
       "tag": "0024_rls_billing_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792502700802,
+      "tag": "0027_ads_attribution_capi",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792502701802,
+      "tag": "0028_rls_ads_attribution_capi",
+      "breakpoints": true
     }
   ]
 }

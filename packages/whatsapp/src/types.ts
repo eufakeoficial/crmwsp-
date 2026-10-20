@@ -25,6 +25,22 @@ export interface InboundLocation {
   address?: string;
 }
 
+/**
+ * Click-to-WhatsApp ad referral (Meta `messages[].referral`). Present only on the first message a
+ * user sends after tapping an ad. `ctwaClid` is the click id Meta's Conversions API expects back.
+ */
+export interface InboundReferral {
+  /** Ad id (Meta `source_id`). */
+  sourceId?: string;
+  /** "ad" | "post" | ... */
+  sourceType?: string;
+  sourceUrl?: string;
+  headline?: string;
+  body?: string;
+  mediaType?: string;
+  ctwaClid?: string;
+}
+
 export interface NormalizedInboundMessage {
   externalId: string;
   /** E.164 sender phone. */
@@ -36,6 +52,7 @@ export interface NormalizedInboundMessage {
   media?: InboundMedia;
   location?: InboundLocation;
   contactName?: string;
+  referral?: InboundReferral;
   raw: unknown;
 }
 
