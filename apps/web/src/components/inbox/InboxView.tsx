@@ -22,9 +22,10 @@ import { useToast } from "@/lib/hooks/use-toast";
 import { contactsApi } from "@/lib/inbox-api";
 import { inboxV2Api } from "@/lib/inbox-v2-api";
 import { errorMessage } from "@/lib/messages";
+import { NotificationBell } from "@/components/app/notifications/NotificationBell";
 import { ContactPanel } from "./ContactPanel";
 import { AUTO_ASSIGN, type ReminderInput } from "./ConversationHeader";
-import { type BulkAction, ConversationList, type ListControls } from "./ConversationList";
+import { type BulkAction, ConversationList, ListToolbar, type ListControls } from "./ConversationList";
 import { ConversationThread } from "./ConversationThread";
 import { FolderSidebar } from "./FolderSidebar";
 import { useContactFilterIds } from "./InboxFilter";
@@ -357,20 +358,24 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
   };
 
   const listError = list.error ? errorMessage(list.error) : undefined;
-  const cols = panelOpen && selectedId
-    ? "desk:grid-cols-[auto_340px_minmax(0,1fr)_300px]"
-    : "desk:grid-cols-[auto_340px_minmax(0,1fr)]";
+  const showPanel = panelOpen && selectedId !== null;
+  const cols = showPanel
+    ? "desk:grid-cols-[380px_minmax(0,1fr)_340px]"
+    : "desk:grid-cols-[380px_minmax(0,1fr)]";
   return (
-    <div className="-mb-16 flex h-[calc(100dvh-120px)] min-h-[420px] flex-col gap-2">
-      <h1 className="sr-only">Inbox</h1>
+    <div className="flex h-[calc(100dvh-68px)] min-h-[420px] flex-col bg-white desk:h-dvh">
       {eventsStatus === "limited" ? (
         <Alert tone="info">Hay demasiadas pestañas abiertas con tiempo real: cierra alguna y recarga para recibir mensajes al instante.</Alert>
       ) : eventsStatus === "reconnecting" ? (
         <Alert tone="info">Reconectando el tiempo real…</Alert>
       ) : null}
 
-      <div className="flex items-center gap-2">
-        <form onSubmit={submitSearch} role="search" className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-full border border-line bg-white pl-4 pr-1 focus-within:outline-3 focus-within:outline-focus">
+      <div className="flex flex-none items-center gap-3 border-b border-line bg-white px-3 py-2 desk:h-14 desk:px-4">
+        <div className="hidden min-w-0 flex-1 desk:block">
+          <h1 className="m-0 truncate text-[18px] font-extrabold">Bandeja de entrada</h1>
+        </div>
+        <h1 className="sr-only desk:hidden">Bandeja de entrada</h1>
+        <form onSubmit={submitSearch} role="search" className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full border border-line-2 bg-paper pl-4 pr-1 focus-within:outline-3 focus-within:outline-focus desk:w-full desk:max-w-[480px] desk:flex-none">
           <Search aria-hidden className="size-4 flex-none text-muted" />
           <input
             type="search"
@@ -386,116 +391,129 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
           aria-label="Carpeta"
           value={folder.startsWith("tag:") ? "" : folder}
           onChange={(e) => selectFolder(e.target.value as FolderId)}
-          className="h-10 cursor-pointer rounded-full border border-line bg-white px-3 text-[13px] font-bold desk:hidden"
+          className="h-9 cursor-pointer rounded-full border border-line-2 bg-white px-3 text-[13px] font-bold desk:hidden"
         >
           {folder.startsWith("tag:") ? <option value="">Etiqueta: {folder.slice(4)}</option> : null}
           {FOLDER_OPTIONS.map((f) => (
             <option key={f.id} value={f.id}>{f.label}</option>
           ))}
         </select>
-        {canConfigure ? (
-          <button type="button" onClick={() => setSettingsOpen(true)} aria-label="Ajustes de la bandeja" title="Ajustes de la bandeja" className="grid size-10 flex-none cursor-pointer place-items-center rounded-full border border-line bg-white text-ink hover:bg-paper">
-            <Settings aria-hidden className="size-[18px]" />
-          </button>
-        ) : null}
+        <div className="flex flex-none items-center justify-end gap-2 desk:flex-1">
+          <NotificationBell triggerClassName="hidden size-9 flex-none border border-line bg-white text-ink desk:grid" />
+          {canConfigure ? (
+            <button type="button" onClick={() => setSettingsOpen(true)} aria-label="Ajustes de la bandeja" title="Ajustes de la bandeja" className="grid size-9 flex-none cursor-pointer place-items-center rounded-full bg-transparent text-ink hover:bg-paper">
+              <Settings aria-hidden className="size-[18px]" />
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className={`grid min-h-0 flex-1 grid-cols-1 gap-3 ${cols}`}>
-        <div className="hidden min-h-0 desk:flex [&>nav]:flex-1">
+      <div className="grid min-h-0 flex-1 grid-cols-1 desk:grid-cols-[auto_minmax(0,1fr)]">
+        <div className="hidden min-h-0 border-r border-line desk:flex [&>nav]:flex-1">
           <FolderSidebar folder={folder} counts={counts} tags={tags} collapsed={sidebarCollapsed} onCollapse={setSidebarCollapsed} onSelect={selectFolder} onCreateTag={createTag} />
         </div>
-        <div className={`min-h-0 flex-col [&>section]:flex-1 ${selectedId ? "hidden desk:flex" : "flex"}`}>
-          <ConversationList
-            items={visible}
-            folder={folder}
-            controls={controls}
-            onControls={setControls}
-            filter={filter}
-            onFilter={setFilter}
-            filterInfo={filterInfo}
-            selectedId={selectedId}
-            checked={checked}
-            onCheck={toggleChecked}
-            onCheckAll={(all) => setChecked(all ? new Set(visible.map((c) => c.id)) : new Set())}
-            members={members}
-            meId={me.user.id}
-            tags={tags}
-            tagMeta={tagMeta}
-            bulkBusy={bulkBusy}
-            onBulk={bulk}
-            loading={list.loading || filterInfo.loading}
-            loadingMore={list.loadingMore}
-            hasMore={list.nextCursor !== null}
-            error={listError}
-            onSelect={setSelectedId}
-            onLoadMore={() => void list.loadMore()}
-          />
-        </div>
-        {selectedId ? (
-          <>
-            <div className={`min-h-0 min-w-0 flex-col [&>section]:flex-1 ${mobilePanel ? "hidden desk:flex" : "flex"}`}>
-              <ConversationThread
-                conversationId={selectedId}
-                conversation={detail}
-                messages={thread.messages}
-                notes={notes}
-                members={members}
-                meId={me.user.id}
-                tags={tags}
-                hasOlder={thread.hasOlder}
-                loadingOlder={thread.loadingOlder}
-                loading={thread.loading}
-                blocked={thread.blocked}
-                busy={busy}
-                panelOpen={panelOpen}
-                hideSystem={hideSystem}
-                error={thread.error ? errorMessage(thread.error) : undefined}
-                composerSlot={detail && composerSlot ? composerSlot(detail) : undefined}
-                actions={{
-                  onBack: () => setSelectedId(null),
-                  onTogglePanel: () => {
-                    setPanelOpen((v) => !v);
-                    setMobilePanel((v) => !v);
-                  },
-                  onAssign: assign,
-                  onToggleTag: setContactTag,
-                  onCreateTag: createTag,
-                  onRemind: remind,
-                  onToggleStatus: toggleStatus,
-                  onMarkUnread: markUnread,
-                  onPause: pause,
-                }}
-                onHideSystem={setHideSystem}
-                onSend={thread.send}
-                onSendNote={sendNote}
-                onSendTemplate={thread.sendTemplate}
-                onLoadOlder={() => void thread.loadOlder()}
+        <div className="flex min-h-0 min-w-0 flex-col">
+          <div className={selectedId ? "hidden desk:block" : "block"}>
+            <ListToolbar
+              items={visible}
+              folder={folder}
+              controls={controls}
+              onControls={setControls}
+              filter={filter}
+              onFilter={setFilter}
+              filterInfo={filterInfo}
+              checked={checked}
+              onCheckAll={(all) => setChecked(all ? new Set(visible.map((c) => c.id)) : new Set())}
+              members={members}
+              meId={me.user.id}
+              tags={tags}
+              bulkBusy={bulkBusy}
+              onBulk={bulk}
+            />
+          </div>
+          <div className={`grid min-h-0 flex-1 grid-cols-1 ${cols}`}>
+            <div className={`min-h-0 flex-col desk:border-r desk:border-line [&>section]:flex-1 ${selectedId ? "hidden desk:flex" : "flex"}`}>
+              <ConversationList
+                items={visible}
+                selectedId={selectedId}
+                checked={checked}
+                onCheck={toggleChecked}
+                tagMeta={tagMeta}
+                loading={list.loading || filterInfo.loading}
+                loadingMore={list.loadingMore}
+                hasMore={list.nextCursor !== null}
+                error={listError}
+                onSelect={setSelectedId}
+                onLoadMore={() => void list.loadMore()}
               />
             </div>
-            <div className={`min-h-0 flex-col ${mobilePanel ? "flex" : "hidden"} ${panelOpen ? "desk:flex" : "desk:hidden"}`}>
-              {detail ? (
-                <ContactPanel
-                  conversation={detail}
-                  contact={contact}
-                  panel={panel}
-                  tags={tags}
-                  busy={busy}
-                  onToggleTag={setContactTag}
-                  onPause={pause}
-                  onClose={() => {
-                    setMobilePanel(false);
-                    setPanelOpen(true);
-                  }}
-                />
-              ) : null}
-            </div>
-          </>
-        ) : (
-          <div className="hidden min-h-0 flex-col items-center justify-center gap-2 rounded-[22px] border border-dashed border-line-2 text-center text-muted desk:flex">
-            <MessageSquare aria-hidden className="size-8" />
-            <p className="m-0 font-bold">Elige una conversación</p>
+            {selectedId ? (
+              <>
+                <div className={`min-h-0 min-w-0 flex-col [&>section]:flex-1 ${mobilePanel ? "hidden desk:flex" : "flex"}`}>
+                  <ConversationThread
+                    conversationId={selectedId}
+                    conversation={detail}
+                    messages={thread.messages}
+                    notes={notes}
+                    members={members}
+                    meId={me.user.id}
+                    tags={tags}
+                    hasOlder={thread.hasOlder}
+                    loadingOlder={thread.loadingOlder}
+                    loading={thread.loading}
+                    blocked={thread.blocked}
+                    busy={busy}
+                    panelOpen={panelOpen}
+                    hideSystem={hideSystem}
+                    error={thread.error ? errorMessage(thread.error) : undefined}
+                    composerSlot={detail && composerSlot ? composerSlot(detail) : undefined}
+                    actions={{
+                      onBack: () => setSelectedId(null),
+                      onTogglePanel: () => {
+                        setPanelOpen((v) => !v);
+                        setMobilePanel((v) => !v);
+                      },
+                      onAssign: assign,
+                      onToggleTag: setContactTag,
+                      onCreateTag: createTag,
+                      onRemind: remind,
+                      onToggleStatus: toggleStatus,
+                      onMarkUnread: markUnread,
+                      onPause: pause,
+                    }}
+                    onHideSystem={setHideSystem}
+                    onSend={thread.send}
+                    onSendNote={sendNote}
+                    onSendTemplate={thread.sendTemplate}
+                    onLoadOlder={() => void thread.loadOlder()}
+                  />
+                </div>
+                <div className={`min-h-0 flex-col desk:border-l desk:border-line ${mobilePanel ? "flex" : "hidden"} ${panelOpen ? "desk:flex" : "desk:hidden"}`}>
+                  {detail ? (
+                    <ContactPanel
+                      conversation={detail}
+                      contact={contact}
+                      panel={panel}
+                      tags={tags}
+                      busy={busy}
+                      onToggleTag={setContactTag}
+                      onPause={pause}
+                      onClose={() => {
+                        setMobilePanel(false);
+                        setPanelOpen(false);
+                      }}
+                    />
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <div className="hidden min-h-0 flex-col items-center justify-center gap-2 bg-paper-2 text-center text-muted desk:flex">
+                <MessageSquare aria-hidden className="size-8" />
+                <p className="m-0 font-bold">Elige una conversación</p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
       {settingsOpen ? <InboxSettingsDrawer onClose={() => setSettingsOpen(false)} onSaved={() => { show("Ajustes guardados"); refreshAll(); }} /> : null}
       <Toast message={toast} tone="warn" />

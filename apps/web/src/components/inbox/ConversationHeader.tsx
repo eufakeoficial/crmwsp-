@@ -9,8 +9,10 @@ import { formatDateTime } from "@/lib/format";
 import { REMINDER_PRESETS, TAG_COLORS, localInputToIso } from "./inbox-meta";
 import { MenuItem, Popover } from "./Popover";
 
-const SELECT = "h-9 min-w-0 max-w-44 cursor-pointer rounded-full border-[1.5px] border-line-2 bg-white px-2.5 text-[13px] font-bold text-ink disabled:cursor-not-allowed disabled:opacity-50";
-const ICON_BTN = "grid size-9 flex-none cursor-pointer place-items-center rounded-full bg-paper text-ink hover:bg-line disabled:cursor-not-allowed disabled:opacity-50";
+/** Inline text dropdown under the contact name: looks like a link, behaves like a select. */
+const SELECT = "-ml-1 h-6 min-w-0 max-w-52 cursor-pointer rounded-md border-0 bg-transparent px-1 text-[13px] font-semibold text-muted hover:bg-paper hover:text-ink disabled:cursor-not-allowed disabled:opacity-50";
+const ICON_BTN = "grid size-9 flex-none cursor-pointer place-items-center rounded-full bg-transparent text-ink hover:bg-paper disabled:cursor-not-allowed disabled:opacity-50";
+const POP_ICON = "size-9 min-w-9 bg-transparent p-0 hover:bg-paper";
 
 export const AUTO_ASSIGN = "__auto__";
 
@@ -70,47 +72,41 @@ export function ConversationHeader({
   const assignedId = assignee?.id === meId ? "me" : (assignee?.id ?? "");
   const hasTags = new Set(conversation.contactTags);
   return (
-    <header className="flex flex-col gap-2 border-b border-line bg-white p-3">
-      <div className="flex items-center gap-2">
+    <header className="flex flex-col border-b border-line bg-white">
+      <div className="flex items-center gap-3 px-4 py-2.5">
         <button type="button" onClick={onBack} aria-label="Volver a la lista" className={cn(ICON_BTN, "desk:hidden")}>
           <ArrowLeft aria-hidden className="size-5" />
         </button>
         <Avatar name={contact.name ?? "?"} round />
         <div className="min-w-0 flex-1">
-          <h2 className="m-0 truncate text-[16px] leading-tight font-extrabold">{title}</h2>
-          <p className="m-0 truncate text-xs text-muted">
-            {contact.phoneE164}
-            {closed ? " · Cerrado" : ""}
-          </p>
+          <h2 className="m-0 truncate text-[16px] leading-tight font-extrabold">
+            {title}
+            {closed ? <span className="ml-2 rounded-full bg-paper px-2 py-0.5 align-middle text-[11px] font-bold text-muted">Cerrado</span> : null}
+          </h2>
+          <select
+            aria-label="Asignar a"
+            className={SELECT}
+            disabled={busy}
+            value={assignedId}
+            onChange={(e) => onAssign(e.target.value === "" ? null : e.target.value)}
+          >
+            <option value="">No asignado</option>
+            <option value="me">Yo</option>
+            {(members ?? [])
+              .filter((m) => m.userId !== meId && m.role !== "viewer")
+              .map((m) => (
+                <option key={m.userId} value={m.userId}>{m.name ?? m.email}</option>
+              ))}
+            {members ? <option value={AUTO_ASSIGN}>Asignar automáticamente</option> : null}
+            {assignee && assignee.id !== meId && !members ? <option value={assignee.id}>{assignee.name ?? assignee.email}</option> : null}
+          </select>
         </div>
-        <button type="button" onClick={onTogglePanel} aria-pressed={panelOpen} aria-label={panelOpen ? "Ocultar contacto" : "Mostrar contacto"} title={panelOpen ? "Ocultar contacto" : "Mostrar contacto"} className={cn(ICON_BTN, panelOpen && "bg-lime-soft")}>
-          <PanelRight aria-hidden className="size-[18px]" />
-        </button>
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <select
-          aria-label="Asignar a"
-          className={SELECT}
-          disabled={busy}
-          value={assignedId}
-          onChange={(e) => onAssign(e.target.value === "" ? null : e.target.value)}
-        >
-          <option value="">Sin asignar</option>
-          <option value="me">Yo</option>
-          {(members ?? [])
-            .filter((m) => m.userId !== meId && m.role !== "viewer")
-            .map((m) => (
-              <option key={m.userId} value={m.userId}>{m.name ?? m.email}</option>
-            ))}
-          {members ? <option value={AUTO_ASSIGN}>Asignar automáticamente</option> : null}
-          {assignee && assignee.id !== meId && !members ? <option value={assignee.id}>{assignee.name ?? assignee.email}</option> : null}
-        </select>
 
-        <Popover label="Etiquetas" trigger={<><Tag aria-hidden className="size-4" />{conversation.contactTags.length ? <span className="text-[11px]">{conversation.contactTags.length}</span> : null}</>}>
+        <Popover label="Etiquetas" align="right" triggerClassName={POP_ICON} trigger={<><Tag aria-hidden className="size-[18px]" />{conversation.contactTags.length ? <span className="text-[11px]">{conversation.contactTags.length}</span> : null}</>}>
           {() => <TagMenu tags={tags} has={hasTags} onToggle={onToggleTag} onCreate={onCreateTag} />}
         </Popover>
 
-        <Popover label="Recuérdamelo" trigger={<AlarmClock aria-hidden className="size-4" />} triggerClassName={conversation.nextReminderAt ? "bg-lime-soft" : undefined}>
+        <Popover label="Recuérdamelo" align="right" trigger={<AlarmClock aria-hidden className="size-[18px]" />} triggerClassName={cn(POP_ICON, conversation.nextReminderAt && "bg-lime-soft hover:bg-lime-soft")}>
           {(close) => <ReminderMenu next={conversation.nextReminderAt} onPick={(r) => { onRemind(r); close(); }} />}
         </Popover>
 
@@ -120,7 +116,7 @@ export function ConversationHeader({
         <button type="button" className={ICON_BTN} disabled={busy} onClick={onMarkUnread} aria-label="Marcar como no leído" title="Marcar como no leído">
           <MailOpen aria-hidden className="size-[18px]" />
         </button>
-        <Popover label="Pausar IA para este contacto" triggerClassName={paused ? "bg-gold-soft" : undefined} trigger={<Bot aria-hidden className="size-4" />}>
+        <Popover label="Pausar IA para este contacto" align="right" triggerClassName={cn(POP_ICON, paused && "bg-gold-soft hover:bg-gold-soft")} trigger={<Bot aria-hidden className="size-[18px]" />}>
           {(close) => (
             <div className="flex flex-col">
               <p className="m-0 px-2.5 pb-1 text-xs text-muted">
@@ -133,6 +129,16 @@ export function ConversationHeader({
             </div>
           )}
         </Popover>
+        <button type="button" onClick={onTogglePanel} aria-pressed={panelOpen} aria-label={panelOpen ? "Ocultar contacto" : "Mostrar contacto"} title={panelOpen ? "Ocultar contacto" : "Mostrar contacto"} className={cn(ICON_BTN, panelOpen && "bg-lime-soft hover:bg-lime-soft")}>
+          <PanelRight aria-hidden className="size-[18px]" />
+        </button>
+      </div>
+      <div className="flex items-center gap-3 px-4">
+        <div role="tablist" aria-label="Canal">
+          <button type="button" role="tab" aria-selected="true" className="h-9 cursor-pointer border-0 border-b-2 border-ink bg-transparent px-1 text-[13px] font-extrabold text-ink">
+            WhatsApp
+          </button>
+        </div>
         <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[12px] font-semibold text-muted">
           <input type="checkbox" checked={hideSystem} onChange={(e) => onHideSystem(e.target.checked)} className="size-4 cursor-pointer accent-ink" />
           Ocultar mensajes del sistema

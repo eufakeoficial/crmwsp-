@@ -3,6 +3,7 @@
 import { Menu, Plus } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { NotificationBell } from "./notifications/NotificationBell";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { useSession } from "./SessionProvider";
@@ -10,10 +11,10 @@ import { useSession } from "./SessionProvider";
 const ROUND = "grid size-9 flex-none place-items-center rounded-full";
 
 /** Fixed top bar on `paper`: company switcher on the left, bell and primary action on the right. */
-export function AppTopbar({ menuOpen, onToggleMenu }: { menuOpen: boolean; onToggleMenu: () => void }) {
+export function AppTopbar({ menuOpen, onToggleMenu, hideOnDesktop = false }: { menuOpen: boolean; onToggleMenu: () => void; hideOnDesktop?: boolean }) {
   const { tenant } = useSession();
   return (
-    <header className="fixed inset-x-0 top-0 z-20 flex items-center gap-2 bg-paper px-[clamp(12px,3vw,28px)] py-2.5 desk:left-[220px]">
+    <header className={cn("fixed inset-x-0 top-0 z-20 flex items-center gap-2 bg-paper px-[clamp(12px,3vw,28px)] py-2.5 desk:left-[220px]", hideOnDesktop && "desk:hidden")}>
       <Avatar name={tenant?.name ?? "?"} round size="md" className="max-[479px]:hidden" />
       <TenantSwitcher />
       <span aria-hidden className="flex-1" />

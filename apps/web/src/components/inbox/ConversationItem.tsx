@@ -34,14 +34,14 @@ export function ConversationItem({
   const tagEmojis = (inbox?.contactTags ?? []).map((t) => ({ name: t, emoji: tagMeta?.get(t)?.emoji ?? "🏷" }));
   const assigneeName = c.assignee ? (c.assignee.name ?? c.assignee.email) : null;
   return (
-    <li className={cn("flex items-start gap-1.5 rounded-2xl pl-1.5", selected ? "bg-lime-soft" : "hover:bg-paper")}>
+    <li className={cn("flex min-h-[88px] items-stretch border-b border-line pl-3", selected ? "bg-lime-soft" : "hover:bg-paper-2")}>
       {onCheck ? (
         <input
           type="checkbox"
           aria-label={`Seleccionar ${title}`}
           checked={checked === true}
           onChange={onCheck}
-          className="mt-4 size-4 flex-none cursor-pointer accent-ink"
+          className="my-auto size-4 flex-none cursor-pointer accent-ink"
         />
       ) : null}
       <button
@@ -49,22 +49,18 @@ export function ConversationItem({
         onClick={onSelect}
         aria-current={selected ? "true" : undefined}
         data-testid="conversation-item"
-        className="flex min-w-0 flex-1 cursor-pointer items-start gap-2.5 rounded-2xl bg-transparent p-2.5 text-left"
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 bg-transparent px-3 py-3 text-left"
       >
-        <Avatar name={c.contact.name ?? "?"} round />
-        <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2">
-            <b className={cn("min-w-0 flex-1 truncate text-[14px]", unread && "font-extrabold")}>{title}</b>
+        <Avatar name={c.contact.name ?? "?"} round className="size-11 text-[15px]" />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="flex items-center gap-2">
+            <b className={cn("min-w-0 flex-1 truncate text-[15px]", unread ? "font-extrabold" : "font-semibold")}>{title}</b>
+            {unread ? <span data-testid="unread-badge" role="img" aria-label="Sin leer" className="size-2.5 flex-none rounded-full bg-focus" /> : null}
             <time dateTime={activityOf(c)} className="flex-none text-xs text-muted">{compactRelative(activityOf(c))}</time>
           </span>
-          <span className="flex items-center gap-2">
-            <span className={cn("min-w-0 flex-1 truncate text-[13px]", unread ? "font-bold text-ink" : "text-muted")}>{preview}</span>
-            {unread ? (
-              <span data-testid="unread-badge" role="img" aria-label="Sin leer" className="size-2.5 flex-none rounded-full bg-focus" />
-            ) : null}
-          </span>
+          <span className={cn("block truncate text-[13px]", unread ? "font-bold text-ink" : "text-muted")}>{preview}</span>
           {tagEmojis.length > 0 || assigneeName ? (
-            <span className="mt-0.5 flex items-center gap-1 text-xs text-muted">
+            <span className="flex items-center gap-1 text-xs text-muted">
               <span className="flex min-w-0 flex-1 gap-0.5 truncate">
                 {tagEmojis.slice(0, 6).map((t) => (
                   <span key={t.name} title={t.name} aria-label={`Etiqueta ${t.name}`}>{t.emoji}</span>

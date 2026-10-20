@@ -69,7 +69,7 @@ export function ConversationThread({
   onLoadOlder: () => void;
 }) {
   return (
-    <section aria-label="Conversación" className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[22px] border border-line bg-white">
+    <section aria-label="Conversación" className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-white">
       {conversation ? (
         <ConversationHeader
           conversation={conversation}

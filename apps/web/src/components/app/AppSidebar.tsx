@@ -3,7 +3,7 @@
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Logo } from "@/components/brand/Logo";
+import { Logo, LogoMark } from "@/components/brand/Logo";
 import { cn } from "@/lib/cn";
 import { NAV_MAIN, NAV_SECONDARY, type NavItem, isActive } from "./nav-items";
 
@@ -78,8 +78,51 @@ export function AssistantCard() {
   );
 }
 
-/** Floating black sidebar (desktop, from the `desk` breakpoint). */
-export function AppSidebar({ counts }: { counts?: NavCounts }) {
+/** Narrow icon-only rail (desktop) used on full-bleed screens such as the inbox. Labels live in the tooltip. */
+function AppRail({ counts = {} }: { counts?: NavCounts }) {
+  const pathname = usePathname();
+  const items = [...NAV_MAIN, ...NAV_SECONDARY];
+  return (
+    <nav
+      aria-label="Principal"
+      className="fixed inset-y-0 left-0 z-[25] hidden w-[72px] flex-col items-center gap-1 overflow-y-auto bg-ink py-3 [scrollbar-width:none] desk:flex"
+    >
+      <Link href="/app" aria-label="CRMWSP, ir al inicio" title="CRMWSP" className="mb-2 rounded-xl no-underline">
+        <LogoMark size={36} />
+      </Link>
+      {items.map((item) => {
+        const Icon = item.icon;
+        const active = isActive(pathname, item.href);
+        const count = counts[item.key];
+        return (
+          <Link
+            key={item.key}
+            href={item.href}
+            title={item.label}
+            aria-label={item.label}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "relative grid size-11 flex-none place-items-center rounded-xl no-underline",
+              active ? "bg-lime text-ink" : "text-white hover:bg-ink-2",
+            )}
+          >
+            <Icon aria-hidden className="size-5" />
+            {count ? (
+              <span className="absolute top-0.5 right-0.5 min-w-4 rounded-full bg-alert px-1 text-center text-[10px] leading-4 font-extrabold text-white">
+                {count}
+                <span className="sr-only"> sin leer</span>
+              </span>
+            ) : null}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+/** Floating black sidebar (desktop, from the `desk` breakpoint); `rail` swaps it for the icon-only rail. */
+export function AppSidebar({ counts, rail = false }: { counts?: NavCounts; rail?: boolean }) {
+  if (rail) return <AppRail {...(counts ? { counts } : {})} />;
   return (
     <nav aria-label="Principal" className="fixed top-0 bottom-0 left-0 z-[25] hidden w-[220px] p-3 desk:block">
       <div className="flex h-full flex-col gap-1 overflow-y-auto rounded-[22px] bg-ink px-2.5 py-3.5 text-white [scrollbar-color:var(--color-ink-4)_transparent] [scrollbar-width:thin]">

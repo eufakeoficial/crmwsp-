@@ -151,9 +151,9 @@ export function Composer({
 
   const showWindow = !note && (blocked || windowWarning);
   return (
-    <div className="flex flex-col gap-2 border-t border-line bg-white p-3">
+    <div className="flex flex-col gap-2 border-t border-line bg-white px-4 pt-1 pb-3">
       {slot}
-      <div role="tablist" aria-label="Tipo de mensaje" className="flex gap-1.5">
+      <div role="tablist" aria-label="Tipo de mensaje" className="flex gap-4 border-b border-line">
         {(["reply", "note"] as const).map((m) => (
           <button
             key={m}
@@ -161,7 +161,10 @@ export function Composer({
             type="button"
             aria-selected={mode === m}
             onClick={() => setMode(m)}
-            className={cn("h-8 cursor-pointer rounded-full px-3.5 text-[13px] font-bold", mode === m ? (m === "note" ? "bg-gold text-ink" : "bg-ink text-white") : "bg-paper text-ink hover:bg-line")}
+            className={cn(
+              "-mb-px h-9 cursor-pointer border-0 border-b-2 bg-transparent px-1 text-[13px]",
+              mode === m ? (m === "note" ? "border-gold font-extrabold text-ink" : "border-ink font-extrabold text-ink") : "border-transparent font-semibold text-muted hover:text-ink",
+            )}
           >
             {m === "reply" ? "Responder" : "Nota"}
           </button>
@@ -187,7 +190,7 @@ export function Composer({
         <textarea
           ref={area}
           aria-label={note ? "Escribe una nota interna" : "Escribe un mensaje"}
-          rows={2}
+          rows={3}
           value={text}
           disabled={replyBlocked}
           // readOnly (not disabled) keeps the focus for the next message.
@@ -196,11 +199,11 @@ export function Composer({
           placeholder={replyBlocked ? "Envío de texto libre bloqueado (ventana de 24 h)" : note ? "Nota visible solo para tu equipo…" : "Escribe un mensaje… (/ para respuestas predefinidas)"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          className={cn("block max-h-40 min-h-[52px] w-full resize-none rounded-[14px] border-[1.5px] border-ink bg-white px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50", note && "border-gold bg-gold-soft")}
+          className={cn("block max-h-48 min-h-[88px] w-full resize-none rounded-lg border border-line-2 bg-white px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50", note && "border-gold bg-gold-soft")}
         />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <Popover label="Emoji" disabled={replyBlocked} trigger={<Smile aria-hidden className="size-[18px]" />} panelClassName="w-64">
+        <Popover label="Emoji" disabled={replyBlocked} triggerClassName="bg-transparent hover:bg-paper" trigger={<Smile aria-hidden className="size-[18px]" />} panelClassName="w-64">
           {(close) => (
             <div className="grid grid-cols-8 gap-0.5">
               {COMMON_EMOJIS.map((e) => (
@@ -213,7 +216,7 @@ export function Composer({
         </Popover>
         <CannedPicker onPick={pick} disabled={replyBlocked} />
         {note ? null : (
-          <Popover label="Mejorar texto" disabled={replyBlocked || improving || trimmed.length === 0} trigger={<><Sparkles aria-hidden className="size-4" /> {improving ? "Mejorando…" : "Mejorar texto"}</>}>
+          <Popover label="Mejorar texto" disabled={replyBlocked || improving || trimmed.length === 0} triggerClassName="bg-transparent hover:bg-paper" trigger={<><Sparkles aria-hidden className="size-4" /> {improving ? "Mejorando…" : "Mejorar texto"}</>}>
             {(close) => (
               <div className="flex flex-col">
                 {IMPROVE_STYLES.map((s) => (
@@ -225,7 +228,7 @@ export function Composer({
           </Popover>
         )}
         {undo !== null ? (
-          <button type="button" onClick={() => { setText(undo); setUndo(null); }} className="inline-flex h-9 cursor-pointer items-center gap-1 rounded-full bg-paper px-3 text-[12px] font-bold hover:bg-line">
+          <button type="button" onClick={() => { setText(undo); setUndo(null); }} className="inline-flex h-9 cursor-pointer items-center gap-1 rounded-full bg-transparent px-3 text-[12px] font-bold hover:bg-paper">
             <Undo2 aria-hidden className="size-4" /> Deshacer
           </button>
         ) : null}
@@ -252,7 +255,7 @@ function CannedPicker({ onPick, disabled }: { onPick: (c: CannedResponseDto) => 
     );
   };
   return (
-    <Popover label="Respuestas predefinidas" disabled={disabled} trigger={<MessageSquareText aria-hidden className="size-[18px]" />} panelClassName="w-72">
+    <Popover label="Respuestas predefinidas" disabled={disabled} triggerClassName="bg-transparent hover:bg-paper" trigger={<MessageSquareText aria-hidden className="size-[18px]" />} panelClassName="w-72">
       {(close) => (
         <CannedList items={items} failed={failed} load={load} onPick={(c) => { onPick(c); close(); }} />
       )}
