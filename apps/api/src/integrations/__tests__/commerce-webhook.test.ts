@@ -33,6 +33,7 @@ class FakeLedger implements CommerceLedger {
 
   async inTenant<T>(_tenantId: string, fn: (tx: CommerceLedgerTx) => Promise<T>): Promise<T> {
     const snap = { e: [...this.events], s: [...this.sales] };
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- fake tx closes over the ledger
     const self = this;
     const tx: CommerceLedgerTx = {
       async recordEvent(e) {
