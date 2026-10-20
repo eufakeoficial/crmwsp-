@@ -15,3 +15,4 @@ export * from "./team/index.js";
 export * from "./inbox/index.js";
 export * from "./owner-mode/index.js";
 export * from "./order-extraction/index.js";
+export * from "./platform/index.js";

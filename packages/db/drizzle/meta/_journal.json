@@ -330,6 +330,20 @@
       "when": 1792522223442,
       "tag": "0050_rls_team_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1792530000000,
+      "tag": "0051_platform_admin",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792530010000,
+      "tag": "0052_rls_platform_admin",
+      "breakpoints": true
     }
   ]
 }

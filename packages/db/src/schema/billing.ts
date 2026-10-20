@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, char, check, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { bigint, char, check, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 
 /** Keep in sync with `PLAN_IDS` in @crmwsp/billing. */
@@ -19,6 +19,8 @@ export const tenantPlans = pgTable(
       .references(() => tenants.id, { onDelete: "cascade" })
       .unique("tenant_plans_tenant_unique"),
     plan: text("plan", { enum: tenantPlanIds }).notNull().default("start"),
+    /** Optional per-tenant limit overrides set by a platform admin (`{ limitKey: number | null }`). */
+    limitsOverride: jsonb("limits_override").$type<Record<string, number | null>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
