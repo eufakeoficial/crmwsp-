@@ -74,6 +74,9 @@ importers:
       '@crmwsp/knowledge':
         specifier: workspace:*
         version: link:../../packages/knowledge
+      '@crmwsp/mailer':
+        specifier: workspace:*
+        version: link:../../packages/mailer
       '@crmwsp/payments':
         specifier: workspace:*
         version: link:../../packages/payments

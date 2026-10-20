@@ -316,6 +316,20 @@
       "when": 1792520071785,
       "tag": "0046_rls_order_extractions",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792522194015,
+      "tag": "0049_team_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792522223442,
+      "tag": "0050_rls_team_invitations",
+      "breakpoints": true
     }
   ]
 }
