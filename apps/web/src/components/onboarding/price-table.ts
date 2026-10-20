@@ -27,7 +27,7 @@ function detectDelimiter(line: string): string {
 
 /** RFC 4180-ish parser with quotes and an auto-detected delimiter. */
 export function parseCsvText(text: string): string[][] {
-  const src = text.replace(/^﻿/, "");
+  const src = (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
   const delim = detectDelimiter(src.split(/\r?\n/, 1)[0] ?? "");
   const rows: string[][] = [];
   let row: string[] = [];
