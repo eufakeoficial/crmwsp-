@@ -97,6 +97,11 @@ export class AuthService implements OnModuleInit {
     };
   }
 
+  /** Opens a session for a user created or verified elsewhere (e.g. invitation signup). */
+  openSessionFor(userId: string, client: ClientInfo): Promise<string> {
+    return this.openSession(userId, client);
+  }
+
   private async openSession(userId: string, client: ClientInfo): Promise<string> {
     const token = newSessionToken();
     await this.repo.createSession({

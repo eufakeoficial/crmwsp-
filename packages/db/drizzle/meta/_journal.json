@@ -260,6 +260,20 @@
       "when": 1792519991785,
       "tag": "0038_rls_contact_segments",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792521385205,
+      "tag": "0049_team_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792521395948,
+      "tag": "0050_rls_team_invitations",
+      "breakpoints": true
     }
   ]
 }

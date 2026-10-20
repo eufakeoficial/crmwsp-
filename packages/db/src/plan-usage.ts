@@ -36,7 +36,9 @@ export async function readPlanUsage(tx: Transaction): Promise<PlanUsageSnapshot>
       (select used from usage_counters u where u.period = p.period and u.limit_key = 'ai_messages') as ai_messages,
       (select used from usage_counters u where u.period = p.period and u.limit_key = 'broadcast_sends') as broadcast_sends,
       (select count(*) from contacts) as contacts,
-      (select count(*) from memberships) as seats,
+      (select count(*) from memberships)
+        + (select count(*) from team_invitations i
+           where i.accepted_at is null and i.revoked_at is null and i.expires_at > now()) as seats,
       (select count(*) from channel_connections where status <> 'disabled') as numbers
     from p`);
   if (!row) throw new Error("plan usage query returned no row");

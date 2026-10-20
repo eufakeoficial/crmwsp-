@@ -10,3 +10,4 @@ export * from "./broadcasts/index.js";
 export * from "./templates/index.js";
 export * from "./profitability/index.js";
 export * from "./contacts/index.js";
+export * from "./team/index.js";
