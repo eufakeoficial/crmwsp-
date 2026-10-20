@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { MembershipRole } from "@crmwsp/contracts";
+import type { MembershipRole, TenantStatus } from "@crmwsp/contracts";
 import { DB_HANDLE, type DbHandle } from "../common/http.js";
 
 export interface LoginRow {
@@ -16,6 +16,7 @@ export interface UserTenantRow {
   slug: string;
   name: string;
   role: MembershipRole;
+  status: TenantStatus;
 }
 
 /**
@@ -76,8 +77,8 @@ export class AuthRepository {
   }
 
   async listUserTenants(userId: string): Promise<UserTenantRow[]> {
-    const rows = await this.handle.sql<{ tenant_id: string; slug: string; name: string; role: MembershipRole }[]>`
-      select tenant_id, slug, name, role from public.list_user_tenants(${userId})`;
-    return rows.map((r) => ({ id: r.tenant_id, slug: r.slug, name: r.name, role: r.role }));
+    const rows = await this.handle.sql<{ tenant_id: string; slug: string; name: string; role: MembershipRole; status: TenantStatus }[]>`
+      select tenant_id, slug, name, role, status from public.list_user_tenants(${userId})`;
+    return rows.map((r) => ({ id: r.tenant_id, slug: r.slug, name: r.name, role: r.role, status: r.status }));
   }
 }
