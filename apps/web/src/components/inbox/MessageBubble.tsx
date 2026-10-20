@@ -3,6 +3,7 @@ import { AlertCircle, Check, CheckCheck, Clock, Paperclip } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/format";
+import { AttachmentView, attachmentKind } from "./AttachmentView";
 import { ATTACHMENT_LABELS, deliveryErrorText } from "@/lib/inbox-state";
 
 const STATUS_TEXT: Record<Message["status"], string> = {
@@ -47,9 +48,11 @@ function StatusIcon({ message }: { message: Message }) {
 
 export function MessageBubble({ message }: { message: Message }) {
   const out = message.direction === "outbound";
-  const chips = message.attachments.length
-    ? message.attachments.map((a) => `${ATTACHMENT_LABELS[message.type]}${a.mimeType ? ` · ${a.mimeType}` : ""}`)
-    : message.type !== "text" && message.type !== "template"
+  const viewable = message.attachments.filter((a) => attachmentKind(message.type, a.mimeType) !== "other");
+  const rest = message.attachments.filter((a) => attachmentKind(message.type, a.mimeType) === "other");
+  const chips = rest.length
+    ? rest.map((a) => `${ATTACHMENT_LABELS[message.type]}${a.mimeType ? ` · ${a.mimeType}` : ""}`)
+    : viewable.length === 0 && message.type !== "text" && message.type !== "template"
       ? [ATTACHMENT_LABELS[message.type]]
       : [];
   return (
@@ -60,6 +63,13 @@ export function MessageBubble({ message }: { message: Message }) {
           out ? "rounded-br-md bg-ink text-white" : "rounded-bl-md border border-line bg-white text-ink",
         )}
       >
+        {viewable.length ? (
+          <div className="mb-1 flex flex-col gap-2">
+            {viewable.map((a) => (
+              <AttachmentView key={a.id} messageType={message.type} attachment={a} />
+            ))}
+          </div>
+        ) : null}
         {chips.length ? (
           <div className="mb-1 flex flex-wrap gap-1">
             {chips.map((c, i) => (

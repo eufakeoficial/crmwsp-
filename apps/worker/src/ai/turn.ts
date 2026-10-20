@@ -37,7 +37,9 @@ import { UnrecoverableError } from "bullmq";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { InboxEvent } from "../processors.js";
 import { AI_TURN_MAX_ATTEMPTS, SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS } from "../queue.js";
+import { insertNotification } from "../notifications/notify.js";
 import { applyConversationHandoff, runAction } from "./actions.js";
+import { extractReceipt, findPendingPaymentOrder, handleReceipt, pgReceiptPorts, type ReceiptImage } from "./receipt.js";
 import { maybeWarnBudget, readBudget } from "./budget.js";
 import { withRedisLock } from "./lock.js";
 import {
@@ -237,6 +239,8 @@ interface Prepared {
   /** Trigger audio attachment (voice note) and stored transcripts of earlier voice notes by message id. */
   triggerAudio: AudioAttachment | undefined;
   transcripts: Map<string, string>;
+  /** Trigger image while the contact has a `pending_payment` order: a receipt to review (T8). */
+  receipt?: ReceiptImage;
 }
 
 /** Writes handoff rows inside `tx`; the conversation is moved to `pending` at most once. */
@@ -247,6 +251,14 @@ function handoffWriter(tx: Transaction, c: TurnCtx, events: Array<AiEvent | Inbo
     handedOff = true;
     // Unassigned conversations go to `pending`; an assigned agent already owns it.
     await applyConversationHandoff(tx, c.conversationId, c.now);
+    await insertNotification(tx, c.tenantId, {
+      kind: "handoff",
+      title: "Una conversación necesita atención humana",
+      entity: "conversation",
+      entityId: c.conversationId,
+      conversationId: c.conversationId,
+      dedupeKey: `handoff:${actionId}`,
+    });
     events.push(
       { type: "ai.handoff", conversationId: c.conversationId, actionId },
       { type: "conversation.updated", conversationId: c.conversationId, messageId: c.triggerMessageId },
@@ -361,7 +373,21 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
       if (r.messageId === triggerMessageId && !triggerAudio) triggerAudio = r;
     }
   }
-  return { prep: { conn, tenantName: tenant?.name ?? "", config, contact, history, triggerAudio, transcripts } };
+  let receipt: ReceiptImage | undefined;
+  if (trigger.type === "image") {
+    const order = await findPendingPaymentOrder(tx, conv.contactId);
+    if (order) {
+      const [img] = await tx
+        .select({ id: attachments.id, externalMediaId: attachments.externalMediaId, mimeType: attachments.mimeType })
+        .from(attachments)
+        .where(eq(attachments.messageId, triggerMessageId))
+        .limit(1);
+      receipt = { attachmentId: img?.id ?? null, externalMediaId: img?.externalMediaId ?? null, mimeType: img?.mimeType ?? null, order };
+    }
+  }
+  return {
+    prep: { conn, tenantName: tenant?.name ?? "", config, contact, history, triggerAudio, transcripts, ...(receipt ? { receipt } : {}) },
+  };
 }
 
 /**
@@ -394,6 +420,50 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   const phase1 = await withTenant(deps.db, tenantId, (tx) => prepare(deps, tx, c));
   if ("done" in phase1) return phase1.done;
   const { conn, tenantName, config, contact, triggerAudio, transcripts } = phase1.prep;
+
+  // Receipt image for a pending order: extract for a human reviewer; never marks the order paid.
+  if (phase1.prep.receipt) {
+    const image = phase1.prep.receipt;
+    const out = await handleReceipt(
+      {
+        inTx: pgReceiptPorts(deps.db, tenantId, c.conversationId, triggerMessageId),
+        extract: async () => {
+          let provider: LLMProvider;
+          try {
+            provider = buildProvider(deps, tenantId, conn);
+          } catch (err) {
+            logger.warn(`receipt provider unavailable (${err instanceof Error ? err.name : "unknown"})`);
+            return { status: "failed", reason: "credentials_unavailable" };
+          }
+          return extractReceipt(image, {
+            tenantId,
+            conversationId: c.conversationId,
+            provider,
+            supported: conn.capabilities.vision === true,
+            model: visionModelFor(conn),
+            loadMedia: deps.loadMedia,
+            logger,
+          });
+        },
+        canAutoReply: (conv) => aiMayAutoReply(conv) && sessionWindowOpen(conv.lastInboundAt, now),
+        replyClientMessageId: aiReplyClientMessageId(triggerMessageId),
+      },
+      { conversationId: c.conversationId, messageId: triggerMessageId, image },
+    );
+    if (out.outcome === "already-processed") {
+      return {
+        result: { outcome: "skipped", reason: "already-processed" },
+        events: out.events,
+        ...(out.enqueueMessageId ? { enqueueMessageId: out.enqueueMessageId } : {}),
+      };
+    }
+    return {
+      result: { outcome: "processed", replied: out.replied, drafted: false, handoff: false, actionIds: [] },
+      events: out.events,
+      ...(out.enqueueMessageId ? { enqueueMessageId: out.enqueueMessageId } : {}),
+      connection: conn,
+    };
+  }
   let history = phase1.prep.history;
   const contextIds = new Set(history.map((m) => m.id));
   const confidenceThreshold = config ? Number(config.confidenceThreshold) : DEFAULT_CONFIDENCE_THRESHOLD;
@@ -503,6 +573,11 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   return withTenant(deps.db, tenantId, (tx) =>
     persist(tx, c, { conn, config, calls, hits, contextIds, confidenceThreshold, queryEmbeddingTokens }),
   );
+}
+
+function visionModelFor(conn: LlmConnection): string {
+  const configured = conn.capabilities.visionModel;
+  return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : conn.modelCheap;
 }
 
 function transcriptionModelFor(conn: LlmConnection): string {
@@ -687,6 +762,15 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
         .set({ status: outcome.status, result: outcome.result, ...(outcome.status === "approved" ? {} : { executedAt: now }) })
         .where(eq(aiActions.id, row.id));
     } else if (decision === "approve") {
+      await insertNotification(tx, tenantId, {
+        kind: "approval_requested",
+        title: "La IA pide aprobación para una acción",
+        body: action?.type ?? null,
+        entity: "ai_action",
+        entityId: row.id,
+        conversationId,
+        dedupeKey: `approval:${row.id}`,
+      });
       events.push({ type: "ai.action_pending", conversationId, actionId: row.id });
     }
   }

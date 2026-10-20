@@ -12,6 +12,7 @@ import {
   type Database,
   type Transaction,
 } from "@crmwsp/db";
+import { insertNotification } from "../notifications/notify.js";
 import type { MarkPaidInput, OrderRecord, PaymentEventOutcome, PaymentLedger, PaymentLedgerTx, PaymentRecord } from "./payment-ledger.js";
 
 /** Drizzle implementation; every call runs under withTenant (RLS, ADR 0002). */
@@ -99,6 +100,17 @@ class PgLedgerTx implements PaymentLedgerTx {
         currency: i.currency,
       },
       reason: "pago verificado por webhook de Stripe",
+    });
+    // Team notification, atomic with the payment (delivered by the worker notification tick).
+    const [o] = await this.tx.select({ number: orders.number, conversationId: orders.conversationId }).from(orders).where(eq(orders.id, i.orderId));
+    await insertNotification(this.tx, this.tenantId, {
+      kind: "order_paid",
+      title: `Pedido ${o?.number ?? ""} pagado`.replace("  ", " "),
+      body: `Pago verificado por Stripe: ${(Number(i.amountMinor) / 100).toFixed(2)} ${i.currency.toUpperCase()}.`,
+      entity: "order",
+      entityId: i.orderId,
+      conversationId: o?.conversationId ?? null,
+      dedupeKey: `order_paid:${i.orderId}`,
     });
   }
 

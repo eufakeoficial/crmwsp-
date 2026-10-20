@@ -22,6 +22,7 @@ import {
 } from "./queue.js";
 import { previousStatusesFor } from "./status.js";
 import { cancelFollowUpsForConversation } from "./followups/pg-store.js";
+import { STORE_MEDIA_JOB, STORE_MEDIA_JOB_OPTIONS, storeMediaJobId, type StoreMediaJobData } from "./media/job.js";
 
 /** Minimal publisher (ioredis satisfies it). */
 export interface EventPublisher {
@@ -41,6 +42,8 @@ export interface ProcessorDeps {
   logger?: Logger;
   /** `ai` queue; when absent, ingest never schedules AI turns. */
   aiQueue?: Pick<Queue, "add">;
+  /** `media` queue; when absent, inbound media is not copied to object storage. */
+  mediaQueue?: Pick<Queue, "add">;
 }
 
 export type InboxEventType = "message.received" | "message.created" | "message.status" | "conversation.updated";
@@ -60,6 +63,8 @@ export interface IngestMessageResult {
 interface IngestTxResult extends IngestMessageResult {
   /** True when an AI turn must be scheduled after commit. */
   scheduleAiTurn: boolean;
+  /** Attachment whose bytes must be copied to object storage after commit. */
+  attachmentId?: string | null;
 }
 
 export interface IngestStatusResult {
@@ -210,14 +215,19 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       return { conversationId: existing.conversationId, messageId: existing.id, duplicate: true, scheduleAiTurn: false };
     }
 
+    let attachmentId: string | null = null;
     if (m.media) {
-      // TODO: download media (provider.downloadMedia) to object storage and fill storage_key/size.
-      await tx.insert(attachments).values({
-        tenantId,
-        messageId: inserted.id,
-        externalMediaId: m.media.externalMediaId ?? m.media.url ?? null,
-        mimeType: m.media.mimeType ?? null,
-      });
+      // The bytes are copied to object storage by the `store-media` job, enqueued after commit.
+      const [att] = await tx
+        .insert(attachments)
+        .values({
+          tenantId,
+          messageId: inserted.id,
+          externalMediaId: m.media.externalMediaId ?? m.media.url ?? null,
+          mimeType: m.media.mimeType ?? null,
+        })
+        .returning({ id: attachments.id });
+      attachmentId = att?.id ?? null;
     }
 
     const ts = m.timestamp.toISOString();
@@ -246,9 +256,9 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     }
 
     await markProcessed(tx, eventId);
-    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn };
+    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn, attachmentId };
   });
-  const { scheduleAiTurn, ...result } = out;
+  const { scheduleAiTurn, attachmentId, ...result } = out;
 
   if (!result.duplicate) {
     await publish(deps, tenantId, {
@@ -256,6 +266,15 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       conversationId: result.conversationId,
       messageId: result.messageId,
     });
+    if (attachmentId && deps.mediaQueue) {
+      const data: StoreMediaJobData = { tenantId, attachmentId };
+      try {
+        await deps.mediaQueue.add(STORE_MEDIA_JOB, data, { ...STORE_MEDIA_JOB_OPTIONS, jobId: storeMediaJobId(attachmentId) });
+      } catch (err) {
+        // The message is committed; the attachment keeps storage_key null and is still playable via the BSP.
+        (deps.logger ?? silent).warn(`could not enqueue store-media (${err instanceof Error ? err.name : "unknown"})`);
+      }
+    }
     if (scheduleAiTurn && deps.aiQueue) {
       const data: AiTurnJobData = { tenantId, conversationId: result.conversationId, triggerMessageId: result.messageId };
       try {

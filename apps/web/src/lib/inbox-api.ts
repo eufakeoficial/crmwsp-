@@ -2,6 +2,7 @@ import {
   type ConversationStatus,
   type CreateGupshupChannelRequest,
   type UpdateConversationRequest,
+  attachmentUrlResponseSchema,
   channelListResponseSchema,
   channelSchema,
   contactListResponseSchema,
@@ -70,4 +71,9 @@ export const contactsApi = {
   list: (params: { q?: string | undefined; limit?: number | undefined } = {}) =>
     request("/contacts", { query: params, schema: contactListResponseSchema }),
   get: (id: string) => request(`/contacts/${id}`, { schema: contactSchema }),
+};
+
+export const attachmentsApi = {
+  /** Short-lived signed URL (about 5 minutes); fetch it lazily, do not cache it long. */
+  url: (id: string) => request(`/attachments/${id}/url`, { schema: attachmentUrlResponseSchema }),
 };

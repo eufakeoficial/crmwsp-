@@ -141,6 +141,13 @@
       "when": 1792498548215,
       "tag": "0019_follow_up_engine",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792499197926,
+      "tag": "0020_notifications_payment_reviews",
+      "breakpoints": true
     }
   ]
 }

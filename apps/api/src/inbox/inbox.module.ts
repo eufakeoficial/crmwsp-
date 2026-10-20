@@ -3,13 +3,14 @@ import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { AuthModule } from "../auth/auth.module.js";
 import { EventsModule } from "../events/events.module.js";
+import { AttachmentsController } from "./attachments.controller.js";
 import { ContactsController } from "./contacts.controller.js";
 import { ConversationsController } from "./conversations.controller.js";
 import { OUTBOUND_QUEUE, outboundQueueName } from "./outbound.constants.js";
 
 @Module({
   imports: [AuthModule, EventsModule],
-  controllers: [ConversationsController, ContactsController],
+  controllers: [ConversationsController, ContactsController, AttachmentsController],
   providers: [
     {
       provide: OUTBOUND_QUEUE,

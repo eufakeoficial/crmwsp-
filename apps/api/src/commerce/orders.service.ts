@@ -1,4 +1,7 @@
-import { NotFoundError, ValidationError, type Order } from "@crmwsp/contracts";
+import { ConflictError, NotFoundError, ValidationError, type Order } from "@crmwsp/contracts";
+import { transitionOrder, type OrderAction } from "@crmwsp/domain";
+import { writeAudit } from "../inbox/audit.js";
+import { insertNotification } from "../notifications/notify.js";
 import {
   and,
   contacts,
@@ -186,4 +189,109 @@ export async function assertConversationOfContact(tx: Transaction, conversationI
   const [c] = await tx.select({ contactId: conversations.contactId }).from(conversations).where(eq(conversations.id, conversationId));
   if (!c) throw new NotFoundError();
   if (c.contactId !== contactId) throw new ValidationError("The conversation belongs to another contact");
+}
+
+export interface TransitionCtx {
+  tenantId: string;
+  userId: string;
+  ip?: string | undefined;
+}
+
+export interface TransitionAudit {
+  reason: string;
+  diff: Record<string, unknown>;
+}
+
+/**
+ * Applies an order state transition inside `tx` (row locked FOR UPDATE), with its side effect,
+ * an audit row and — for confirm/mark_paid — a team notification. Shared by the orders controller
+ * and the payment-review approval (which uses the same manual mark-paid path).
+ */
+export async function transitionOrderTx(
+  tx: Transaction,
+  ctx: TransitionCtx,
+  id: string,
+  action: OrderAction,
+  sideEffect?: (tx: Transaction) => Promise<void>,
+  audit?: TransitionAudit,
+): Promise<Order> {
+  const [o] = await tx.select().from(orders).where(eq(orders.id, id)).for("update");
+  if (!o) throw new NotFoundError();
+  const t = transitionOrder(o.status, action, o.fulfillment);
+  if (!t.ok) {
+    if (t.reason === "not_applicable") throw new ValidationError(`'${action}' does not apply to ${o.fulfillment} orders`);
+    throw new ConflictError(`Cannot ${action.replace("_", "-")} an order that is ${o.status}`);
+  }
+  if (sideEffect) await sideEffect(tx);
+  const now = new Date();
+  await tx
+    .update(orders)
+    .set({
+      status: t.to,
+      ...(t.to === "paid" ? { paidAt: now } : {}),
+      ...(t.to === "cancelled" ? { cancelledAt: now } : {}),
+      lockVersion: sql`${orders.lockVersion} + 1`,
+      updatedAt: now,
+    })
+    .where(eq(orders.id, id));
+  await writeAudit(tx, {
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    entity: "order",
+    entityId: id,
+    action: `order.${action}`,
+    diff: { status: { from: o.status, to: t.to }, ...(audit?.diff ?? {}) },
+    ip: ctx.ip,
+    reason: audit?.reason,
+  });
+  if (action === "confirm") {
+    await insertNotification(tx, ctx.tenantId, {
+      kind: "order_confirmed",
+      title: `Pedido ${o.number} confirmado`,
+      body: `Total ${(Number(o.totalMinor) / 100).toFixed(2)} ${o.currency}. Pendiente de pago.`,
+      entity: "order",
+      entityId: id,
+      conversationId: o.conversationId,
+      dedupeKey: `order_confirmed:${id}`,
+    });
+  } else if (t.to === "paid") {
+    await insertNotification(tx, ctx.tenantId, {
+      kind: "order_paid",
+      title: `Pedido ${o.number} pagado`,
+      body: `Pago manual registrado: ${(Number(o.totalMinor) / 100).toFixed(2)} ${o.currency}.`,
+      entity: "order",
+      entityId: id,
+      conversationId: o.conversationId,
+      dedupeKey: `order_paid:${id}`,
+    });
+  }
+  return loadOrder(tx, id);
+}
+
+/** Manual mark-paid (owner/admin, audited). `verifiedBy` is never "webhook" here. */
+export function markPaidManuallyTx(
+  tx: Transaction,
+  ctx: TransitionCtx,
+  id: string,
+  input: { reason: string; paymentReviewId?: string },
+): Promise<Order> {
+  return transitionOrderTx(
+    tx,
+    ctx,
+    id,
+    "mark_paid",
+    async (t) => {
+      await t.execute(sql`select public.commit_stock(${id}::uuid)`);
+    },
+    {
+      reason: `pago manual: ${input.reason}`,
+      diff: {
+        method: input.paymentReviewId ? "receipt_review" : "manual",
+        verifiedBy: "manual",
+        verifiedByUserId: ctx.userId,
+        reason: input.reason,
+        ...(input.paymentReviewId ? { paymentReviewId: input.paymentReviewId } : {}),
+      },
+    },
+  );
 }

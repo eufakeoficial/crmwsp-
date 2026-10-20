@@ -1,17 +1,49 @@
-import { channelConnections, conversations, withTenant, type Database } from "@crmwsp/db";
+import { attachments, channelConnections, conversations, messages, withTenant, type Database } from "@crmwsp/db";
 import type { CipherBox } from "@crmwsp/crypto";
 import type { WhatsAppProvider } from "@crmwsp/whatsapp";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { GUPSHUP_API_KEY_PURPOSE } from "../outbound.js";
+import type { MediaStore } from "../media/store.js";
 import type { MediaLoader } from "./transcribe.js";
 
 /**
  * Builds the production `MediaLoader`: finds the conversation's channel (RLS-scoped), decrypts the
  * BSP key and downloads the media through the `WhatsAppProvider`. Wire it as `AiDeps.loadMedia`.
- * Media is not persisted to object storage yet (processors.ts TODO), so audio is fetched on demand.
+ * When a `store` is given and the attachment was already copied to object storage (storage_key set),
+ * the bytes are read from there; any storage miss or error falls back to the BSP download.
  */
-export function createBspMediaLoader(deps: { db: Database; cipher: CipherBox; provider: WhatsAppProvider }): MediaLoader {
+export function createBspMediaLoader(deps: {
+  db: Database;
+  cipher: CipherBox;
+  provider: WhatsAppProvider;
+  store?: MediaStore | null;
+}): MediaLoader {
   return async ({ tenantId, conversationId, externalMediaId, mimeType }) => {
+    if (deps.store) {
+      const stored = await withTenant(deps.db, tenantId, async (tx) => {
+        const [row] = await tx
+          .select({ storageKey: attachments.storageKey, mimeType: attachments.mimeType })
+          .from(attachments)
+          .innerJoin(messages, eq(messages.id, attachments.messageId))
+          .where(
+            and(
+              eq(messages.conversationId, conversationId),
+              eq(attachments.externalMediaId, externalMediaId),
+              isNotNull(attachments.storageKey),
+            ),
+          )
+          .limit(1);
+        return row;
+      }).catch(() => undefined);
+      if (stored?.storageKey) {
+        try {
+          const obj = await deps.store.get(stored.storageKey);
+          return { data: obj.data, mimeType: obj.contentType ?? stored.mimeType ?? mimeType ?? "application/octet-stream" };
+        } catch {
+          // fall through to the BSP
+        }
+      }
+    }
     const ch = await withTenant(deps.db, tenantId, async (tx) => {
       const [row] = await tx
         .select({

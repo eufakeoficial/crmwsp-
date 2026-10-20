@@ -87,6 +87,14 @@ export const attachmentSchema = z.object({
 });
 export type Attachment = z.infer<typeof attachmentSchema>;
 
+/** Short-lived signed GET URL of an attachment stored in object storage. */
+export const attachmentUrlResponseSchema = z.object({
+  url: z.string().url(),
+  expiresAt: isoDateTimeSchema,
+  mimeType: z.string().nullable(),
+});
+export type AttachmentUrlResponse = z.infer<typeof attachmentUrlResponseSchema>;
+
 export const messageSchema = z.object({
   id: uuidSchema,
   conversationId: uuidSchema,

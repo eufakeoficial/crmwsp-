@@ -152,7 +152,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   private async chatOnce<T>(req: ChatRequest<T>, responseFormat: unknown, messages: ChatMessage[]): Promise<ChatResult<T>> {
-    const body: Record<string, unknown> = { model: req.model, messages };
+    const body: Record<string, unknown> = { model: req.model, messages: messages.map(toWireMessage) };
     if (responseFormat !== undefined) body.response_format = responseFormat;
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.maxTokens !== undefined) body.max_tokens = req.maxTokens;
@@ -349,4 +349,19 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
     return out;
   }
+}
+
+/** OpenAI wire format: messages with images become content parts (text + image_url data URLs). */
+export function toWireMessage(m: ChatMessage): Record<string, unknown> {
+  if (!m.images || m.images.length === 0) return { role: m.role, content: m.content };
+  return {
+    role: m.role,
+    content: [
+      { type: "text", text: m.content },
+      ...m.images.map((img) => ({
+        type: "image_url",
+        image_url: { url: `data:${img.mimeType};base64,${Buffer.from(img.data).toString("base64")}` },
+      })),
+    ],
+  };
 }

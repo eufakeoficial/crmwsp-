@@ -1,9 +1,16 @@
 import type { z } from "zod";
 
 export type ChatRole = "system" | "user" | "assistant";
+/** Inline image for vision-capable chat models (sent as a data URL; never logged). */
+export interface ChatImage {
+  mimeType: string;
+  data: Uint8Array;
+}
 export interface ChatMessage {
   role: ChatRole;
   content: string;
+  /** Only for `user` messages; requires a vision-capable model. */
+  images?: ChatImage[];
 }
 
 export interface ResponseFormat<T> {
