@@ -30,7 +30,7 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 
 **Salida:** dos tenants con dos números en staging; 1.000 webhooks con duplicados inyectados producen exactamente los mensajes esperados; un usuario del tenant A no puede leer nada del B (test automatizado).
 
-## Fase 2 — MVP 1: IA con control
+## Fase 2 — MVP 1: IA con control ✅ (completada 2026-10-20)
 
 **Objetivo:** la IA responde solo con fuentes y propone acciones auditables.
 

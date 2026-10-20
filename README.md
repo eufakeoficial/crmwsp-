@@ -11,4 +11,4 @@ CRM WhatsApp-first con IA para negocios de servicios con presupuestos (España y
 
 ## Estado
 
-Fases 0 y 1 completadas. Siguiente: Fase 2 (MVP 1, IA con control). Ver `docs/ROADMAP.md`.
+Fases 0, 1 y 2 completadas. Siguiente: Fase 3 (pipeline y presupuestos). Ver `docs/ROADMAP.md`.
