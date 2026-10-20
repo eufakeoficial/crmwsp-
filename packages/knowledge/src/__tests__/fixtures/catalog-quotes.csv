@@ -1,0 +1,4 @@
+name,price,currency,description
+"Pack ""Pro""",10 EUR,,"line one
+line two, with comma"
+Other,5 EUR,,x

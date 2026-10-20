@@ -1,0 +1,5 @@
+P: ¿Hacen facturas?
+R: Sí, siempre.
+Con IVA.
+P: ¿Horario?
+R: L-V 9 a 18.
