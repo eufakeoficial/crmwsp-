@@ -355,6 +355,7 @@ describe.skipIf(!hasDb)("sales, catalog, orders, consents and follow-ups RLS wit
       ["quotes -> ai_actions", () => withTenant(app.db, A.tenant, (tx) => tx.insert(quotes).values({ tenantId: A.tenant, number: "X-4", contactId: A.contact, approvalActionId: B.action, currency: "EUR", validUntil, createdByType: "user" }))],
       ["quote_items -> quotes", () => withTenant(app.db, A.tenant, (tx) => tx.insert(quoteItems).values({ tenantId: A.tenant, quoteId: B.quote, position: 5, description: "x", quantityMilli: 1000n, unitPriceMinor: 1n, lineTotalMinor: 1n }))],
       ["quote_items -> products", () => withTenant(app.db, A.tenant, (tx) => tx.insert(quoteItems).values({ tenantId: A.tenant, quoteId: A.quote, position: 6, productId: B.product, description: "x", quantityMilli: 1000n, unitPriceMinor: 1n, lineTotalMinor: 1n }))],
+      ["quote_items -> variants (0016)", () => withTenant(app.db, A.tenant, (tx) => tx.insert(quoteItems).values({ tenantId: A.tenant, quoteId: A.quote, position: 8, variantId: B.variant, description: "x", quantityMilli: 1000n, unitPriceMinor: 1n, lineTotalMinor: 1n }))],
       ["quote_items -> knowledge_chunks", () => withTenant(app.db, A.tenant, (tx) => tx.insert(quoteItems).values({ tenantId: A.tenant, quoteId: A.quote, position: 7, knowledgeChunkId: B.chunk, description: "x", quantityMilli: 1000n, unitPriceMinor: 1n, lineTotalMinor: 1n }))],
       ["orders -> contacts", () => withTenant(app.db, A.tenant, (tx) => tx.insert(orders).values({ tenantId: A.tenant, number: "O-1", contactId: B.contact, currency: "EUR", fulfillment: "pickup", createdByType: "user" }))],
       ["orders -> quotes", () => withTenant(app.db, A.tenant, (tx) => tx.insert(orders).values({ tenantId: A.tenant, number: "O-2", contactId: A.contact, quoteId: B.quote, currency: "EUR", fulfillment: "pickup", createdByType: "user" }))],
@@ -426,6 +427,27 @@ describe.skipIf(!hasDb)("sales, catalog, orders, consents and follow-ups RLS wit
     it("quote number is unique per tenant but reusable across tenants", async () => {
       const dup = await code(() => withTenant(app.db, A.tenant, (tx) => tx.insert(quotes).values({ tenantId: A.tenant, number: "PRE-2026-a", contactId: A.contact, currency: "EUR", validUntil: new Date(), createdByType: "user" })));
       expect(dup).toBe("23505");
+    });
+
+    it("quote_items.variant_id: deleting the variant sets only variant_id to null (0016)", async () => {
+      const id = await withTenant(app.db, A.tenant, async (tx) => {
+        const [v] = await tx.insert(productVariants).values({ tenantId: A.tenant, productId: A.product, optionKey: `tmp-${randomUUID()}` }).returning({ id: productVariants.id });
+        const [it] = await tx
+          .insert(quoteItems)
+          .values({ tenantId: A.tenant, quoteId: A.quote, position: 30, variantId: must(v).id, description: "x", quantityMilli: 1000n, unitPriceMinor: 1n, lineTotalMinor: 1n })
+          .returning({ id: quoteItems.id });
+        await tx.delete(productVariants).where(eq(productVariants.id, must(v).id));
+        return must(it).id;
+      });
+      const [row] = await withTenant(app.db, A.tenant, (tx) => tx.select().from(quoteItems).where(eq(quoteItems.id, id)));
+      expect(row?.variantId).toBeNull();
+      expect(row?.tenantId).toBe(A.tenant);
+      await withTenant(app.db, A.tenant, (tx) => tx.delete(quoteItems).where(eq(quoteItems.id, id)));
+    });
+
+    it("quotes: accept_token_hash is indexed and unique per tenant (0016)", async () => {
+      const rows = await migrator.sql<{ indexdef: string }[]>`select indexdef from pg_indexes where indexname = 'quotes_tenant_accept_token_hash_idx'`;
+      expect(rows[0]?.indexdef).toMatch(/UNIQUE INDEX .*\(tenant_id, accept_token_hash\)/);
     });
 
     it("quotes: total_minor >= 0", async () => {

@@ -18,6 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { aiActions } from "./ai-actions.js";
 import { bytea } from "./channel-connections.js";
+import { productVariants } from "./commerce.js";
 import { contacts } from "./contacts.js";
 import { conversations } from "./conversations.js";
 import { knowledgeChunks } from "./knowledge.js";
@@ -38,7 +39,9 @@ export const quoteStatus = pgEnum("quote_status", [
   "expired",
   "cancelled",
 ]);
-export const quoteCreatedByType = pgEnum("quote_created_by_type", ["user", "ai"]);
+import { quoteCreatedByType } from "./document-enums.js";
+
+export { quoteCreatedByType };
 
 export const products = pgTable(
   "products",
@@ -128,6 +131,10 @@ export const quotes = pgTable(
     unique("quotes_tenant_number_unique").on(t.tenantId, t.number),
     index("quotes_tenant_contact_idx").on(t.tenantId, t.contactId),
     index("quotes_tenant_status_idx").on(t.tenantId, t.status),
+    /** Public acceptance link lookup: sha256(secret), unique per tenant. */
+    uniqueIndex("quotes_tenant_accept_token_hash_idx")
+      .on(t.tenantId, t.acceptTokenHash)
+      .where(sql`${t.acceptTokenHash} IS NOT NULL`),
     check("quotes_total_check", sql`${t.totalMinor} >= 0`),
     foreignKey({
       name: "quotes_tenant_opportunity_fk",
@@ -163,6 +170,8 @@ export const quoteItems = pgTable(
     position: integer("position").notNull(),
     productId: uuid("product_id"),
     productVersion: integer("product_version"),
+    /** Exact variant of catalog lines (0016). Null on free lines and on quotes older than 0016. */
+    variantId: uuid("variant_id"),
     knowledgeChunkId: uuid("knowledge_chunk_id"),
     description: text("description").notNull(),
     /** Quantity x 1000 (1.5 units = 1500). */
@@ -185,6 +194,12 @@ export const quoteItems = pgTable(
       name: "quote_items_tenant_product_fk",
       columns: [t.tenantId, t.productId],
       foreignColumns: [products.tenantId, products.id],
+    }).onDelete("set null"),
+    // ON DELETE SET NULL ("variant_id") is hand-written in 0016 (drizzle has no column list).
+    foreignKey({
+      name: "quote_items_tenant_variant_fk",
+      columns: [t.tenantId, t.variantId],
+      foreignColumns: [productVariants.tenantId, productVariants.id],
     }).onDelete("set null"),
     foreignKey({
       name: "quote_items_tenant_knowledge_chunk_fk",

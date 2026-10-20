@@ -8,6 +8,7 @@ export interface AuditEntry {
   action: string;
   diff?: Record<string, unknown>;
   ip?: string | undefined;
+  reason?: string | undefined;
 }
 
 /** Appends an audit row inside the caller's tenant transaction. Never put secrets in `diff`. */
@@ -21,6 +22,7 @@ export async function writeAudit(tx: Transaction, e: AuditEntry): Promise<void> 
     action: e.action,
     diff: e.diff ?? {},
     ip: e.ip && e.ip.length > 0 ? e.ip : null,
+    reason: e.reason ?? null,
   });
 }
 

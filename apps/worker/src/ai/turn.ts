@@ -576,7 +576,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
         await handoff.note(row.id);
       }
     } else if (decision === "auto") {
-      const outcome = await runAction(tx, { conversationId, type: action?.type ?? "unknown", payload: action ? { ...action } : {} }, now);
+      const outcome = await runAction(tx, { id: row.id, conversationId, type: action?.type ?? "unknown", payload: action ? { ...action } : {} }, now);
       await tx
         .update(aiActions)
         .set({ status: outcome.status, result: outcome.result, ...(outcome.status === "approved" ? {} : { executedAt: now }) })

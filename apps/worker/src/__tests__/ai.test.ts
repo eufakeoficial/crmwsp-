@@ -266,7 +266,7 @@ describe.skipIf(!hasEnv)("AI worker (Postgres + Redis, mocked LLM fetch)", () =>
     expect(await queued()).toBe(queuedBefore);
   });
 
-  it("a discount stays pending_approval; auto actions run and create_task is deferred", async () => {
+  it("a discount stays pending_approval; auto actions run, including create_task", async () => {
     const t = await tenant();
     const conv = await seedConversation(migrator, t, "auto", "Soy Ana de Madrid, quiero un descuento");
     const llm = mockLlm(() =>
@@ -284,7 +284,8 @@ describe.skipIf(!hasEnv)("AI worker (Postgres + Redis, mocked LLM fetch)", () =>
     expect(by("apply_discount")).toMatchObject({ decision: "approve", status: "pending_approval", executedAt: null });
     expect(eventsOf("ai.action_pending", conv.conversationId)).toHaveLength(1);
     expect(by("update_contact_field")).toMatchObject({ decision: "auto", status: "executed" });
-    expect(by("create_task")).toMatchObject({ decision: "auto", status: "approved", result: { deferred: true, reason: "tasks_table_missing" } });
+    expect(by("create_task")).toMatchObject({ decision: "auto", status: "executed", result: { applied: true } });
+    expect(by("create_task").executedAt).not.toBeNull();
     const [contact] = await migrator.db.select().from(contacts).where(eq(contacts.id, conv.contactId));
     expect(contact?.extracted).toMatchObject({
       city: { value: "Madrid", confidence: 0.95, sourceMessageId: conv.firstMessageId },
@@ -493,10 +494,11 @@ describe.skipIf(!hasEnv)("AI worker (Postgres + Redis, mocked LLM fetch)", () =>
     const runs = await Promise.all([1, 2, 3].map(() => processExecuteAiAction(deps(llm), { tenantId: t.tenantId, actionId: dup })));
     expect(runs.filter((r) => r.outcome === "executed")).toHaveLength(1);
 
-    expect(await processExecuteAiAction(deps(llm), { tenantId: t.tenantId, actionId: discount })).toEqual({ outcome: "executed" });
-    expect(await get(discount)).toMatchObject({ status: "executed", result: { deferred: true, reason: "not_implemented_until_phase_3" } });
-    expect(await processExecuteAiAction(deps(llm), { tenantId: t.tenantId, actionId: task })).toEqual({ outcome: "approved" });
-    expect(await get(task)).toMatchObject({ status: "approved", result: { deferred: true, reason: "tasks_table_missing" } });
+    // No draft quote in this conversation: the discount fails cleanly (details in sales-actions.test.ts).
+    expect(await processExecuteAiAction(deps(llm), { tenantId: t.tenantId, actionId: discount })).toEqual({ outcome: "failed" });
+    expect(await get(discount)).toMatchObject({ status: "failed", result: { error: "no_draft_quote" } });
+    expect(await processExecuteAiAction(deps(llm), { tenantId: t.tenantId, actionId: task })).toEqual({ outcome: "executed" });
+    expect(await get(task)).toMatchObject({ status: "executed", result: { applied: true } });
     expect(await processExecuteAiAction(deps(llm), { tenantId: t.tenantId, actionId: pending })).toEqual({ outcome: "skipped", reason: "not-approved" });
     expect((await get(pending)).status).toBe("pending_approval");
   });

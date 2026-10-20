@@ -1,11 +1,12 @@
 import { updateContactFieldActionSchema } from "@crmwsp/contracts";
 import { contacts, conversations, type Transaction } from "@crmwsp/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { applyDiscount, createQuoteDraft, createTask, moveStage } from "./sales-actions.js";
 
 /**
  * Outcome of running an approved action.
  * - `executed`: done (or intentionally deferred, see `result.deferred`).
- * - `approved`: stays approved because it cannot run yet (no `tasks` table).
+ * - `approved`: stays approved because it cannot run yet (`send_template`, until phase 4b).
  * - `failed`: the stored payload is unusable.
  */
 export interface ActionOutcome {
@@ -14,13 +15,12 @@ export interface ActionOutcome {
 }
 
 export interface ActionRow {
+  /** The `ai_actions` row id (links created tasks back to the action). */
+  id?: string;
   conversationId: string | null;
   type: string;
   payload: Record<string, unknown>;
 }
-
-/** Action types that need pipeline/templates tables that arrive in phase 3. */
-const PHASE_3_TYPES = new Set(["apply_discount", "create_quote_draft", "send_template", "move_stage"]);
 
 /**
  * Puts the conversation in `pending` when nobody is assigned to it. Returns whether it changed.
@@ -57,17 +57,22 @@ export async function runAction(tx: Transaction, row: ActionRow, now: Date): Pro
       return { status: "executed", result: { applied: true, field: a.field } };
     }
     case "create_task":
-      // There is no `tasks` table yet: the action stays `approved` (not executed) and is flagged.
-      return { status: "approved", result: { deferred: true, reason: "tasks_table_missing" } };
+      return createTask(tx, row);
+    case "move_stage":
+      return moveStage(tx, row, now);
+    case "create_quote_draft":
+      return createQuoteDraft(tx, row, now);
+    case "apply_discount":
+      return applyDiscount(tx, row, now);
+    case "send_template":
+      // Needs the template tables/sync of phase 4b: stays approved (not executed) and flagged.
+      return { status: "approved", result: { deferred: true, reason: "send_template_until_phase_4b" } };
     case "handoff": {
       if (!row.conversationId) return { status: "failed", result: { error: "invalid_payload" } };
       const changed = await applyConversationHandoff(tx, row.conversationId, now);
       return { status: "executed", result: { applied: true, conversationChanged: changed } };
     }
     default:
-      if (PHASE_3_TYPES.has(row.type)) {
-        return { status: "executed", result: { deferred: true, reason: "not_implemented_until_phase_3" } };
-      }
       return { status: "failed", result: { error: "unsupported_action_type" } };
   }
 }

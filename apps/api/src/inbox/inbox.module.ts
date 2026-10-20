@@ -22,6 +22,7 @@ import { OUTBOUND_QUEUE, outboundQueueName } from "./outbound.constants.js";
       },
     },
   ],
+  exports: [OUTBOUND_QUEUE],
 })
 export class InboxModule implements OnApplicationShutdown {
   constructor(@Inject(OUTBOUND_QUEUE) private readonly queue: Queue) {}

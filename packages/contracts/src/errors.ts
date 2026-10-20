@@ -11,6 +11,8 @@ export const ErrorCode = {
   ExternalProvider: "EXTERNAL_PROVIDER_ERROR",
   OutsideServiceWindow: "OUTSIDE_SERVICE_WINDOW",
   EncryptionNotConfigured: "ENCRYPTION_NOT_CONFIGURED",
+  InsufficientStock: "INSUFFICIENT_STOCK",
+  StorageNotConfigured: "STORAGE_NOT_CONFIGURED",
   Internal: "INTERNAL_ERROR",
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -107,6 +109,20 @@ export class EncryptionNotConfiguredError extends AppError {
     options?: AppErrorOptions,
   ) {
     super(ErrorCode.EncryptionNotConfigured, message, 503, options);
+  }
+}
+
+/** 409: not enough available stock to reserve an order; `details.variantId` names the variant. */
+export class InsufficientStockError extends AppError {
+  constructor(variantId: string, options: Omit<AppErrorOptions, "details"> = {}) {
+    super(ErrorCode.InsufficientStock, "Insufficient stock", 409, { ...options, details: { variantId } });
+  }
+}
+
+/** 503: object storage (S3_*) is not configured, so files cannot be stored or served. */
+export class StorageNotConfiguredError extends AppError {
+  constructor(message = "Object storage is not configured", options?: AppErrorOptions) {
+    super(ErrorCode.StorageNotConfigured, message, 503, options);
   }
 }
 

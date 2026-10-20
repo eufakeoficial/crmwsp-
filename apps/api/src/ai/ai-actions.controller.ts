@@ -17,8 +17,10 @@ import {
   eq,
   inArray,
   isUuid,
+  sql,
   knowledgeChunks,
   knowledgeSources,
+  quotes,
   type AiAction,
   type Transaction,
 } from "@crmwsp/db";
@@ -125,6 +127,15 @@ export class AiActionsController {
         note: note ?? null,
       });
       await tx.update(aiActions).set({ status: decision }).where(eq(aiActions.id, id));
+      // Quote approval records (POST /quotes/:id/submit) carry the quote id: a rejection here rejects the quote too.
+      // An approval is applied to the quote by the worker (execute-ai-action).
+      const quoteId = action.type === "create_quote_draft" ? action.payload["quoteId"] : undefined;
+      if (decision === "rejected" && isUuid(quoteId)) {
+        await tx
+          .update(quotes)
+          .set({ status: "rejected", lockVersion: sql`${quotes.lockVersion} + 1`, updatedAt: new Date() })
+          .where(and(eq(quotes.id, quoteId), eq(quotes.status, "pending_approval")));
+      }
       await writeAudit(tx, {
         tenantId: db.tenantId,
         userId: db.userId,

@@ -18,7 +18,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { contacts } from "./contacts.js";
 import { conversations } from "./conversations.js";
-import { products, quoteCreatedByType, quotes } from "./quotes.js";
+import { quoteCreatedByType } from "./document-enums.js";
+import { products, quotes } from "./quotes.js";
 import { opportunities } from "./sales.js";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
