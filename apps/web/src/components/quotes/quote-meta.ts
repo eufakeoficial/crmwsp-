@@ -34,8 +34,6 @@ export const QUOTE_STATUS_TONES: Record<QuoteStatus, Tone> = {
   cancelled: "danger",
 };
 
-export const QUOTE_CURRENCIES = ["EUR", "USD", "MXN", "COP", "ARS", "CLP", "PEN", "BOB"] as const;
-
 export const contactLabel = (q: Pick<Quote, "contact">): string => q.contact.name?.trim() || q.contact.phoneE164;
 
 export type QuoteActionKey = "edit" | "submit" | "approve" | "reject" | "send" | "link" | "order";

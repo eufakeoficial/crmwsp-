@@ -1,9 +1,22 @@
 /** Locale-aware formatters. Default locale is neutral Spanish; currency is always explicit (per tenant). */
 const LOCALE = "es";
 
+/**
+ * Native locale of each curated currency, so prices read as the customer expects:
+ * PEN "S/ 1,234.50", USD "$1,234.50", EUR "1.234,50 €". Other currencies use neutral Spanish.
+ */
+export const CURRENCY_LOCALES: Readonly<Record<string, string>> = {
+  PEN: "es-PE", USD: "en-US", EUR: "es-ES", MXN: "es-MX", COP: "es-CO", CLP: "es-CL", ARS: "es-AR",
+  BOB: "es-BO", PYG: "es-PY", UYU: "es-UY", BRL: "pt-BR", GTQ: "es-GT", DOP: "es-DO", CRC: "es-CR",
+};
+
 /** Amount in major units (e.g. 12.5 EUR). The currency decides the decimals (CLP 0, EUR 2, KWD 3). */
-export function formatMoney(amount: number, currency: string, locale = LOCALE): string {
-  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
+export function formatMoney(amount: number, currency: string, locale?: string): string {
+  try {
+    return new Intl.NumberFormat(locale ?? CURRENCY_LOCALES[currency] ?? LOCALE, { style: "currency", currency, useGrouping: "always" } as Intl.NumberFormatOptions).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
 }
 
 /** ISO 4217 decimals of a currency (CLP/JPY: 0, EUR/USD: 2, KWD/BHD: 3); 2 for unknown codes. */
@@ -21,7 +34,7 @@ export function minorToMajor(minor: number, currency: string): number {
 }
 
 /** Formats an amount in minor units: 1250 EUR -> "12,50 €", 1250 CLP -> "$1.250". */
-export function formatMoneyMinor(minor: number, currency: string, locale = LOCALE): string {
+export function formatMoneyMinor(minor: number, currency: string, locale?: string): string {
   return formatMoney(minorToMajor(minor, currency), currency, locale);
 }
 

@@ -5,7 +5,9 @@ import {
   EncryptionNotConfiguredError,
   NotFoundError,
   ValidationError,
+  MERCADOPAGO_CURRENCIES,
   createPaymentLinkRequestSchema,
+  providerSupportsCurrency,
   upsertMercadoPagoConnectionRequestSchema,
   upsertStripeConnectionRequestSchema,
   type MercadoPagoConnection,
@@ -190,6 +192,11 @@ export class PaymentsController {
       if (!o) throw new NotFoundError();
       if (o.status !== "pending_payment") throw new ConflictError(`Cannot create a payment link for an order that is ${o.status}`);
       if (o.totalMinor <= 0n) throw new ValidationError("Order total must be positive");
+      if (!providerSupportsCurrency(providerName, o.currency)) {
+        throw new ValidationError(
+          `${providerName === "stripe" ? "Stripe" : "Mercado Pago"} does not support ${o.currency}. Mercado Pago only charges in the local currency of its account (${MERCADOPAGO_CURRENCIES.join(", ")}).`,
+        );
+      }
       const [existing] = await tx
         .select()
         .from(payments)

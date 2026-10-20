@@ -10,7 +10,9 @@ export interface PriceRow {
 export const DEFAULT_CURRENCY = "EUR";
 export const MAX_PREVIEW_ROWS = 2000;
 
-const SYMBOLS: Record<string, string> = { "€": "EUR", $: "USD", "£": "GBP" };
+const SYMBOLS: Record<string, string> = { "S/": "PEN", "€": "EUR", "£": "GBP", $: "USD" };
+/** Currencies written with a bare "$": a "$" price is read in the base currency when it is one of them. */
+const DOLLAR_SIGN_CURRENCIES = new Set(["USD", "MXN", "COP", "CLP", "ARS", "UYU", "DOP"]);
 const HEADERS = {
   name: ["nombre", "producto", "servicio", "articulo", "item", "name", "product", "service", "titulo", "title", "descripcion"],
   variant: ["variante", "variant", "talla", "size", "color", "modelo", "presentacion"],
@@ -58,13 +60,18 @@ export function parseCsvText(text: string): string[][] {
   return rows;
 }
 
-function currencyFromPrice(price: string): string | undefined {
-  for (const [sym, code] of Object.entries(SYMBOLS)) if (price.includes(sym)) return code;
+function currencyFromPrice(price: string, base: string): string | undefined {
+  for (const [sym, code] of Object.entries(SYMBOLS)) {
+    if (price.includes(sym)) return sym === "$" && DOLLAR_SIGN_CURRENCIES.has(base) ? base : code;
+  }
   return undefined;
 }
 
-/** Maps a parsed CSV to preview rows. Returns an error message when name/price columns can't be found. */
-export function rowsFromCsv(records: string[][]): { rows: PriceRow[]; error?: string; truncated?: boolean } {
+/**
+ * Maps a parsed CSV to preview rows; rows without a currency get `baseCurrency` (the tenant base).
+ * Returns an error message when name/price columns can't be found.
+ */
+export function rowsFromCsv(records: string[][], baseCurrency: string = DEFAULT_CURRENCY): { rows: PriceRow[]; error?: string; truncated?: boolean } {
   const header = records[0];
   if (!header) return { rows: [], error: "El archivo está vacío." };
   const heads = header.map(norm);
@@ -89,8 +96,8 @@ export function rowsFromCsv(records: string[][]): { rows: PriceRow[]; error?: st
     return {
       name: (r[name] ?? "").trim(),
       variant: variant >= 0 ? (r[variant] ?? "").trim() : "",
-      price: rawPrice.replace(/[€$£]/g, "").trim(),
-      currency: (cur || currencyFromPrice(rawPrice) || DEFAULT_CURRENCY).slice(0, 3),
+      price: rawPrice.replace(/S\/|[€$£]/g, "").trim(),
+      currency: (cur || currencyFromPrice(rawPrice, baseCurrency) || baseCurrency).slice(0, 3),
     };
   });
   return { rows, truncated: body.length > MAX_PREVIEW_ROWS };

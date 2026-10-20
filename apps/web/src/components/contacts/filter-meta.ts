@@ -11,10 +11,12 @@ import {
 } from "@crmwsp/contracts";
 import { formatMoneyMinor, majorToMinor, minorToMajor } from "../../lib/format";
 
-/** Currencies offered in the money filter; the tenant currency always comes first. */
-const COMMON_CURRENCIES = ["USD", "EUR", "CLP", "COP", "PYG", "PEN", "BOB", "MXN", "ARS", "BRL", "UYU"];
-export function moneyCurrencies(tenantCurrency: string): string[] {
-  return [...new Set([tenantCurrency, ...COMMON_CURRENCIES])];
+/**
+ * Currencies offered in the money filter: the tenant base first, then the enabled currencies
+ * (Configuración → Moneda) and the currency already in the condition, if any.
+ */
+export function moneyCurrencies(tenantCurrency: string, enabled: readonly string[] = [], current?: string): string[] {
+  return [...new Set([tenantCurrency, ...enabled, ...(current ? [current] : [])])];
 }
 
 /** Typed amount ("12,50") in `currency` to the filter value, using the currency's exponent. */
