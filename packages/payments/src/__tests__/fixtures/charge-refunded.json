@@ -1,0 +1,20 @@
+{
+  "id": "evt_1Q1refund",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "created": 1760918400,
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": { "id": null, "idempotency_key": null },
+  "type": "charge.refunded",
+  "data": { "object": {
+    "id": "ch_3Q1abcDEF456",
+    "object": "charge",
+    "amount": 78000,
+    "amount_refunded": 30000,
+    "currency": "eur",
+    "refunded": false,
+    "payment_intent": "pi_3Q1abcDEF456",
+    "metadata": { "tenantId": "ten_01HZX", "kind": "quote", "id": "qte_01HZY" }
+  } }
+}

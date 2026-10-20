@@ -1,0 +1,24 @@
+{
+  "id": "evt_1Q1unpaid",
+  "object": "event",
+  "api_version": "2025-09-30.clover",
+  "created": 1760918400,
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": { "id": null, "idempotency_key": null },
+  "type": "checkout.session.completed",
+  "data": { "object": {
+    "id": "cs_test_a1B2c3D4e5F6",
+    "object": "checkout.session",
+    "amount_subtotal": 78000,
+    "amount_total": 78000,
+    "currency": "eur",
+    "client_reference_id": "ten_01HZX:quote:qte_01HZY",
+    "customer_details": { "email": "cliente@example.com", "name": "Marta Vidal" },
+    "metadata": { "tenantId": "ten_01HZX", "kind": "quote", "id": "qte_01HZY" },
+    "mode": "payment",
+    "payment_intent": "pi_3Q1abcDEF456",
+    "payment_status": "unpaid",
+    "status": "complete"
+  } }
+}
