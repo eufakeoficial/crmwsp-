@@ -1,5 +1,7 @@
 import type { CipherBox } from "@crmwsp/crypto";
+import { shouldSendVoiceReply } from "@crmwsp/domain";
 import {
+  attachments,
   channelConnections,
   contacts,
   conversations,
@@ -7,12 +9,16 @@ import {
   isUuid,
   messages,
   messageTemplates,
+  usageLedger,
+  voiceSettings,
   withTenant,
   type Database,
+  type Transaction,
 } from "@crmwsp/db";
 import type { SendResult, WhatsAppConnection, WhatsAppProvider } from "@crmwsp/whatsapp";
 import { UnrecoverableError, Worker, type ConnectionOptions, type Job } from "bullmq";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
+import { TTS_API_KEY_PURPOSE, sendVoiceOrText, type VoiceDeps } from "./voice.js";
 import { tenantChannel, type EventPublisher, type InboxEvent, type Logger } from "./processors.js";
 import {
   OUTBOUND_QUEUE_NAME,
@@ -30,6 +36,8 @@ export interface SendDeps {
   publisher: EventPublisher;
   cipher: CipherBox;
   logger?: Logger;
+  /** Voice replies (TTS + object storage). Absent => AI replies always go as text. */
+  voice?: VoiceDeps;
 }
 
 export interface SendAttempt {
@@ -117,6 +125,81 @@ export async function dispatchOutbound(
   return provider.sendText(conn, to, msg.body);
 }
 
+/**
+ * Voice-reply branch for AI text replies (T19). Returns the external id when the voice path handled
+ * the send (as audio, or as its text fallback), or null to continue with the normal dispatch.
+ */
+async function maybeSendVoice(
+  deps: SendDeps,
+  tx: Transaction,
+  m: {
+    tenantId: string;
+    messageId: string;
+    conversationId: string;
+    author: string;
+    type: string;
+    body: string | null;
+    to: string;
+    conn: WhatsAppConnection;
+  },
+): Promise<string | null> {
+  if (!deps.voice || m.author !== "ai" || m.type !== "text" || !m.body) return null;
+  const [vs] = await tx.select().from(voiceSettings).limit(1);
+  if (!vs || vs.replyMode === "off") return null;
+  const [lastIn] = await tx
+    .select({ type: messages.type })
+    .from(messages)
+    .where(and(eq(messages.conversationId, m.conversationId), eq(messages.direction, "inbound")))
+    .orderBy(desc(messages.createdAt))
+    .limit(1);
+  const apply = shouldSendVoiceReply({
+    mode: vs.replyMode,
+    configured: Boolean(vs.apiKeyEncrypted && vs.voiceId),
+    author: m.author,
+    messageType: m.type,
+    lastInboundType: lastIn?.type ?? null,
+  });
+  if (!apply || !vs.apiKeyEncrypted || !vs.voiceId) return null;
+  let ttsKey: string;
+  try {
+    ttsKey = deps.cipher.decrypt(vs.apiKeyEncrypted, { tenantId: m.tenantId, purpose: TTS_API_KEY_PURPOSE });
+  } catch {
+    (deps.logger ?? silent).warn(`voice reply ${m.messageId}: tts key unavailable, sending text`);
+    return null;
+  }
+  const out = await sendVoiceOrText(
+    deps.voice,
+    deps.provider,
+    m.conn,
+    m.to,
+    { tenantId: m.tenantId, messageId: m.messageId, text: m.body, apiKey: ttsKey, voiceId: vs.voiceId, modelId: vs.modelId },
+    deps.logger ?? silent,
+  );
+  if (out.kind === "audio") {
+    // The text stays in messages.body and is copied as the attachment transcript for the inbox.
+    await tx.update(messages).set({ type: "audio" }).where(eq(messages.id, m.messageId));
+    await tx.insert(attachments).values({
+      tenantId: m.tenantId,
+      messageId: m.messageId,
+      storageKey: out.storageKey,
+      mimeType: out.mimeType,
+      sizeBytes: out.sizeBytes,
+      transcript: m.body,
+    });
+    await tx.insert(usageLedger).values({
+      tenantId: m.tenantId,
+      kind: "tts_characters",
+      quantity: String(out.characters),
+      unit: "characters",
+      currency: "USD",
+      refType: "message",
+      refId: m.messageId,
+      meta: { provider: deps.voice.tts.name, model: vs.modelId },
+    });
+  }
+  return out.send.externalId;
+}
+
 async function publish(deps: SendDeps, tenantId: string, event: InboxEvent): Promise<void> {
   try {
     await deps.publisher.publish(tenantChannel(tenantId), JSON.stringify(event));
@@ -146,6 +229,7 @@ export async function processSendMessage(
         status: messages.status,
         type: messages.type,
         direction: messages.direction,
+        author: messages.author,
         body: messages.body,
         externalId: messages.externalId,
         conversationId: messages.conversationId,
@@ -190,9 +274,27 @@ export async function processSendMessage(
       if (loaded.connectionStatus === "disabled") throw new UnrecoverableError("channel is disabled");
       if (!loaded.credentials || !loaded.appName) throw new UnrecoverableError("channel has no credentials");
       const apiKey = deps.cipher.decrypt(loaded.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
+      const conn = { apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone };
+      const voiced = await maybeSendVoice(deps, tx, {
+        tenantId,
+        messageId,
+        conversationId: loaded.conversationId,
+        author: loaded.author,
+        type: loaded.type,
+        body: loaded.body,
+        to: loaded.to,
+        conn,
+      });
+      if (voiced) {
+        await tx
+          .update(messages)
+          .set({ externalId: voiced, status: "sent", sentAt: new Date(), error: null })
+          .where(and(eq(messages.id, messageId), eq(messages.status, "queued")));
+        return { res: { outcome: "sent", externalId: voiced } as SendMessageResult, conversationId: loaded.conversationId };
+      }
       const { externalId } = await dispatchOutbound(
         deps.provider,
-        { apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone },
+        conn,
         loaded.to,
         {
           type: loaded.type,

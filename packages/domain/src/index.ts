@@ -5,3 +5,4 @@ export * from "./followups/index.js";
 export * from "./bot-templates/index.js";
 export * from "./ads/index.js";
 export * from "./webhooks/index.js";
+export * from "./voice/index.js";
