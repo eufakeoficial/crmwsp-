@@ -15,6 +15,7 @@ import { StorageModule } from "./storage/storage.module.js";
 import { TenantModule } from "./tenant/tenant.module.js";
 import { PaymentsModule } from "./payments/payments.module.js";
 import { IntegrationsModule } from "./integrations/integrations.module.js";
+import { AdsModule } from "./ads/ads.module.js";
 import { MetricsModule } from "./metrics/metrics.module.js";
 import { FollowUpsModule } from "./followups/followups.module.js";
 import { WebhooksModule } from "./webhooks/webhooks.module.js";
@@ -22,7 +23,7 @@ import { NotificationsModule } from "./notifications/notifications.module.js";
 import { PaymentReviewsModule } from "./payment-reviews/payment-reviews.module.js";
 
 @Module({
-  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, FollowUpsModule, NotificationsModule, PaymentReviewsModule, IntegrationsModule],
+  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, FollowUpsModule, NotificationsModule, PaymentReviewsModule, IntegrationsModule, AdsModule],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AppErrorFilter }],
 })

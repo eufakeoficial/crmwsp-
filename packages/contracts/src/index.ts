@@ -13,3 +13,4 @@ export * from "./followups.js";
 export * from "./notifications.js";
 export * from "./payment-reviews.js";
 export * from "./integrations.js";
+export * from "./ads.js";

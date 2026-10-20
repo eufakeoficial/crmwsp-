@@ -1,4 +1,5 @@
 import {
+  adAttributions,
   attachments,
   contacts,
   conversations,
@@ -228,6 +229,25 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
         })
         .returning({ id: attachments.id });
       attachmentId = att?.id ?? null;
+    }
+
+    // Click-to-WhatsApp: first-touch attribution per contact. A later referral never overwrites it.
+    if (m.referral) {
+      await tx
+        .insert(adAttributions)
+        .values({
+          tenantId,
+          contactId: contact.id,
+          conversationId: conversation.id,
+          sourceId: m.referral.sourceId ?? null,
+          sourceType: m.referral.sourceType ?? null,
+          sourceUrl: m.referral.sourceUrl ?? null,
+          headline: m.referral.headline ?? null,
+          ctwaClid: m.referral.ctwaClid ?? null,
+          firstMessageExternalId: m.externalId,
+          firstSeenAt: m.timestamp,
+        })
+        .onConflictDoNothing({ target: [adAttributions.tenantId, adAttributions.contactId] });
     }
 
     const ts = m.timestamp.toISOString();
