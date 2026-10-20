@@ -105,6 +105,20 @@ export function useThread(conversationId: string | null, userId: string, onChang
     [userId],
   );
 
+  /** Manual template send; resolves false on failure so the picker can keep its input. */
+  const sendTemplate = useCallback(async (templateId: string, params: string[], clientMessageId: string): Promise<boolean> => {
+    const id = idRef.current;
+    if (!id) return false;
+    try {
+      const saved = await conversationsApi.sendTemplate(id, templateId, params, clientMessageId);
+      setMessages((prev) => mergeMessages(prev, [saved]));
+      changedRef.current();
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const update = useCallback(async (patch: Omit<UpdateConversationRequest, "lockVersion">): Promise<UpdateResult> => {
     const id = idRef.current;
     const current = convRef.current;
@@ -130,5 +144,5 @@ export function useThread(conversationId: string | null, userId: string, onChang
   const blocked =
     blockedAt !== null && blockedAt.id === conversationId && blockedAt.inbound === (conversation?.lastInboundAt ?? null);
 
-  return { conversation, messages, hasOlder: olderCursor !== null, loading, loadingOlder, error, blocked, refresh, loadOlder, send, update };
+  return { conversation, messages, hasOlder: olderCursor !== null, loading, loadingOlder, error, blocked, refresh, loadOlder, send, sendTemplate, update };
 }

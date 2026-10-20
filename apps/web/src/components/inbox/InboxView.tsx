@@ -161,6 +161,7 @@ export function InboxView() {
                 onAssign={(userId) => void mutate({ assignedUserId: userId })}
                 onStatus={(s) => void mutate({ status: s })}
                 onSend={thread.send}
+                onSendTemplate={thread.sendTemplate}
                 onLoadOlder={() => void thread.loadOlder()}
               />
             </div>

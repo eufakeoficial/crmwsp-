@@ -24,6 +24,7 @@ export function ConversationThread({
   onAssign,
   onStatus,
   onSend,
+  onSendTemplate,
   onLoadOlder,
 }: {
   conversationId: string;
@@ -42,6 +43,7 @@ export function ConversationThread({
   onAssign: (userId: string | null) => void;
   onStatus: (s: ConversationStatus) => void;
   onSend: (text: string) => Promise<void>;
+  onSendTemplate: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
   onLoadOlder: () => void;
 }) {
   return (
@@ -68,6 +70,8 @@ export function ConversationThread({
           blocked={blocked}
           windowWarning={isOutsideServiceWindow(conversation.lastInboundAt)}
           onSend={onSend}
+          channelConnectionId={conversation.channelConnectionId}
+          onSendTemplate={onSendTemplate}
         />
       ) : null}
     </section>

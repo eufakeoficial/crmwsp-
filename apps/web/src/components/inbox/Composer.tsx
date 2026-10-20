@@ -3,20 +3,26 @@
 import { Clock, Send } from "lucide-react";
 import { type KeyboardEvent, useRef, useState } from "react";
 import { Banner, Button, Textarea } from "@/components/ui";
+import { TemplatePicker } from "./TemplatePicker";
 
 export const MAX_MESSAGE_LENGTH = 4096;
 export const WINDOW_NOTICE =
-  "Pasaron más de 24 h desde el último mensaje del cliente: WhatsApp exige una plantilla aprobada (próximamente).";
+  "Pasaron más de 24 h desde el último mensaje del cliente: WhatsApp exige una plantilla aprobada.";
 
 /** Enter sends, Shift+Enter inserts a line break. `blocked` (server said 422) disables it; `windowWarning` only warns. */
 export function Composer({
   blocked,
   windowWarning,
   onSend,
+  channelConnectionId,
+  onSendTemplate,
 }: {
   blocked: boolean;
   windowWarning: boolean;
   onSend: (text: string) => Promise<void>;
+  /** With both set, a closed window offers the approved-template picker. */
+  channelConnectionId?: string;
+  onSendTemplate?: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
 }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -46,6 +52,9 @@ export function Composer({
   return (
     <div className="flex flex-col gap-2 border-t border-line bg-white p-3">
       {blocked || windowWarning ? <Banner tone="info" icon={Clock}>{WINDOW_NOTICE}</Banner> : null}
+      {(blocked || windowWarning) && channelConnectionId && onSendTemplate ? (
+        <TemplatePicker channelConnectionId={channelConnectionId} onSend={onSendTemplate} />
+      ) : null}
       <div className="flex items-end gap-2">
         <div className="min-w-0 flex-1">
           <Textarea
