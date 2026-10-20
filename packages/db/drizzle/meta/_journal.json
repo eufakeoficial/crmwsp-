@@ -246,6 +246,20 @@
       "when": 1792502760000,
       "tag": "0036_messages_template",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792519981785,
+      "tag": "0037_contact_segments",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792519991785,
+      "tag": "0038_rls_contact_segments",
+      "breakpoints": true
     }
   ]
 }

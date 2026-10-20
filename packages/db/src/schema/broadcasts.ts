@@ -23,6 +23,8 @@ export interface BroadcastAudience {
   tags: string[];
   /** Contacts with ANY of these tags are excluded. */
   excludeTags: string[];
+  /** Optional saved segment (contact_segments.id) the contacts must also match. */
+  segmentId?: string | undefined;
 }
 
 /** One entry per template variable, in order: where the value comes from. */
