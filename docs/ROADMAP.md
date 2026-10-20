@@ -59,6 +59,15 @@ Hitos derivados de `docs/STRATEGY.md` §11, con alcance técnico concreto y crit
 
 **Salida:** piloto real completa el ciclo lead → presupuesto → aceptado; los seguimientos se envían solo con consentimiento y plantilla cuando aplica.
 
+## Fase 3b — Ecommerce (ADR 0009)
+
+- Productos con variantes (talla/color), stock por variante sin sobreventa, fotos y enlace de video.
+- Pedidos desde el chat, conversión presupuesto → pedido, estados de envío.
+- Adjuntar y enviar fotos, videos y documentos desde el inbox; enviar ficha de producto.
+- La IA cita precio y stock por variante; la acción "enviar ficha de producto" pasa por el policy engine.
+
+**Salida:** un cliente pide por WhatsApp una prenda en talla y color concretos, recibe foto y precio, se crea el pedido, se reserva stock y se cobra con enlace.
+
 ## Fase 4 — MVP 3: resultado económico
 
 **Objetivo:** ingreso verificado, no inferido.
