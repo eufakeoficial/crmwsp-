@@ -2,6 +2,8 @@ import {
   and,
   auditEvents,
   eq,
+  followUps,
+  inArray,
   orders,
   paymentEvents,
   payments,
@@ -75,6 +77,11 @@ class PgLedgerTx implements PaymentLedgerTx {
       .update(payments)
       .set({ status: "succeeded", verifiedBy: "webhook", paidAt: i.paidAt, updatedAt: i.paidAt })
       .where(eq(payments.id, i.paymentId));
+    // Paid orders need no more nudges: cancel pending follow-ups atomically with the payment.
+    await this.tx
+      .update(followUps)
+      .set({ status: "cancelled", skipReason: "order_paid", updatedAt: sql`now()` })
+      .where(and(eq(followUps.orderId, i.orderId), inArray(followUps.status, ["suggested", "scheduled"])));
     await this.tx.insert(auditEvents).values({
       tenantId: this.tenantId,
       actorType: "system",

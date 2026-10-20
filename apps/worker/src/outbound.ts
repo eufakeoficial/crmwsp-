@@ -3,12 +3,14 @@ import {
   channelConnections,
   contacts,
   conversations,
+  followUps,
   isUuid,
   messages,
+  messageTemplates,
   withTenant,
   type Database,
 } from "@crmwsp/db";
-import type { WhatsAppProvider } from "@crmwsp/whatsapp";
+import type { SendResult, WhatsAppConnection, WhatsAppProvider } from "@crmwsp/whatsapp";
 import { UnrecoverableError, Worker, type ConnectionOptions, type Job } from "bullmq";
 import { and, eq } from "drizzle-orm";
 import { tenantChannel, type EventPublisher, type InboxEvent, type Logger } from "./processors.js";
@@ -69,6 +71,52 @@ function sanitizeError(err: unknown): Record<string, unknown> {
   return { code: "internal_error" };
 }
 
+/** Template resolved for a type='template' message (via follow_ups.sent_message_id). */
+export interface OutboundTemplate {
+  externalId: string | null;
+  name: string;
+  language: string;
+  status: string;
+  variables: unknown[];
+}
+
+export interface OutboundPayload {
+  type: string;
+  body: string | null;
+  contactName: string | null;
+  template: OutboundTemplate | null;
+}
+
+/** Fills template params from the variable names stored on message_templates.variables. */
+export function resolveTemplateParams(variables: unknown[], ctx: { contactName: string | null }): string[] {
+  return variables.map((v) => {
+    if (v === "name" || v === "contact_name") {
+      if (!ctx.contactName) throw new UnrecoverableError("template variable has no value");
+      return ctx.contactName;
+    }
+    throw new UnrecoverableError("unsupported template variable");
+  });
+}
+
+/** Picks the provider call for a message: approved templates go through sendTemplate, the rest as text. */
+export async function dispatchOutbound(
+  provider: WhatsAppProvider,
+  conn: WhatsAppConnection,
+  to: string,
+  msg: OutboundPayload,
+): Promise<SendResult> {
+  if (msg.type === "template") {
+    const t = msg.template;
+    if (!t) throw new UnrecoverableError("template message without template");
+    if (t.status !== "approved") throw new UnrecoverableError("template is not approved");
+    if (!t.externalId) throw new UnrecoverableError("template has no external id");
+    const params = resolveTemplateParams(Array.isArray(t.variables) ? t.variables : [], { contactName: msg.contactName });
+    return provider.sendTemplate(conn, to, t.externalId, params);
+  }
+  if (!msg.body) throw new UnrecoverableError("message has no text");
+  return provider.sendText(conn, to, msg.body);
+}
+
 async function publish(deps: SendDeps, tenantId: string, event: InboxEvent): Promise<void> {
   try {
     await deps.publisher.publish(tenantChannel(tenantId), JSON.stringify(event));
@@ -96,11 +144,18 @@ export async function processSendMessage(
     const [loaded] = await tx
       .select({
         status: messages.status,
+        type: messages.type,
         direction: messages.direction,
         body: messages.body,
         externalId: messages.externalId,
         conversationId: messages.conversationId,
         to: contacts.phoneE164,
+        contactName: contacts.name,
+        tplExternalId: messageTemplates.externalId,
+        tplName: messageTemplates.name,
+        tplLanguage: messageTemplates.language,
+        tplStatus: messageTemplates.status,
+        tplVariables: messageTemplates.variables,
         connectionId: channelConnections.id,
         sourcePhone: channelConnections.phoneE164,
         appName: channelConnections.externalAppId,
@@ -111,6 +166,12 @@ export async function processSendMessage(
       .innerJoin(conversations, eq(conversations.id, messages.conversationId))
       .innerJoin(contacts, eq(contacts.id, conversations.contactId))
       .innerJoin(channelConnections, eq(channelConnections.id, conversations.channelConnectionId))
+      // Template messages come from follow-ups: follow_ups.sent_message_id -> message, template_id -> template.
+      .leftJoin(followUps, eq(followUps.sentMessageId, messages.id))
+      .leftJoin(
+        messageTemplates,
+        and(eq(messageTemplates.id, followUps.templateId), eq(messageTemplates.channelConnectionId, channelConnections.id)),
+      )
       .where(eq(messages.id, messageId))
       .limit(1)
       .for("update", { of: messages, skipLocked: true });
@@ -126,14 +187,28 @@ export async function processSendMessage(
     }
 
     try {
-      if (!loaded.body) throw new UnrecoverableError("message has no text");
       if (loaded.connectionStatus === "disabled") throw new UnrecoverableError("channel is disabled");
       if (!loaded.credentials || !loaded.appName) throw new UnrecoverableError("channel has no credentials");
       const apiKey = deps.cipher.decrypt(loaded.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
-      const { externalId } = await deps.provider.sendText(
+      const { externalId } = await dispatchOutbound(
+        deps.provider,
         { apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone },
         loaded.to,
-        loaded.body,
+        {
+          type: loaded.type,
+          body: loaded.body,
+          contactName: loaded.contactName,
+          template:
+            loaded.tplName !== null
+              ? {
+                  externalId: loaded.tplExternalId,
+                  name: loaded.tplName,
+                  language: loaded.tplLanguage ?? "",
+                  status: loaded.tplStatus ?? "",
+                  variables: loaded.tplVariables ?? [],
+                }
+              : null,
+        },
       );
       await tx
         .update(messages)
