@@ -30,3 +30,4 @@ export * from "./inbox-v2.js";
 export * from "./owner-mode.js";
 export * from "./ai-improve.js";
 export * from "./order-extractions.js";
+export * from "./currency-settings.js";
