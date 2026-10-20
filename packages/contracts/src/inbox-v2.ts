@@ -236,7 +236,7 @@ export const pauseAutomationsRequestSchema = z.object({
 });
 export type PauseAutomationsRequest = z.infer<typeof pauseAutomationsRequestSchema>;
 
-export const leadOriginSchema = z.enum(["ad", "whatsapp", "manual"]);
+export const leadOriginSchema = z.enum(["ad", "import", "api", "whatsapp", "manual"]);
 export type LeadOrigin = z.infer<typeof leadOriginSchema>;
 
 export const contactPanelSchema = z.object({

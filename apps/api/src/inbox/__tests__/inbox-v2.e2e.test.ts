@@ -312,6 +312,11 @@ describe.skipIf(!hasEnv)("inbox v2 (e2e, real Postgres + Redis)", () => {
     const p2 = await asA("GET", `/inbox/contacts/${s.contact2}/panel`);
     expect(p2.json()).toMatchObject({ origin: "whatsapp", country: "ES", timezone: "Europe/Madrid", ad: null });
     expect((await asB("GET", `/inbox/contacts/${s.contact1}/panel`)).statusCode).toBe(404);
+    const [imported] = await migrator.db
+      .insert(contacts)
+      .values({ tenantId: s.tenantA, phoneE164: "+59170009999", name: "Importado", source: "import" })
+      .returning({ id: contacts.id });
+    expect((await asA("GET", `/inbox/contacts/${imported!.id}/panel`)).json()).toMatchObject({ origin: "import" });
     const paused = await asA("POST", `/inbox/contacts/${s.contact1}/pause-automations`, { minutes: 60 });
     expect(new Date((paused.json() as { automationsPausedUntil: string }).automationsPausedUntil).getTime()).toBeGreaterThan(Date.now());
     const resumed = await asA("POST", `/inbox/contacts/${s.contact1}/pause-automations`, { minutes: null });

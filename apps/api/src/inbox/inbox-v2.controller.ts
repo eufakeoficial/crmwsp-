@@ -486,7 +486,7 @@ export class InboxV2Controller {
       const region = regionForPhone(ct.phoneE164);
       return {
         contactId: ct.id,
-        origin: ad ? "ad" : firstInbound ? "whatsapp" : "manual",
+        origin: ad ? "ad" : ct.source !== "organic" ? ct.source : firstInbound ? "whatsapp" : "manual",
         ad: ad
           ? {
               sourceId: ad.sourceId,
