@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { AuthShell } from "@/components/AuthShell";
 import { ROLE_LABELS } from "@/components/app/roles";
-import { Alert, Button, Input, Label } from "@/components/ui";
+import { Alert, Button, Input, Label, PasswordInput } from "@/components/ui";
 import { api, setActiveTenantId } from "@/lib/api";
 import { errorMessage } from "@/lib/messages";
 import { acceptErrorMessage, teamApi } from "@/lib/team-api";
@@ -109,7 +109,7 @@ export default function InvitePage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="password">Contraseña</Label>
-            <Input id="password" name="password" type="password" autoComplete="current-password" required />
+            <PasswordInput id="password" name="password" autoComplete="current-password" required />
           </div>
           <Button type="submit" variant="accent" size="lg" className="w-full" disabled={busy}>
             {busy ? "Entrando…" : "Entrar y aceptar"}
@@ -127,7 +127,7 @@ export default function InvitePage() {
           </div>
           <div className="space-y-1">
             <Label htmlFor="password">Contraseña (mínimo 10 caracteres)</Label>
-            <Input id="password" name="password" type="password" autoComplete="new-password" minLength={10} required />
+            <PasswordInput id="password" name="password" autoComplete="new-password" minLength={10} required />
           </div>
           <Button type="submit" variant="accent" size="lg" className="w-full" disabled={busy}>
             {busy ? "Creando cuenta…" : "Crear cuenta y aceptar"}

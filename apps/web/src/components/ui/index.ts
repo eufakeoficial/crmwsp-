@@ -15,6 +15,7 @@ export { DataCell, DataRow, DataTable, TableFrame } from "./DataTable";
 export { DateBlock } from "./DateBlock";
 export { ReasonDialog } from "./Dialog";
 export { Input } from "./Input";
+export { PasswordInput } from "./PasswordInput";
 export { KpiCard } from "./KpiCard";
 export { Label } from "./Label";
 export { LeadCard } from "./LeadCard";

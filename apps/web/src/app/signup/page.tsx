@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { tenantSlugSchema } from "@crmwsp/contracts";
 import { AuthShell } from "@/components/AuthShell";
-import { Alert, Button, Input, Label } from "@/components/ui";
+import { Alert, Button, Input, Label, PasswordInput } from "@/components/ui";
 import { api } from "@/lib/api";
 import { routeAfterAuth } from "@/lib/after-auth";
 import { errorMessage } from "@/lib/messages";
@@ -66,7 +66,7 @@ export default function SignupPage() {
         </div>
         <div className="space-y-1">
           <Label htmlFor="password">Contraseña</Label>
-          <Input id="password" name="password" type="password" autoComplete="new-password" minLength={10} required aria-invalid={invalid("password")} aria-describedby={fieldErrors["password"] ? "password-error" : "password-help"} />
+          <PasswordInput id="password" name="password" autoComplete="new-password" minLength={10} required aria-invalid={invalid("password")} aria-describedby={fieldErrors["password"] ? "password-error" : "password-help"} />
           <p id="password-help" className="text-xs text-muted">Mínimo 10 caracteres.</p>
           <div aria-live="polite">{hint("password")}</div>
         </div>
