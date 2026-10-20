@@ -20,8 +20,8 @@ import { and, asc, eq, isNull, memberships, sql, teamInvitations, tenants, users
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { writeAudit } from "../inbox/audit.js";
-import { invitationEmail, newInvitationToken, publicWebUrl } from "./invitation-token.js";
-import { MAILER, type Mailer } from "./mailer.js";
+import type { Mailer } from "@crmwsp/mailer";
+import { invitationEmail, MAILER, newInvitationToken, publicWebUrl } from "./invitation-token.js";
 
 export interface Actor {
   userId: string;
@@ -206,9 +206,9 @@ export class TeamService {
 
   private async deliver(mail: PendingMail): Promise<void> {
     const link = `${publicWebUrl()}/invite/${mail.token}`;
-    const { subject, text } = invitationEmail({ tenantName: mail.tenantName, role: mail.role, inviterName: mail.inviterName, link });
+    const { subject, text, html } = invitationEmail({ tenantName: mail.tenantName, role: mail.role, inviterName: mail.inviterName, link });
     try {
-      await this.mailer.send({ to: mail.to, subject, text });
+      await this.mailer.send({ to: mail.to, subject, text, html });
     } catch (err) {
       // The invitation stays valid and can be resent. Never log the link/token or the address.
       this.logger.warn(`invitation email failed: ${err instanceof Error ? err.message : "unknown error"}`);

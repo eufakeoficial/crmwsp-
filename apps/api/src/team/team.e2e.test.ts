@@ -5,7 +5,8 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { and, auditEvents, createDb, type DbHandle, eq, inArray, teamInvitations, tenants, users } from "@crmwsp/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../app.module.js";
-import { MAILER, type MailMessage } from "./mailer.js";
+import type { MailMessage } from "@crmwsp/mailer";
+import { MAILER } from "./invitation-token.js";
 
 const APP_URL = process.env["DATABASE_URL"];
 const MIGRATOR_URL = process.env["DATABASE_URL_MIGRATOR"];
@@ -56,7 +57,7 @@ describe.skipIf(!hasDb)("team invitations and members (e2e)", () => {
     migrator = createDb(MIGRATOR_URL as string, { max: 1 });
     app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { logger: false });
     // Capture outgoing mail instead of sending it (the service holds this same instance).
-    app.get<{ send: (m: MailMessage) => Promise<void> }>(MAILER, { strict: false }).send = (m) => (sent.push(m), Promise.resolve());
+    app.get<{ send: (m: MailMessage) => Promise<{ messageId: string }> }>(MAILER, { strict: false }).send = (m) => (sent.push(m), Promise.resolve({ messageId: "test" }));
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
     for (const [acc, key] of [

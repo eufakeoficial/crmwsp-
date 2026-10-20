@@ -33,7 +33,8 @@
     "rxjs": "7.8.2",
     "zod": "4.6.7",
     "@crmwsp/payments": "workspace:*",
-    "@crmwsp/integrations": "workspace:*"
+    "@crmwsp/integrations": "workspace:*",
+    "@crmwsp/mailer": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/testing": "11.2.7",
