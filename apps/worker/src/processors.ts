@@ -4,15 +4,22 @@ import {
   conversations,
   inboundEvents,
   isUuid,
+  llmConnections,
   messages,
   withTenant,
   type Database,
   type Transaction,
 } from "@crmwsp/db";
 import type { InboundWebhookResult, NormalizedInboundMessage, WhatsAppProvider } from "@crmwsp/whatsapp";
-import { UnrecoverableError } from "bullmq";
+import { UnrecoverableError, type Queue } from "bullmq";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
-import type { InboundJobData } from "./queue.js";
+import {
+  AI_JOB_OPTIONS,
+  AI_TURN_JOB,
+  aiTurnJobId,
+  type AiTurnJobData,
+  type InboundJobData,
+} from "./queue.js";
 import { previousStatusesFor } from "./status.js";
 
 /** Minimal publisher (ioredis satisfies it). */
@@ -31,9 +38,11 @@ export interface ProcessorDeps {
   provider: WhatsAppProvider;
   publisher: EventPublisher;
   logger?: Logger;
+  /** `ai` queue; when absent, ingest never schedules AI turns. */
+  aiQueue?: Pick<Queue, "add">;
 }
 
-export type InboxEventType = "message.received" | "message.status" | "conversation.updated";
+export type InboxEventType = "message.received" | "message.created" | "message.status" | "conversation.updated";
 
 export interface InboxEvent {
   type: InboxEventType;
@@ -45,6 +54,11 @@ export interface IngestMessageResult {
   conversationId: string;
   messageId: string;
   duplicate: boolean;
+}
+
+interface IngestTxResult extends IngestMessageResult {
+  /** True when an AI turn must be scheduled after commit. */
+  scheduleAiTurn: boolean;
 }
 
 export interface IngestStatusResult {
@@ -108,7 +122,7 @@ async function publish(deps: ProcessorDeps, tenantId: string, event: InboxEvent)
 export async function processIngestMessage(deps: ProcessorDeps, data: unknown): Promise<IngestMessageResult> {
   const { eventId, tenantId } = assertJobData(data);
 
-  const out = await withTenant(deps.db, tenantId, async (tx) => {
+  const out = await withTenant(deps.db, tenantId, async (tx): Promise<IngestTxResult> => {
     const { event, result } = await loadResult(tx, deps.provider, eventId, "message");
     const m = result.message;
     const connectionId = event.channelConnectionId;
@@ -125,7 +139,7 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       .limit(1);
     if (already) {
       await markProcessed(tx, eventId);
-      return { conversationId: already.conversationId, messageId: already.id, duplicate: true };
+      return { conversationId: already.conversationId, messageId: already.id, duplicate: true, scheduleAiTurn: false };
     }
 
     const [contact] = await tx
@@ -151,12 +165,16 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       eq(conversations.channelConnectionId, connectionId),
       ne(conversations.status, "resolved"),
     );
-    let [conversation] = await tx.select({ id: conversations.id }).from(conversations).where(where).limit(1);
+    let [conversation] = await tx
+      .select({ id: conversations.id, aiMode: conversations.aiMode })
+      .from(conversations)
+      .where(where)
+      .limit(1);
     if (!conversation) {
       [conversation] = await tx
         .insert(conversations)
         .values({ tenantId, contactId: contact.id, channelConnectionId: connectionId })
-        .returning({ id: conversations.id });
+        .returning({ id: conversations.id, aiMode: conversations.aiMode });
     }
     if (!conversation) throw new Error("conversation upsert returned no row");
 
@@ -188,7 +206,7 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
         .limit(1);
       if (!existing) throw new Error("duplicate message not found");
       await markProcessed(tx, eventId);
-      return { conversationId: existing.conversationId, messageId: existing.id, duplicate: true };
+      return { conversationId: existing.conversationId, messageId: existing.id, duplicate: true, scheduleAiTurn: false };
     }
 
     if (m.media) {
@@ -211,18 +229,41 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       })
       .where(eq(conversations.id, conversation.id));
 
-    await markProcessed(tx, eventId);
-    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false };
-  });
+    // An AI turn is scheduled only when the conversation has AI enabled and the tenant has an
+    // active LLM connection whose last connection test passed.
+    let scheduleAiTurn = false;
+    if (deps.aiQueue && conversation.aiMode !== "off") {
+      const [llm] = await tx
+        .select({ id: llmConnections.id })
+        .from(llmConnections)
+        .where(and(eq(llmConnections.isActive, true), eq(llmConnections.lastTestOk, true)))
+        .limit(1);
+      scheduleAiTurn = Boolean(llm);
+    }
 
-  if (!out.duplicate) {
+    await markProcessed(tx, eventId);
+    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn };
+  });
+  const { scheduleAiTurn, ...result } = out;
+
+  if (!result.duplicate) {
     await publish(deps, tenantId, {
       type: "message.received",
-      conversationId: out.conversationId,
-      messageId: out.messageId,
+      conversationId: result.conversationId,
+      messageId: result.messageId,
     });
+    if (scheduleAiTurn && deps.aiQueue) {
+      const data: AiTurnJobData = { tenantId, conversationId: result.conversationId, triggerMessageId: result.messageId };
+      try {
+        await deps.aiQueue.add(AI_TURN_JOB, data, { ...AI_JOB_OPTIONS, jobId: aiTurnJobId(result.messageId) });
+      } catch (err) {
+        // The message is committed and visible in the inbox; a retry of this job would be a
+        // duplicate and would not re-enqueue, so do not fail the ingest.
+        (deps.logger ?? silent).warn(`could not enqueue ai-turn (${err instanceof Error ? err.name : "unknown"})`);
+      }
+    }
   }
-  return out;
+  return result;
 }
 
 /** Applies a delivery status, only when it moves the message forward. */

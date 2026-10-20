@@ -44,6 +44,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@crmwsp/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@crmwsp/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -53,9 +56,15 @@ importers:
       '@crmwsp/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@crmwsp/knowledge':
+        specifier: workspace:*
+        version: link:../../packages/knowledge
       '@crmwsp/whatsapp':
         specifier: workspace:*
         version: link:../../packages/whatsapp
+      '@fastify/multipart':
+        specifier: 10.1.2
+        version: 10.1.2
       '@nestjs/common':
         specifier: 11.2.7
         version: 11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -142,12 +151,21 @@ importers:
 
   apps/worker:
     dependencies:
+      '@crmwsp/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@crmwsp/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@crmwsp/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
       '@crmwsp/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@crmwsp/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@crmwsp/whatsapp':
         specifier: workspace:*
         version: link:../../packages/whatsapp
@@ -850,8 +868,14 @@ packages:
   '@fastify/ajv-compiler@4.0.7':
     resolution: {integrity: sha512-VP0yIfwlc1ohj733keYDqyHm1VWeP9VQxYomunhr90jkC4aNNibbkrRiaNgPgqj1ORxUenILR4qzA/ppYBNAtQ==}
 
+  '@fastify/busboy@3.2.3':
+    resolution: {integrity: sha512-fmo/IKgkenPzz3qTKG+sIUXdF/Kv83AkvvOXJHPTHJeKJbat8SsL1ihUaFaDotqoEl4UZ1Lf8Eb/3vK6eaWX2A==}
+
   '@fastify/cors@11.3.0':
     resolution: {integrity: sha512-ggQGua+xHv1MvePbPr0v//xLYEsCXbWspquXCJS9Ot5YoRXq8J8ZWzHnxDBVnbtXosvistXo6LtNzOJswf64Fw==}
+
+  '@fastify/deepmerge@3.2.2':
+    resolution: {integrity: sha512-155eqA/WMQdN6gUD4RrhS2K0Pcz2Ou9pQ86L0sipOpP9ONbTA6oYw/hW4VdBjR4egcDHqmWUK9x80oUX7S1mDQ==}
 
   '@fastify/error@4.2.1':
     resolution: {integrity: sha512-MYBumuIwP+5MIpXSyKm6/o1Eigcoij186lWUssX3LH5U8KWqU0ktZhzC4CErIX9EJeQeRGI+zJZQWakBlFbUcg==}
@@ -870,6 +894,9 @@ packages:
 
   '@fastify/middie@9.3.4':
     resolution: {integrity: sha512-dd8phTnVWzx3iKPBKSvtRUT8+Igvy/MP+P5HcY2tjejEyeVbyjkD4HgzKessUObue5RRM5J6PZdxtAqgbn84yw==}
+
+  '@fastify/multipart@10.1.2':
+    resolution: {integrity: sha512-WHsqW5ffDXCbXXtdBQDryxu58fQvFPVGh4E4MlCO6hwCLNm0lYTCS6GKXUw2P64REDoECUNpMVvtMMstdIyBjQ==}
 
   '@fastify/proxy-addr@5.1.2':
     resolution: {integrity: sha512-uqB4QsgVoro0XDC+DIftIMGXHdBPn+lK6Ek3xXAIxPMCJfqxnbtyEoMCm2KPUVOuIosd7Cyw9HawEqMFM/UA+g==}
@@ -3389,10 +3416,14 @@ snapshots:
       ajv-formats: 3.0.1(ajv@8.20.0)
       fast-uri: 4.2.2
 
+  '@fastify/busboy@3.2.3': {}
+
   '@fastify/cors@11.3.0':
     dependencies:
       fastify-plugin: 6.0.1
       toad-cache: 3.7.4
+
+  '@fastify/deepmerge@3.2.2': {}
 
   '@fastify/error@4.2.1': {}
 
@@ -3418,6 +3449,14 @@ snapshots:
       find-my-way: 9.7.0
       path-to-regexp: 8.4.2
       reusify: 1.1.0
+
+  '@fastify/multipart@10.1.2':
+    dependencies:
+      '@fastify/busboy': 3.2.3
+      '@fastify/deepmerge': 3.2.2
+      '@fastify/error': 4.2.1
+      fastify-plugin: 6.0.1
+      secure-json-parse: 4.1.1
 
   '@fastify/proxy-addr@5.1.2':
     dependencies:

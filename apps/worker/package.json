@@ -12,8 +12,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@crmwsp/ai": "workspace:*",
+    "@crmwsp/contracts": "workspace:*",
     "@crmwsp/crypto": "workspace:*",
     "@crmwsp/db": "workspace:*",
+    "@crmwsp/domain": "workspace:*",
     "@crmwsp/whatsapp": "workspace:*",
     "bullmq": "6.3.17",
     "drizzle-orm": "0.45.4",
