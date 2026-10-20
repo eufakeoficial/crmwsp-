@@ -7,12 +7,14 @@ import { createAiWorker, createBspMediaLoader } from "./ai/index.js";
 import { AI_QUEUE_NAME, OUTBOUND_QUEUE_NAME, createRedis } from "./queue.js";
 import { createInboundWorker } from "./worker.js";
 import { createOutboundWorker } from "./outbound.js";
+import { FOLLOW_UP_QUEUE_NAME, createFollowUpWorker, scheduleFollowUpTick } from "./followups/index.js";
 
 export * from "./queue.js";
 export * from "./processors.js";
 export * from "./status.js";
 export * from "./outbound.js";
 export * from "./ai/index.js";
+export * from "./followups/index.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -56,6 +58,8 @@ function main(): void {
   let ai: ReturnType<typeof createAiWorker> | undefined;
   let outboundQueue: Queue | undefined;
   let lockRedis: ReturnType<typeof createRedis> | undefined;
+  let followUps: ReturnType<typeof createFollowUpWorker> | undefined;
+  let followUpQueue: Queue | undefined;
   try {
     const keys = loadMasterKeysFromEnv(process.env);
     const cipher = createCipherBox(keys);
@@ -86,6 +90,12 @@ function main(): void {
     ai.on("failed", (job, err) =>
       logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
     );
+    // Follow-up scheduler: only enqueues onto the outbound queue, so it runs with it.
+    followUpQueue = new Queue(FOLLOW_UP_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    followUps = createFollowUpWorker({ connection: createRedis(redisUrl), db: db.db, outboundQueue, logger });
+    void scheduleFollowUpTick(followUpQueue).catch((err: unknown) =>
+      logger.warn(`follow-up scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
     outbound.on("failed", (job, err) =>
       logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
     );
@@ -98,8 +108,8 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close()])
-      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close()]))
+    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close()])
+      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));
   };

@@ -21,6 +21,7 @@ import {
   type InboundJobData,
 } from "./queue.js";
 import { previousStatusesFor } from "./status.js";
+import { cancelFollowUpsForConversation } from "./followups/pg-store.js";
 
 /** Minimal publisher (ioredis satisfies it). */
 export interface EventPublisher {
@@ -228,6 +229,9 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
         updatedAt: now,
       })
       .where(eq(conversations.id, conversation.id));
+
+    // The contact replied: pending follow-ups of this conversation are no longer needed.
+    await cancelFollowUpsForConversation(tx, conversation.id);
 
     // An AI turn is scheduled only when the conversation has AI enabled and the tenant has an
     // active LLM connection whose last connection test passed.

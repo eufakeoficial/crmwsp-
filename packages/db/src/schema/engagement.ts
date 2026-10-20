@@ -17,6 +17,7 @@ import { contacts } from "./contacts.js";
 import { conversations } from "./conversations.js";
 import { messages } from "./messages.js";
 import { quotes } from "./quotes.js";
+import { orders } from "./commerce.js";
 import { opportunities } from "./sales.js";
 import { tenants } from "./tenants.js";
 
@@ -25,6 +26,8 @@ export const consentStatus = pgEnum("consent_status", ["granted", "revoked"]);
 export const templateCategory = pgEnum("template_category", ["marketing", "utility", "authentication"]);
 export const templateStatus = pgEnum("template_status", ["approved", "pending", "rejected", "paused", "disabled"]);
 export const followUpStatus = pgEnum("follow_up_status", ["suggested", "scheduled", "sent", "skipped", "cancelled"]);
+/** What created a follow-up: a person, or one of the automatic recovery rules. */
+export const followUpRule = pgEnum("follow_up_rule", ["manual", "lead_stalled", "order_pending_payment"]);
 
 export interface ConsentEvidence {
   messageId?: string;
@@ -103,6 +106,12 @@ export const followUps = pgTable(
     opportunityId: uuid("opportunity_id"),
     conversationId: uuid("conversation_id").notNull(),
     quoteId: uuid("quote_id"),
+    orderId: uuid("order_id"),
+    rule: followUpRule("rule").notNull().default("manual"),
+    /** Idempotency key of automatic rules (e.g. `lead_stalled:<message id>`); one follow-up per key. */
+    dedupeKey: text("dedupe_key"),
+    /** Free-text body sent when the 24 h window is open. */
+    messageBody: text("message_body"),
     /** Human-readable explanation of why this follow-up exists. */
     reason: text("reason").notNull(),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
@@ -118,6 +127,15 @@ export const followUps = pgTable(
   (t) => [
     uniqueIndex("follow_ups_tenant_id_id_idx").on(t.tenantId, t.id),
     index("follow_ups_tenant_status_scheduled_idx").on(t.tenantId, t.status, t.scheduledAt),
+    index("follow_ups_tenant_conversation_status_idx").on(t.tenantId, t.conversationId, t.status),
+    uniqueIndex("follow_ups_tenant_dedupe_key_unique")
+      .on(t.tenantId, t.dedupeKey)
+      .where(sql`${t.dedupeKey} IS NOT NULL`),
+    foreignKey({
+      name: "follow_ups_tenant_order_fk",
+      columns: [t.tenantId, t.orderId],
+      foreignColumns: [orders.tenantId, orders.id],
+    }).onDelete("set null"),
     foreignKey({
       name: "follow_ups_tenant_opportunity_fk",
       columns: [t.tenantId, t.opportunityId],

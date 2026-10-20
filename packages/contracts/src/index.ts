@@ -9,3 +9,4 @@ export * from "./ai-settings.js";
 export * from "./sales.js";
 export * from "./commerce.js";
 export * from "./metrics.js";
+export * from "./followups.js";
