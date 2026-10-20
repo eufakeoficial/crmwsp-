@@ -1,0 +1,21 @@
+{
+  "name": "@crmwsp/mailer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "nodemailer": "10.1.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/nodemailer": "8.0.2"
+  }
+}
