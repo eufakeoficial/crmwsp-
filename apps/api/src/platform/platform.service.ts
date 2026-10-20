@@ -1,8 +1,19 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { getPlan, isPlanId } from "@crmwsp/billing";
+import { PLAN_IDS, getPlan, isPlanId } from "@crmwsp/billing";
 import {
   ConflictError,
   NotFoundError,
+  type PlatformAuditPage,
+  type PlatformAuditQuery,
+  type PlatformChannel,
+  type PlatformChannelListQuery,
+  type PlatformPlans,
+  type PlatformUsage,
+  type PlatformUsageQuery,
+  type PlatformUser,
+  type PlatformUserListQuery,
+  type RevokeSessionsResponse,
+  type TenantStatus,
   type PlatformDashboard,
   type PlatformSettings,
   type PlatformTenant,
@@ -16,7 +27,7 @@ import {
   type TenantStatusChangeRequest,
   ValidationError,
 } from "@crmwsp/contracts";
-import { estimateMrr } from "@crmwsp/domain";
+import { currentMonthUtc, dayRangeUtc, estimateMrr, microCentsToUsd } from "@crmwsp/domain";
 import { type Mailer, renderEmail } from "@crmwsp/mailer";
 import { pgCode } from "../inbox/audit.js";
 import { publicWebUrl } from "../team/invitation-token.js";
@@ -24,6 +35,8 @@ import { PlatformRepository } from "./platform.repository.js";
 
 /** Nest injection token for the mailer used by the platform module. */
 export const PLATFORM_MAILER = Symbol("PLATFORM_MAILER");
+
+const AUDIT_PAGE_SIZE = 50;
 
 export interface PlatformActor {
   userId: string;
@@ -146,6 +159,77 @@ export class PlatformService {
   async updateSettings(actor: PlatformActor, requireApproval: boolean): Promise<PlatformSettings> {
     await guarded(() => this.repo.setRequireApproval(actor.userId, requireApproval, actor.ip));
     return this.settings(actor);
+  }
+
+  listUsers(actor: PlatformActor, q: PlatformUserListQuery): Promise<PlatformUser[]> {
+    return guarded(() => this.repo.listUsers(actor.userId, q.q && q.q.length > 0 ? q.q : null));
+  }
+
+  async user(actor: PlatformActor, userId: string): Promise<PlatformUser> {
+    const [u] = await guarded(() => this.repo.listUsers(actor.userId, null, userId));
+    if (!u) throw new NotFoundError();
+    return u;
+  }
+
+  async revokeSessions(actor: PlatformActor, userId: string): Promise<RevokeSessionsResponse> {
+    return { revoked: await guarded(() => this.repo.revokeUserSessions(actor.userId, userId, actor.ip)) };
+  }
+
+  listChannels(actor: PlatformActor, q: PlatformChannelListQuery): Promise<PlatformChannel[]> {
+    return guarded(() => this.repo.listChannels(actor.userId, q.status ?? null));
+  }
+
+  async plans(actor: PlatformActor): Promise<PlatformPlans> {
+    return guarded(async () => {
+      const [counts, overrides] = await Promise.all([this.repo.planCounts(actor.userId), this.repo.limitOverrides(actor.userId)]);
+      const plans = PLAN_IDS.map((id) => {
+        const def = getPlan(id);
+        const tenantsByStatus: Partial<Record<TenantStatus, number>> = {};
+        for (const c of counts) if (c.plan === id) tenantsByStatus[c.status] = c.count;
+        return {
+          id,
+          name: def.name,
+          priceMonthlyUsd: def.priceMonthlyUsd,
+          limits: { ...def.limits },
+          tenantsByStatus,
+          tenantCount: Object.values(tenantsByStatus).reduce((a, b) => a + (b ?? 0), 0),
+        };
+      });
+      return { plans, overrides };
+    });
+  }
+
+  async usage(actor: PlatformActor, q: PlatformUsageQuery): Promise<PlatformUsage> {
+    const month = q.month ?? currentMonthUtc();
+    const rows = await guarded(() => this.repo.usage(actor.userId, month));
+    const items = rows.map(({ aiCostMicro, ...r }) => ({ ...r, aiCostUsd: microCentsToUsd(aiCostMicro) }));
+    const sumMicro = rows.reduce((a, r) => a + BigInt(r.aiCostMicro), 0n);
+    return {
+      month,
+      items,
+      totals: {
+        aiMessages: items.reduce((a, r) => a + r.aiMessages, 0),
+        broadcastSends: items.reduce((a, r) => a + r.broadcastSends, 0),
+        ttsCharacters: items.reduce((a, r) => a + r.ttsCharacters, 0),
+        aiCostUsd: microCentsToUsd(sumMicro),
+      },
+    };
+  }
+
+  async audit(actor: PlatformActor, q: PlatformAuditQuery): Promise<PlatformAuditPage> {
+    const page = q.page ?? 1;
+    const range = dayRangeUtc(q.from, q.to);
+    const res = await guarded(() =>
+      this.repo.auditSearch(actor.userId, {
+        actor: q.actor && q.actor.length > 0 ? q.actor : null,
+        action: q.action && q.action.length > 0 ? q.action : null,
+        tenantId: q.tenantId ?? null,
+        ...range,
+        limit: AUDIT_PAGE_SIZE,
+        offset: (page - 1) * AUDIT_PAGE_SIZE,
+      }),
+    );
+    return { items: res.items, total: res.total, page, pageSize: AUDIT_PAGE_SIZE };
   }
 
   /** Best effort: a mail failure never undoes the (already audited) status change. */

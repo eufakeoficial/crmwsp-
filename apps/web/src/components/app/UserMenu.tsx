@@ -13,7 +13,8 @@ type Placement = "topbar" | "rail";
 const ITEM = "flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 text-left font-semibold text-ink no-underline hover:bg-paper focus-visible:bg-paper";
 
 /** Avatar button with the account menu: identity, admin panel (platform admins), tenant switch and logout. */
-export function UserMenu({ placement = "topbar", className }: { placement?: Placement; className?: string }) {
+/** `tone="lime"`: lime avatar for dark headers (the admin topbar), where the ink one disappears. */
+export function UserMenu({ placement = "topbar", tone, className }: { placement?: Placement; tone?: "lime"; className?: string }) {
   const { me, tenant, selectTenant, logout } = useSession();
   const isPlatformAdmin = usePlatformMe();
   const [open, setOpen] = useState(false);
@@ -69,7 +70,8 @@ export function UserMenu({ placement = "topbar", className }: { placement?: Plac
         data-testid="user-menu-trigger"
         className={cn(
           "grid size-9 cursor-pointer place-items-center rounded-full text-[13px] font-extrabold",
-          placement === "rail" ? "bg-lime text-ink hover:opacity-90" : "bg-ink text-lime hover:bg-ink-2",
+          placement === "rail" || tone === "lime" ? "bg-lime text-ink hover:opacity-90" : "bg-ink text-lime hover:bg-ink-2",
+          tone === "lime" && "focus-visible:outline-lime",
         )}
       >
         {initials(label)}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionRequiresReason, availableTenantActions, estimateMrr, isOverdue, isTenantOperational, nextTenantStatus } from "./index.js";
+import { actionRequiresReason, availableTenantActions, currentMonthUtc, dayRangeUtc, estimateMrr, isOverdue, isTenantOperational, microCentsToUsd, nextTenantStatus } from "./index.js";
 
 describe("platform tenant lifecycle", () => {
   it("allows only the documented transitions", () => {
@@ -45,5 +45,18 @@ describe("overdue and MRR", () => {
 
   it("estimates MRR from plan counts", () => {
     expect(estimateMrr({ start: 2, pro: 1, legacy: 3 }, (p) => ({ start: 49, pro: 89 })[p])).toBe(187);
+  });
+
+  it("converts ledger micro-cents to USD", () => {
+    expect(microCentsToUsd("250000000")).toBe(2.5);
+    expect(microCentsToUsd(123456789n)).toBe(1.234567);
+    expect(microCentsToUsd(0)).toBe(0);
+    expect(microCentsToUsd("99.7")).toBe(0);
+  });
+
+  it("maps inclusive day filters to half-open UTC instants", () => {
+    expect(dayRangeUtc("2026-10-01", "2026-10-31")).toEqual({ from: new Date("2026-10-01T00:00:00Z"), to: new Date("2026-11-01T00:00:00Z") });
+    expect(dayRangeUtc()).toEqual({ from: null, to: null });
+    expect(currentMonthUtc(new Date("2026-10-21T23:00:00Z"))).toBe("2026-10");
   });
 });

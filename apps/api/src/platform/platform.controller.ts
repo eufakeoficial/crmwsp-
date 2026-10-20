@@ -1,5 +1,16 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import {
+  type PlatformAuditPage,
+  type PlatformChannelList,
+  type PlatformPlans,
+  type PlatformUsage,
+  type PlatformUser,
+  type PlatformUserList,
+  type RevokeSessionsResponse,
+  platformAuditQuerySchema,
+  platformChannelListQuerySchema,
+  platformUsageQuerySchema,
+  platformUserListQuerySchema,
   type PlatformDashboard,
   type PlatformMeResponse,
   type PlatformSettings,
@@ -76,6 +87,42 @@ export class PlatformController {
   @HttpCode(201)
   recordPayment(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Body() body: unknown): Promise<SubscriptionPayment> {
     return this.platform.recordPayment(actorOf(user, req), parseOrThrow(recordSubscriptionPaymentRequestSchema, body));
+  }
+
+  @Get("users")
+  async users(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Query() query: unknown): Promise<PlatformUserList> {
+    return { items: await this.platform.listUsers(actorOf(user, req), parseOrThrow(platformUserListQuerySchema, query)) };
+  }
+
+  @Get("users/:id")
+  userDetail(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("id") id: string): Promise<PlatformUser> {
+    return this.platform.user(actorOf(user, req), parseOrThrow(uuidSchema, id));
+  }
+
+  @Post("users/:id/revoke-sessions")
+  @HttpCode(200)
+  revokeSessions(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("id") id: string): Promise<RevokeSessionsResponse> {
+    return this.platform.revokeSessions(actorOf(user, req), parseOrThrow(uuidSchema, id));
+  }
+
+  @Get("channels")
+  async channels(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Query() query: unknown): Promise<PlatformChannelList> {
+    return { items: await this.platform.listChannels(actorOf(user, req), parseOrThrow(platformChannelListQuerySchema, query)) };
+  }
+
+  @Get("plans")
+  plans(@CurrentUser() user: RequestUser, @Req() req: HttpRequest): Promise<PlatformPlans> {
+    return this.platform.plans(actorOf(user, req));
+  }
+
+  @Get("usage")
+  usage(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Query() query: unknown): Promise<PlatformUsage> {
+    return this.platform.usage(actorOf(user, req), parseOrThrow(platformUsageQuerySchema, query));
+  }
+
+  @Get("audit")
+  audit(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Query() query: unknown): Promise<PlatformAuditPage> {
+    return this.platform.audit(actorOf(user, req), parseOrThrow(platformAuditQuerySchema, query));
   }
 
   @Get("settings")

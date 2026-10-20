@@ -51,3 +51,20 @@ export function estimateMrr(activeByPlan: Partial<Record<string, number>>, month
   for (const [plan, count] of Object.entries(activeByPlan)) total += (count ?? 0) * (monthlyPrice(plan) ?? 0);
   return total;
 }
+
+/** `usage_ledger.cost_minor` for AI kinds is USD micro-cents (1e-8 USD). Rounded to 1e-6 USD. */
+export function microCentsToUsd(micro: number | bigint | string): number {
+  const v = typeof micro === "bigint" ? micro : BigInt(String(micro).split(".")[0] || "0");
+  return Number(v / 100n) / 1_000_000;
+}
+
+/** Inclusive `YYYY-MM-DD` day range -> half-open UTC instants [from, to + 1 day). */
+export function dayRangeUtc(from?: string, to?: string): { from: Date | null; to: Date | null } {
+  const at = (d: string) => new Date(`${d}T00:00:00Z`);
+  return { from: from ? at(from) : null, to: to ? new Date(at(to).getTime() + 86_400_000) : null };
+}
+
+/** Current calendar month `YYYY-MM` (UTC). */
+export function currentMonthUtc(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 7);
+}
