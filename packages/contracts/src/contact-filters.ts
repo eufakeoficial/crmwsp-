@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isoDateTimeSchema, uuidSchema } from "./common.js";
+import { currencySchema, isoDateTimeSchema, uuidSchema } from "./common.js";
 import { contactBookItemSchema, contactTagSchema } from "./contacts.js";
 
 /**
@@ -34,8 +34,11 @@ export interface FilterFieldDef {
   label: string;
   /** Closed value set for relation fields; tag/segment values are dynamic (names / ids). */
   options?: readonly FilterFieldOption[];
-  /** Number fields stored in minor units (shown as major in the UI). */
-  minorUnits?: boolean;
+  /**
+   * Money field: the value is `{amountMinor, currency}` and only amounts in that currency are
+   * compared (never summed across currencies). The UI converts with the currency's exponent.
+   */
+  money?: boolean;
 }
 
 const YES_NO: readonly FilterFieldOption[] = [
@@ -87,7 +90,7 @@ export const FILTER_FIELDS: readonly FilterFieldDef[] = [
   },
   { key: "has_open_quote", group: "sales", type: "relation", label: "Tiene presupuesto abierto", options: YES_NO },
   { key: "has_paid_order", group: "sales", type: "relation", label: "Tiene pedido pagado", options: YES_NO },
-  { key: "total_paid", group: "sales", type: "number", label: "Total pagado", minorUnits: true },
+  { key: "total_paid", group: "sales", type: "number", label: "Total pagado", money: true },
   { key: "last_order_at", group: "sales", type: "date", label: "Último pedido" },
   { key: "ad_id", group: "sales", type: "text", label: "ID de anuncio" },
 ];
@@ -115,11 +118,16 @@ export type RelativeTime = z.infer<typeof relativeTimeSchema>;
 const textValue = z.string().trim().min(1).max(FILTER_MAX_TEXT);
 const dateValue = z.union([z.iso.date(), isoDateTimeSchema]);
 const numberValue = z.number().finite().min(-1e15).max(1e15);
+export const moneyFilterValueSchema = z.object({
+  amountMinor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  currency: currencySchema,
+});
+export type MoneyFilterValue = z.infer<typeof moneyFilterValueSchema>;
 const relationValue = z.array(z.string().trim().min(1).max(100)).min(1).max(FILTER_MAX_RELATION_VALUES);
 
 const NO_VALUE_OPERATORS = new Set(["has_any", "is_unknown"]);
 
-function valueSchemaFor(type: FilterFieldType, operator: string): z.ZodType | null {
+function valueSchemaFor(type: FilterFieldType, operator: string, money = false): z.ZodType | null {
   if (NO_VALUE_OPERATORS.has(operator)) return null;
   switch (type) {
     case "text":
@@ -127,7 +135,7 @@ function valueSchemaFor(type: FilterFieldType, operator: string): z.ZodType | nu
     case "date":
       return operator === "less_than_ago" || operator === "more_than_ago" ? relativeTimeSchema : dateValue;
     case "number":
-      return numberValue;
+      return money ? moneyFilterValueSchema : numberValue;
     case "relation":
       return relationValue;
   }
@@ -147,7 +155,7 @@ export const filterConditionSchema = z
     if (!(FILTER_OPERATORS[c.type] as readonly string[]).includes(c.operator)) {
       return ctx.addIssue({ code: "custom", path: ["operator"], message: "operator not allowed for type" });
     }
-    const schema = valueSchemaFor(c.type, c.operator);
+    const schema = valueSchemaFor(c.type, c.operator, def.money);
     if (!schema) return;
     const parsed = schema.safeParse(c.value);
     if (!parsed.success) return ctx.addIssue({ code: "custom", path: ["value"], message: "invalid value" });
@@ -185,7 +193,11 @@ export type ContactBookSearchResult = z.infer<typeof contactBookSearchResultSche
 
 /** Tag with how many contacts carry it (sidebar). */
 export const contactTagCountSchema = z.object({ tag: z.string(), count: z.number().int() });
-export const contactTagCountsSchema = z.object({ items: z.array(contactTagCountSchema) });
+export const contactTagCountsSchema = z.object({
+  items: z.array(contactTagCountSchema),
+  /** Tenant default currency (default for money filters in the UI). */
+  currency: currencySchema,
+});
 export type ContactTagCount = z.infer<typeof contactTagCountSchema>;
 
 // Segments

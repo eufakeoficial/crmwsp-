@@ -6,8 +6,27 @@ import {
   type FilterCondition,
   type FilterFieldGroup,
   type FilterFieldType,
+  type MoneyFilterValue,
   type RelativeTime,
 } from "@crmwsp/contracts";
+import { formatMoneyMinor, majorToMinor, minorToMajor } from "../../lib/format";
+
+/** Currencies offered in the money filter; the tenant currency always comes first. */
+const COMMON_CURRENCIES = ["USD", "EUR", "CLP", "COP", "PYG", "PEN", "BOB", "MXN", "ARS", "BRL", "UYU"];
+export function moneyCurrencies(tenantCurrency: string): string[] {
+  return [...new Set([tenantCurrency, ...COMMON_CURRENCIES])];
+}
+
+/** Typed amount ("12,50") in `currency` to the filter value, using the currency's exponent. */
+export function toMoneyFilterValue(input: string, currency: string): MoneyFilterValue | undefined {
+  const amountMinor = majorToMinor(input, currency);
+  return amountMinor === undefined ? undefined : { amountMinor, currency };
+}
+
+/** Filter value back to the text shown in the amount input. */
+export function moneyInputText(value: MoneyFilterValue): string {
+  return String(minorToMajor(value.amountMinor, value.currency));
+}
 
 export const GROUP_LABELS: Record<FilterFieldGroup, string> = {
   general: "General",
@@ -69,8 +88,9 @@ export function describeCondition(c: FilterCondition, ctx: { segments: readonly 
   } else if (c.operator === "less_than_ago" || c.operator === "more_than_ago") {
     const r = c.value as RelativeTime;
     value = `${r.amount} ${UNIT_LABELS[r.unit]}`;
-  } else if (c.type === "number" && def?.minorUnits) {
-    value = (Number(c.value) / 100).toLocaleString("es", { maximumFractionDigits: 2 });
+  } else if (c.type === "number" && def?.money) {
+    const m = c.value as MoneyFilterValue;
+    value = formatMoneyMinor(m.amountMinor, m.currency);
   } else value = String(c.value);
   return `${label} ${op} ${value}`;
 }

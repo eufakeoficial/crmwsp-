@@ -56,6 +56,7 @@ describe.skipIf(!hasDb)("contact filter compiler against Postgres", () => {
       await tx.insert(conversations).values({ tenantId: ids.a, contactId: ids.ana, channelConnectionId: conn!.id, lastInboundAt: new Date(), lastMessageAt: new Date() });
       await tx.insert(consents).values({ tenantId: ids.a, contactId: ids.ana, kind: "marketing", status: "granted", evidence: { source: "test" } });
       await tx.insert(orders).values({ tenantId: ids.a, number: `O-${suffix}`, contactId: ids.ana, status: "paid", currency: "EUR", totalMinor: 5000n, fulfillment: "digital", createdByType: "user" });
+      await tx.insert(orders).values({ tenantId: ids.a, number: `O2-${suffix}`, contactId: ids.ana, status: "paid", currency: "CLP", totalMinor: 3000n, fulfillment: "digital", createdByType: "user" });
       await tx.insert(quotes).values({ tenantId: ids.a, number: `Q-${suffix}`, contactId: ids.luis, status: "sent", currency: "EUR", validUntil: new Date(), createdByType: "user" });
       await tx.insert(adAttributions).values({ tenantId: ids.a, contactId: ids.ana, sourceId: "ad-123", firstSeenAt: new Date() });
     });
@@ -94,7 +95,11 @@ describe.skipIf(!hasDb)("contact filter compiler against Postgres", () => {
     expect(await one({ field: "window_open", type: "relation", operator: "is", value: ["closed"] })).toEqual([ids.luis]);
     expect(await one({ field: "has_open_quote", type: "relation", operator: "is", value: ["yes"] })).toEqual([ids.luis]);
     expect(await one({ field: "has_paid_order", type: "relation", operator: "is_not", value: ["yes"] })).toEqual([ids.luis]);
-    expect(await one({ field: "total_paid", type: "number", operator: "gt", value: 4999 })).toEqual([ids.ana]);
+    expect(await one({ field: "total_paid", type: "number", operator: "gt", value: { amountMinor: 4999, currency: "EUR" } })).toEqual([ids.ana]);
+    // 5000 EUR + 3000 CLP must never be added together.
+    expect(await one({ field: "total_paid", type: "number", operator: "gt", value: { amountMinor: 4999, currency: "CLP" } })).toEqual([]);
+    expect(await one({ field: "total_paid", type: "number", operator: "eq", value: { amountMinor: 3000, currency: "CLP" } })).toEqual([ids.ana]);
+    expect(await one({ field: "total_paid", type: "number", operator: "lt", value: { amountMinor: 1, currency: "USD" } })).toEqual([ids.ana, ids.luis].sort());
     expect(await one({ field: "total_paid", type: "number", operator: "is_unknown" })).toEqual([ids.luis]);
   });
 

@@ -3,6 +3,7 @@ import {
   filterFieldDef,
   type ContactFilter,
   type FilterCondition,
+  type MoneyFilterValue,
   type RelativeTime,
 } from "@crmwsp/contracts";
 import { adAttributions, consents, contacts, conversations, orders, quotes, sql, type SQL } from "@crmwsp/db";
@@ -69,9 +70,11 @@ function dateExpr(field: string): SQL {
   }
 }
 
-function numberExpr(field: string): SQL {
+/** `currency` restricts the sum to one currency; amounts in different currencies are never added. */
+function numberExpr(field: string, currency?: string): SQL {
   if (field === "total_paid") {
-    return sql`(select coalesce(sum(${orders.totalMinor}), 0) from ${orders} where ${orders.contactId} = ${contacts.id} and ${orders.status}::text in (${statusList(PAID_ORDER_STATUSES)}))`;
+    const sameCurrency = currency ? sql` and ${orders.currency} = ${currency}` : sql``;
+    return sql`(select coalesce(sum(${orders.totalMinor}), 0) from ${orders} where ${orders.contactId} = ${contacts.id} and ${orders.status}::text in (${statusList(PAID_ORDER_STATUSES)})${sameCurrency})`;
   }
   throw new ValidationError(`field ${field} is not a number field`);
 }
@@ -137,10 +140,22 @@ function compileDate(c: FilterCondition, now: Date): SQL {
 }
 
 function compileNumber(c: FilterCondition): SQL {
-  const e = numberExpr(c.field);
-  if (c.operator === "has_any") return sql`${e} > 0`;
-  if (c.operator === "is_unknown") return sql`${e} = 0`;
-  const v = String(Math.round(Number(c.value)));
+  // has_any / is_unknown only ask "paid anything at all", which is currency-agnostic.
+  if (c.operator === "has_any") return sql`${numberExpr(c.field)} > 0`;
+  if (c.operator === "is_unknown") return sql`${numberExpr(c.field)} = 0`;
+  let e: SQL;
+  let v: string;
+  if (filterFieldDef(c.field)?.money) {
+    const money = c.value as MoneyFilterValue | undefined;
+    if (!money || !Number.isSafeInteger(money.amountMinor) || !/^[A-Z]{3}$/.test(String(money.currency))) {
+      throw new ValidationError("money filters need {amountMinor, currency}");
+    }
+    e = numberExpr(c.field, money.currency);
+    v = String(money.amountMinor);
+  } else {
+    e = numberExpr(c.field);
+    v = String(Math.round(Number(c.value)));
+  }
   switch (c.operator) {
     case "eq":
       return sql`${e} = ${v}::numeric`;

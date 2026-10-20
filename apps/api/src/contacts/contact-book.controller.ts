@@ -26,6 +26,7 @@ import {
   orders,
   quotes,
   sql,
+  tenants,
   type Contact as ContactRow,
   type Transaction,
 } from "@crmwsp/db";
@@ -155,14 +156,15 @@ export class ContactBookController {
     });
   }
 
-  /** Every tag in use with its contact count (sidebar). */
+  /** Every tag in use with its contact count (sidebar), plus the tenant currency for money filters. */
   @Get("tags")
-  async tags(@CurrentTenantDb() db: TenantDb): Promise<{ items: ContactTagCount[] }> {
+  async tags(@CurrentTenantDb() db: TenantDb): Promise<{ items: ContactTagCount[]; currency: string }> {
     return db.run(async (tx) => {
       const rows = await tx.execute<{ tag: string; count: number }>(
         sql`select t.tag, count(*)::int as count from ${contacts}, unnest(${contacts.tags}) as t(tag) group by t.tag order by count desc, t.tag asc limit 500`,
       );
-      return { items: [...rows].map((r) => ({ tag: r.tag, count: Number(r.count) })) };
+      const [tenant] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, db.tenantId));
+      return { items: [...rows].map((r) => ({ tag: r.tag, count: Number(r.count) })), currency: tenant?.currency ?? "EUR" };
     });
   }
 

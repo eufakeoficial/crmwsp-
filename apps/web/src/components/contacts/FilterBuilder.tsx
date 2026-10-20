@@ -8,23 +8,37 @@ import {
   type ContactSegment,
   type ContactTagCount,
   type FilterCondition,
+  type MoneyFilterValue,
   type RelativeTime,
 } from "@crmwsp/contracts";
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { Button, CheckBox, Input } from "@/components/ui";
-import { FIELDS_BY_GROUP, GROUP_LABELS, NO_VALUE, OPERATOR_LABELS, UNIT_LABELS, describeCondition, relationChoices } from "./filter-meta";
+import {
+  FIELDS_BY_GROUP,
+  GROUP_LABELS,
+  NO_VALUE,
+  OPERATOR_LABELS,
+  UNIT_LABELS,
+  describeCondition,
+  moneyCurrencies,
+  moneyInputText,
+  relationChoices,
+  toMoneyFilterValue,
+} from "./filter-meta";
 
 interface Props {
   filter: ContactFilter;
   onChange: (next: ContactFilter) => void;
   tags: readonly ContactTagCount[];
   segments: readonly ContactSegment[];
+  /** Tenant currency: default for money conditions. */
+  currency: string;
   onSaveSegment?: () => void;
 }
 
 /** ManyChat-style chip builder: "+ Condición", one chip per condition, match all/any. */
-export function FilterBuilder({ filter, onChange, tags, segments, onSaveSegment }: Props) {
+export function FilterBuilder({ filter, onChange, tags, segments, currency, onSaveSegment }: Props) {
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const setCondition = (i: number | "new", c: FilterCondition) => {
     const conditions = [...filter.conditions];
@@ -76,6 +90,7 @@ export function FilterBuilder({ filter, onChange, tags, segments, onSaveSegment 
           initial={editing === "new" ? undefined : filter.conditions[editing]}
           tags={tags}
           segments={segments}
+          tenantCurrency={currency}
           onCancel={() => setEditing(null)}
           onApply={(c) => setCondition(editing, c)}
         />
@@ -88,12 +103,14 @@ function ConditionEditor({
   initial,
   tags,
   segments,
+  tenantCurrency,
   onApply,
   onCancel,
 }: {
   initial: FilterCondition | undefined;
   tags: readonly ContactTagCount[];
   segments: readonly ContactSegment[];
+  tenantCurrency: string;
   onApply: (c: FilterCondition) => void;
   onCancel: () => void;
 }) {
@@ -102,10 +119,12 @@ function ConditionEditor({
   const def = field ? filterFieldDef(field) : undefined;
   const [operator, setOperator] = useState(initial?.operator ?? "");
   // Number fields keep the typed text (major units for money) and convert on apply.
+  const initialMoney = initial && filterFieldDef(initial.field)?.money ? (initial.value as MoneyFilterValue | undefined) : undefined;
   const [value, setValue] = useState<unknown>(() => {
     if (initial?.type !== "number" || initial.value === undefined) return initial?.value;
-    return String(filterFieldDef(initial.field)?.minorUnits ? Number(initial.value) / 100 : initial.value);
+    return initialMoney ? moneyInputText(initialMoney) : String(initial.value);
   });
+  const [currency, setCurrency] = useState(initialMoney?.currency ?? tenantCurrency);
   const [search, setSearch] = useState("");
 
   const pickField = (key: string) => {
@@ -149,10 +168,9 @@ function ConditionEditor({
 
   const isRelative = operator === "less_than_ago" || operator === "more_than_ago";
   const rel = (value as RelativeTime | undefined) ?? { amount: 1, unit: "days" as const };
-  const numberValue = (): number | undefined => {
-    if (value === undefined || value === "") return undefined;
-    const n = Number(value);
-    return def.minorUnits ? Math.round(n * 100) : n;
+  const numberValue = (): number | MoneyFilterValue | undefined => {
+    if (typeof value !== "string" || value.trim() === "") return undefined;
+    return def.money ? toMoneyFilterValue(value, currency) : Number(value);
   };
   const candidate: FilterCondition = {
     field,
@@ -229,14 +247,24 @@ function ConditionEditor({
         </div>
       ) : def.type === "date" ? (
         <Input aria-label="Fecha" type="date" value={typeof value === "string" ? value : ""} onChange={(e) => setValue(e.target.value)} />
+      ) : def.type === "number" && def.money ? (
+        <div className="flex items-center gap-2">
+          <Input aria-label="Importe" inputMode="decimal" placeholder="0" value={typeof value === "string" ? value : ""} onChange={(e) => setValue(e.target.value)} />
+          <select
+            aria-label="Moneda"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            className="h-9 rounded-[10px] border-[1.5px] border-line-2 bg-white px-2 text-sm"
+          >
+            {moneyCurrencies(tenantCurrency).map((cur) => (
+              <option key={cur} value={cur}>
+                {cur}
+              </option>
+            ))}
+          </select>
+        </div>
       ) : def.type === "number" ? (
-        <Input
-          aria-label={def.minorUnits ? "Importe" : "Valor"}
-          type="number"
-          step={def.minorUnits ? "0.01" : "1"}
-          value={typeof value === "string" ? value : ""}
-          onChange={(e) => setValue(e.target.value)}
-        />
+        <Input aria-label="Valor" type="number" step="1" value={typeof value === "string" ? value : ""} onChange={(e) => setValue(e.target.value)} />
       ) : (
         <Input aria-label="Valor" maxLength={200} value={typeof value === "string" ? value : ""} onChange={(e) => setValue(e.target.value)} />
       )}

@@ -45,6 +45,7 @@ export function ContactsView() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [tags, setTags] = useState<ContactTagCount[]>([]);
+  const [currency, setCurrency] = useState("EUR");
   const [segments, setSegments] = useState<ContactSegment[]>([]);
   const [selection, setSelection] = useState<Selection>({ mode: "ids", ids: new Set() });
   const [menuOpen, setMenuOpen] = useState(false);
@@ -56,6 +57,7 @@ export function ContactsView() {
     try {
       const [t, s] = await Promise.all([contactBookApi.tags(), segmentsApi.list()]);
       setTags(t.items);
+      setCurrency(t.currency);
       setSegments(s.items);
     } catch (err) {
       setError(err);
@@ -202,7 +204,7 @@ export function ContactsView() {
             <Button variant="outline" onClick={() => setImportOpen(true)}>Importar CSV</Button>
           </div>
 
-          <FilterBuilder filter={filter} onChange={setFilter} tags={tags} segments={segments} onSaveSegment={() => setSaveOpen(true)} />
+          <FilterBuilder filter={filter} onChange={setFilter} tags={tags} segments={segments} currency={currency} onSaveSegment={() => setSaveOpen(true)} />
 
           {error ? <div className="mb-3"><Alert>{errorMessage(error)}</Alert></div> : null}
           {notice ? (

@@ -96,9 +96,22 @@ describe("compileCondition (number)", () => {
     ["gt", ">"],
     ["lt", "<"],
   ])("%s", (operator, op) => {
-    const q = render({ field: "total_paid", type: "number", operator, value: 1500 });
-    expect(q.sql).toContain(`) ${op} $5::numeric`);
-    expect(q.params).toContain("1500");
+    const q = render({ field: "total_paid", type: "number", operator, value: { amountMinor: 1500, currency: "USD" } });
+    expect(q.sql).toContain(`and "orders"."currency" = $5) ${op} $6::numeric`);
+    expect(q.params.slice(-2)).toEqual(["USD", "1500"]);
+  });
+  it("money filters compare only within one currency (CLP has no decimals, USD has 2)", () => {
+    const clp = render({ field: "total_paid", type: "number", operator: "gt", value: { amountMinor: 10000, currency: "CLP" } });
+    expect(clp.params.slice(-2)).toEqual(["CLP", "10000"]);
+    const usd = render({ field: "total_paid", type: "number", operator: "gt", value: { amountMinor: 10000, currency: "USD" } });
+    expect(usd.params.slice(-2)).toEqual(["USD", "10000"]);
+    expect(() => render({ field: "total_paid", type: "number", operator: "gt", value: 1500 })).toThrow(/currency/);
+  });
+  it("schema requires {amountMinor, currency} for money", () => {
+    expect(valid({ field: "total_paid", type: "number", operator: "gt", value: 1500 })).toBe(false);
+    expect(valid({ field: "total_paid", type: "number", operator: "gt", value: { amountMinor: 1.5, currency: "USD" } })).toBe(false);
+    expect(valid({ field: "total_paid", type: "number", operator: "gt", value: { amountMinor: 150, currency: "usd" } })).toBe(false);
+    expect(valid({ field: "total_paid", type: "number", operator: "gt", value: { amountMinor: 150, currency: "CLP" } })).toBe(true);
   });
   it("has_any / is_unknown compare with zero", () => {
     expect(render({ field: "total_paid", type: "number", operator: "has_any" }).sql).toMatch(/\) > 0$/);
