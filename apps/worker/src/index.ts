@@ -11,6 +11,7 @@ import { createInboundWorker } from "./worker.js";
 import { createOutboundWorker } from "./outbound.js";
 import { FOLLOW_UP_QUEUE_NAME, createFollowUpWorker, scheduleFollowUpTick } from "./followups/index.js";
 import { CAPI_QUEUE_NAME, createCapiWorker, scheduleCapiTick, type FetchLike } from "./meta-capi/index.js";
+import { META_ADS_QUEUE_NAME, createMetaAdsWorker, scheduleMetaAdsTick, type MetaGetFetch } from "./meta-ads/index.js";
 import { BROADCAST_QUEUE_NAME, createBroadcastWorker, scheduleBroadcastTick } from "./broadcasts/index.js";
 import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
 import { createMailerFromEnv, renderEmail } from "@crmwsp/mailer";
@@ -26,6 +27,7 @@ export * from "./outbound.js";
 export * from "./ai/index.js";
 export * from "./followups/index.js";
 export * from "./meta-capi/index.js";
+export * from "./meta-ads/index.js";
 export * from "./notifications/index.js";
 export * from "./media/index.js";
 export * from "./webhooks/index.js";
@@ -94,6 +96,8 @@ function main(): void {
   let mediaWorker: ReturnType<typeof createMediaWorker> | undefined;
   let capiWorker: ReturnType<typeof createCapiWorker> | undefined;
   let capiQueue: Queue | undefined;
+  let metaAdsWorker: ReturnType<typeof createMetaAdsWorker> | undefined;
+  let metaAdsQueue: Queue | undefined;
   let webhooksWorker: ReturnType<typeof createWebhookWorker> | undefined;
   let webhookQueue: Queue | undefined;
   let broadcastWorker: ReturnType<typeof createBroadcastWorker> | undefined;
@@ -200,6 +204,13 @@ function main(): void {
     void scheduleCapiTick(capiQueue).catch((err: unknown) =>
       logger.warn(`capi scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
     );
+    // Meta Marketing API spend sync (every 6 h + "Sincronizar ahora" from the api); token needs the master keys.
+    const metaAdsFetch: MetaGetFetch = (url, init) => fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(30_000) });
+    metaAdsQueue = new Queue(META_ADS_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    metaAdsWorker = createMetaAdsWorker({ connection: createRedis(redisUrl), db: db.db, cipher, fetch: metaAdsFetch, logger });
+    void scheduleMetaAdsTick(metaAdsQueue).catch((err: unknown) =>
+      logger.warn(`meta ads scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
     // Outbound tenant webhooks (signed with the decrypted endpoint secret). http:// only outside production.
     webhookQueue = new Queue(WEBHOOK_QUEUE_NAME, { connection: createRedis(redisUrl) });
     webhooksWorker = createWebhookWorker({
@@ -237,8 +248,8 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
-      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close(), orderExtractionQueue.close()]))
+    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
+      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), metaAdsQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close(), orderExtractionQueue.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));
   };

@@ -68,7 +68,8 @@ export async function loadProfitability(tx: Transaction, tenantId: string, query
       select distinct p.currency::text as currency
       from payments p join orders o on o.tenant_id = p.tenant_id and o.id = p.order_id
       where ${VERIFIED_PAYMENT} and p.paid_at >= ${lo} and p.paid_at < ${hi}
-      union select distinct currency::text from ad_spend`),
+      union select distinct currency::text from ad_spend
+      union select distinct currency::text from ad_spend_daily where date >= ${from}::date and date <= ${to}::date`),
     tx.execute(sql`
       select coalesce(c1.contact_id, c2.contact_id)::text as contact_id,
              coalesce(sum(u.cost_minor) filter (where u.kind in ${AI_KINDS} and u.currency = 'USD' and u.meta->>'unit' = 'usd_microcents'), 0)::text as ai_micro,
@@ -90,10 +91,22 @@ export async function loadProfitability(tx: Transaction, tenantId: string, query
              or exists (select 1 from broadcast_recipients br where br.tenant_id = m.tenant_id and br.message_id = m.id))
       group by 1, 2`),
     tx.execute(sql`
+      with spend as (
+        select d.ad_id as source_id, sum(d.spend_minor)::bigint as amount_minor, true as dated
+        from ad_spend_daily d
+        where d.currency = ${currency} and d.date >= ${from}::date and d.date <= ${to}::date
+        group by 1
+        union all
+        select s.source_id, s.amount_minor, false as dated
+        from ad_spend s
+        where s.currency = ${currency}
+          and not exists (select 1 from ad_spend_daily d where d.tenant_id = s.tenant_id and d.ad_id = s.source_id)
+      )
       select a.contact_id::text as contact_id, a.source_id, s.amount_minor::text as spend,
              count(*) over (partition by a.source_id)::int as n
-      from ad_attributions a join ad_spend s on s.tenant_id = a.tenant_id and s.source_id = a.source_id and s.currency = ${currency}
+      from ad_attributions a join spend s on s.source_id = a.source_id
       where a.source_id is not null
+        and (not s.dated or (a.first_seen_at >= ${lo} and a.first_seen_at < ${hi}))
       order by a.source_id, a.first_seen_at, a.contact_id`),
     tx.execute(sql`
       select count(*)::int as n from quotes
@@ -125,8 +138,10 @@ export async function loadProfitability(tx: Transaction, tenantId: string, query
     agg(r.contact_id).waMicro += r.n * whatsappRateFor(r.phone, rates);
   }
 
-  // Ad spend has no date: each ad's total is split evenly across ALL its first-touch contacts;
-  // only the shares of contacts active in the range are reported (estimate).
+  // Dated spend (daily Meta sync, precedence for the same ad): the range's spend is split evenly
+  // across the ad's contacts first attributed in the range. Manual spend has no date: each ad's
+  // total is split across ALL its first-touch contacts; only the shares of contacts active in the
+  // range are reported (estimate).
   const ads = new Map<string, { spendMinor: number; contacts: string[] }>();
   const attribution = rows<{ contact_id: string; source_id: string; spend: string; n: number }>(attributions);
   for (let i = 0; i < attribution.length; ) {

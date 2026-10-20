@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   adAttributions,
   adSpend,
+  adSpendDaily,
   channelConnections,
   contacts,
   conversations,
@@ -174,5 +175,19 @@ describe.skipIf(!hasDb)("profitability report (app role, RLS)", () => {
     expect(r.unconverted[0]?.usageCostMinor).toBe(12);
     expect(r.totals.conversations).toBe(2);
     expect(r.totals.costPerConversationMinor).toBe(21);
+  });
+
+  it("uses the daily synced spend of the range over the manual total for the same ad", async () => {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    await dangerouslyWithoutTenant(migrator.db, (tx) =>
+      tx.insert(adSpendDaily).values([
+        { tenantId: tenant, adId: "ad-1", date: today, spendMinor: 300, currency: "USD", adAccountId: "act_1" },
+        { tenantId: tenant, adId: "ad-1", date: yesterday, spendMinor: 999, currency: "USD", adAccountId: "act_1" },
+      ]),
+    );
+    const r = await report({ from: today, to: today, groupBy: "ad" });
+    expect(r.rows[0]?.adSpendMinor).toBe(300);
+    const wide = await report({ from: yesterday, to: today, groupBy: "ad" });
+    expect(wide.rows[0]?.adSpendMinor).toBe(1299);
   });
 });
