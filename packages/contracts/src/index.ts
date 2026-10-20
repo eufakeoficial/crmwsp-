@@ -19,3 +19,4 @@ export * from "./ads.js";
 export * from "./developers.js";
 export * from "./voice-settings.js";
 export * from "./broadcasts.js";
+export * from "./contacts.js";

@@ -2,6 +2,7 @@ import type { Contact } from "@crmwsp/contracts";
 import type { ReactNode } from "react";
 import { Avatar, Badge, Card } from "@/components/ui";
 import type { PanelField } from "@/components/ui";
+import { ContactActivity } from "@/components/contacts/ContactActivity";
 import { extractedRows } from "@/lib/contact-extracted";
 
 /** Rows shown in the contact card (desktop column) and in the mobile SidePanel. */
@@ -34,7 +35,7 @@ export function contactFields(summary: { name: string | null; phoneE164: string 
     { label: "Teléfono", value: summary.phoneE164 },
     { label: "Etiquetas", value: tags },
     { label: "Datos extraídos", value: extracted },
-    { label: "Oportunidades", value: <span className="font-normal text-muted">próximamente</span> },
+    { label: "Oportunidades", value: <ContactActivity contactId={contact?.id} /> },
   ];
 }
 
