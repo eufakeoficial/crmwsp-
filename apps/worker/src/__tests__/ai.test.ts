@@ -246,6 +246,62 @@ describe.skipIf(!hasEnv)("AI worker (Postgres + Redis, mocked LLM fetch)", () =>
     expect(eventsOf("ai.handoff", conv.conversationId)).toHaveLength(1);
   });
 
+  describe("emoji reactions", () => {
+    const reactionJobs = async () => (await outbound.getJobs(["waiting", "delayed", "active", "completed"])).filter((j) => j.name === "send-reaction");
+
+    it("auto mode stores the reaction on the customer message and enqueues one send-reaction job", async () => {
+      const t = await tenant();
+      const conv = await seedConversation(migrator, t, "auto", "Muchas gracias!");
+      const llm = mockLlm(() => turnJson({ reaction: { emoji: "🙏" } }));
+      const out = await processAiTurn(deps(llm), turnData(t, conv.conversationId, conv.firstMessageId!));
+      expect(out).toMatchObject({ outcome: "processed" });
+      const [row] = await migrator.db.select().from(messages).where(eq(messages.id, conv.firstMessageId!));
+      expect(row).toMatchObject({ reaction: "🙏", reactionBy: "ai" });
+      const job = (await reactionJobs()).find((j) => j.data.messageId === conv.firstMessageId);
+      expect(job?.data).toEqual({ tenantId: t.tenantId, messageId: conv.firstMessageId, emoji: "🙏" });
+      expect(eventsOf("message.status", conv.conversationId)).toHaveLength(1);
+    });
+
+    it("an emoji outside the allowed set is dropped", async () => {
+      const t = await tenant();
+      const conv = await seedConversation(migrator, t, "auto", "ok");
+      const llm = mockLlm(() => turnJson({ reaction: { emoji: "💀" } }));
+      await processAiTurn(deps(llm), turnData(t, conv.conversationId, conv.firstMessageId!));
+      const [row] = await migrator.db.select().from(messages).where(eq(messages.id, conv.firstMessageId!));
+      expect(row?.reaction).toBeNull();
+      expect((await reactionJobs()).some((j) => j.data.messageId === conv.firstMessageId)).toBe(false);
+    });
+
+    it("assist mode never reacts", async () => {
+      const t = await tenant();
+      const conv = await seedConversation(migrator, t, "assist", "gracias");
+      const llm = mockLlm(() => turnJson({ reaction: { emoji: "👍" } }));
+      await processAiTurn(deps(llm), turnData(t, conv.conversationId, conv.firstMessageId!));
+      const [row] = await migrator.db.select().from(messages).where(eq(messages.id, conv.firstMessageId!));
+      expect(row?.reaction).toBeNull();
+      expect((await reactionJobs()).some((j) => j.data.messageId === conv.firstMessageId)).toBe(false);
+    });
+
+    it("a paused contact is not reacted to", async () => {
+      const t = await tenant();
+      const conv = await seedConversation(migrator, t, "auto", "gracias");
+      await migrator.db.update(contacts).set({ automationsPausedUntil: new Date(Date.now() + 3_600_000) }).where(eq(contacts.id, conv.contactId));
+      const llm = mockLlm(() => turnJson({ reaction: { emoji: "👍" } }));
+      await processAiTurn(deps(llm), turnData(t, conv.conversationId, conv.firstMessageId!));
+      const [row] = await migrator.db.select().from(messages).where(eq(messages.id, conv.firstMessageId!));
+      expect(row?.reaction).toBeNull();
+    });
+
+    it("a turn that hands off does not react", async () => {
+      const t = await tenant();
+      const conv = await seedConversation(migrator, t, "auto", "esto es un desastre");
+      const llm = mockLlm(() => turnJson({ reaction: { emoji: "😂" }, actions: [{ type: "handoff", reason: "complaint" }], needsHuman: true }));
+      await processAiTurn(deps(llm), turnData(t, conv.conversationId, conv.firstMessageId!));
+      const [row] = await migrator.db.select().from(messages).where(eq(messages.id, conv.firstMessageId!));
+      expect(row?.reaction).toBeNull();
+    });
+  });
+
   it("assist mode stores a draft_reply and sends nothing", async () => {
     const t = await tenant();
     const { chunkIds } = await seedKnowledge(migrator, t, ["Entrega en 3 dias habiles."]);

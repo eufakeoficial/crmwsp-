@@ -1,6 +1,6 @@
 "use client";
 
-import type { ConversationNote, InboxConversation, Message, TagDto, TenantMember } from "@crmwsp/contracts";
+import type { ConversationNote, InboxConversation, Message, ReactionEmoji, TagDto, TenantMember } from "@crmwsp/contracts";
 import type { ReactNode } from "react";
 import { Alert } from "@/components/ui";
 import { isOutsideServiceWindow } from "@/lib/service-window";
@@ -42,6 +42,7 @@ export function ConversationThread({
   onSend,
   onSendNote,
   onSendTemplate,
+  onReact,
   onLoadOlder,
 }: {
   conversationId: string;
@@ -66,6 +67,7 @@ export function ConversationThread({
   onSend: (text: string) => Promise<void>;
   onSendNote: (text: string) => Promise<boolean>;
   onSendTemplate: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
+  onReact: (messageId: string, emoji: ReactionEmoji | null) => Promise<void>;
   onLoadOlder: () => void;
 }) {
   return (
@@ -86,7 +88,7 @@ export function ConversationThread({
         <div className="border-b border-line p-3 text-sm text-muted" aria-busy={loading}>{loading ? "Cargando conversación…" : " "}</div>
       )}
       {error ? <div className="p-3"><Alert>{error}</Alert></div> : null}
-      <MessageTimeline conversationId={conversationId} messages={messages} notes={notes} hideSystem={hideSystem} hasOlder={hasOlder} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
+      <MessageTimeline conversationId={conversationId} messages={messages} notes={notes} hideSystem={hideSystem} hasOlder={hasOlder} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} onReact={onReact} />
       {conversation ? (
         <Composer
           key={conversationId}

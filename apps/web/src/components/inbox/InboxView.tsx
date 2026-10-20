@@ -485,6 +485,7 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
                     onSend={thread.send}
                     onSendNote={sendNote}
                     onSendTemplate={thread.sendTemplate}
+                    onReact={thread.react}
                     onLoadOlder={() => void thread.loadOlder()}
                   />
                 </div>

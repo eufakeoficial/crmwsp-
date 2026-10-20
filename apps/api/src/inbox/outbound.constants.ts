@@ -17,3 +17,11 @@ export interface SendMessageJobData {
   tenantId: string;
   messageId: string;
 }
+
+/** Emoji reaction job (keep in sync with apps/worker/src/queue.ts). Empty emoji removes the reaction. */
+export const SEND_REACTION_JOB = "send-reaction";
+export interface SendReactionJobData {
+  tenantId: string;
+  messageId: string;
+  emoji: string;
+}

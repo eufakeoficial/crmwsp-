@@ -45,6 +45,8 @@ export function optimisticMessage(conversationId: string, text: string, clientMe
     authorUserId: userId,
     clientMessageId,
     error: null,
+    reaction: null,
+    reactionBy: null,
     sentAt: null,
     createdAt: now.toISOString(),
     attachments: [],

@@ -8,6 +8,7 @@ export type InboundMessageType =
   | "document"
   | "location"
   | "interactive"
+  | "reaction"
   | "unsupported";
 
 export interface InboundMedia {
@@ -41,6 +42,13 @@ export interface InboundReferral {
   ctwaClid?: string;
 }
 
+/** Customer reaction to one of our messages. Empty `emoji` means the reaction was removed. */
+export interface InboundReaction {
+  /** External id of the message that was reacted to. */
+  targetExternalId: string;
+  emoji: string;
+}
+
 export interface NormalizedInboundMessage {
   externalId: string;
   /** E.164 sender phone. */
@@ -51,6 +59,7 @@ export interface NormalizedInboundMessage {
   text?: string;
   media?: InboundMedia;
   location?: InboundLocation;
+  reaction?: InboundReaction;
   contactName?: string;
   referral?: InboundReferral;
   raw: unknown;
@@ -90,6 +99,15 @@ export interface OutboundMedia {
 export interface SendOptions {
   /** Disable link previews for text messages. */
   previewUrl?: boolean;
+}
+
+export interface ReactionRequest {
+  /** E.164 recipient. */
+  to: string;
+  /** External id of the customer message to react to. */
+  messageExternalId: string;
+  /** Emoji; empty string removes a previous reaction. */
+  emoji: string;
 }
 
 export interface SendResult {

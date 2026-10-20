@@ -69,6 +69,8 @@ export interface IngestMessageResult {
   conversationId: string;
   messageId: string;
   duplicate: boolean;
+  /** Set when the event was a customer reaction applied to this outbound message. */
+  reactedMessageId?: string;
   /** Set when the message came from a verified owner phone (F9): no conversation was touched. */
   ownerCommandId?: string;
 }
@@ -149,6 +151,27 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     const connectionId = event.channelConnectionId;
     if (!connectionId) throw new UnrecoverableError("inbound event has no channel connection");
     const now = new Date();
+
+    // A customer reaction is not a message: it decorates the message it targets (and clears with an
+    // empty emoji). Idempotent by construction; never creates contacts, conversations or AI turns.
+    if (m.type === "reaction") {
+      const emoji = m.reaction?.emoji.trim() ?? "";
+      const [target] = m.reaction
+        ? await tx
+            .update(messages)
+            .set(emoji ? { reaction: emoji, reactionBy: "contact" } : { reaction: null, reactionBy: null })
+            .where(and(eq(messages.externalId, m.reaction.targetExternalId), eq(messages.direction, "outbound")))
+            .returning({ id: messages.id, conversationId: messages.conversationId })
+        : [];
+      await markProcessed(tx, eventId);
+      return {
+        conversationId: target?.conversationId ?? "",
+        messageId: target?.id ?? "",
+        duplicate: true,
+        scheduleAiTurn: false,
+        ...(target ? { reactedMessageId: target.id } : {}),
+      };
+    }
 
     // Replay of an already ingested message (e.g. BullMQ removed the completed job and the BSP
     // retried): return before touching contacts/conversations, so a replay after the
@@ -328,6 +351,10 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn, attachmentId, mediaMimeType: m.media?.mimeType ?? null };
   });
   const { scheduleAiTurn, attachmentId, mediaMimeType, ...result } = out;
+  if (result.reactedMessageId) {
+    await publish(deps, tenantId, { type: "message.status", conversationId: result.conversationId, messageId: result.reactedMessageId });
+    return result;
+  }
   if (result.ownerCommandId) {
     if (!result.duplicate) await enqueueOwnerCommand(deps.ownerQueue, tenantId, result.ownerCommandId, deps.logger ?? silent);
     return result;

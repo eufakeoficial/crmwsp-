@@ -5,7 +5,7 @@ import { deliveryErrorText, failMessage, mergeMessages, optimisticMessage, remov
 const C = "00000000-0000-4000-8000-0000000000c1";
 const base = (over: Partial<Message>): Message => ({
   id: "00000000-0000-4000-8000-000000000001", conversationId: C, direction: "inbound", type: "text", body: "x", status: "received",
-  author: "contact", authorUserId: null, clientMessageId: null, error: null, sentAt: null, createdAt: "2026-10-19T10:00:00.000Z", attachments: [], ...over,
+  author: "contact", authorUserId: null, clientMessageId: null, error: null, reaction: null, reactionBy: null, sentAt: null, createdAt: "2026-10-19T10:00:00.000Z", attachments: [], ...over,
 });
 
 describe("mergeMessages", () => {

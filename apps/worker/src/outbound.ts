@@ -26,7 +26,9 @@ import {
   OUTBOUND_QUEUE_NAME,
   SEND_MESSAGE_JOB,
   SEND_MESSAGE_MAX_ATTEMPTS,
+  SEND_REACTION_JOB,
   type SendMessageJobData,
+  type SendReactionJobData,
 } from "./queue.js";
 
 /** AAD purpose of the encrypted Gupshup API key (same as apps/api channels). */
@@ -382,6 +384,85 @@ export async function processSendMessage(
   return result.res;
 }
 
+export type SendReactionResult = { outcome: "sent" } | { outcome: "skipped"; reason: "stale" | "not-found" } | { outcome: "failed" };
+
+function assertReactionData(data: unknown): SendReactionJobData {
+  const d = data as Partial<SendReactionJobData> | null;
+  if (!d || !isUuid(d.tenantId) || !isUuid(d.messageId) || typeof d.emoji !== "string" || d.emoji.length > 32) {
+    throw new UnrecoverableError("invalid job data");
+  }
+  return { tenantId: d.tenantId, messageId: d.messageId, emoji: d.emoji };
+}
+
+/**
+ * Sends an emoji reaction to an inbound message. The reaction is already stored on the row (so the
+ * inbox shows it); the job only delivers it. A job whose emoji no longer matches the row is stale
+ * and skipped. A permanent failure clears the stored reaction so the inbox never claims a reaction
+ * the customer did not get.
+ */
+export async function processSendReaction(
+  deps: SendDeps,
+  data: unknown,
+  attempt: SendAttempt = { attemptsMade: 0, maxAttempts: SEND_MESSAGE_MAX_ATTEMPTS },
+): Promise<SendReactionResult> {
+  const { tenantId, messageId, emoji } = assertReactionData(data);
+  const result = await withTenant(deps.db, tenantId, async (tx) => {
+    const [loaded] = await tx
+      .select({
+        direction: messages.direction,
+        externalId: messages.externalId,
+        reaction: messages.reaction,
+        reactionBy: messages.reactionBy,
+        conversationId: messages.conversationId,
+        to: contacts.phoneE164,
+        sourcePhone: channelConnections.phoneE164,
+        appName: channelConnections.externalAppId,
+        connectionStatus: channelConnections.status,
+        credentials: channelConnections.credentialsEncrypted,
+      })
+      .from(messages)
+      .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+      .innerJoin(contacts, eq(contacts.id, conversations.contactId))
+      .innerJoin(channelConnections, eq(channelConnections.id, conversations.channelConnectionId))
+      .where(eq(messages.id, messageId))
+      .limit(1);
+    if (!loaded || loaded.direction !== "inbound" || !loaded.externalId) {
+      return { res: { outcome: "skipped", reason: "not-found" } as SendReactionResult };
+    }
+    if ((loaded.reaction ?? "") !== emoji || loaded.reactionBy === "contact") {
+      return { res: { outcome: "skipped", reason: "stale" } as SendReactionResult };
+    }
+    try {
+      if (loaded.connectionStatus === "disabled") throw new UnrecoverableError("channel is disabled");
+      if (!loaded.credentials || !loaded.appName) throw new UnrecoverableError("channel has no credentials");
+      const apiKey = deps.cipher.decrypt(loaded.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
+      await deps.provider.sendReaction(
+        { apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone },
+        { to: loaded.to, messageExternalId: loaded.externalId, emoji },
+      );
+      return { res: { outcome: "sent" } as SendReactionResult, conversationId: loaded.conversationId };
+    } catch (err) {
+      const lastAttempt = attempt.attemptsMade + 1 >= attempt.maxAttempts;
+      if (isRetryable(err) && !lastAttempt) {
+        (deps.logger ?? silent).warn(`send-reaction ${messageId} transient failure (attempt ${attempt.attemptsMade + 1})`);
+        throw err;
+      }
+      if (emoji !== "") {
+        await tx
+          .update(messages)
+          .set({ reaction: null, reactionBy: null })
+          .where(and(eq(messages.id, messageId), eq(messages.reaction, emoji)));
+      }
+      (deps.logger ?? silent).warn(`send-reaction ${messageId} failed permanently`);
+      return { res: { outcome: "failed" } as SendReactionResult, conversationId: loaded.conversationId };
+    }
+  });
+  if (result.conversationId && result.res.outcome === "failed") {
+    await publish(deps, tenantId, { type: "message.status", conversationId: result.conversationId, messageId });
+  }
+  return result.res;
+}
+
 export interface OutboundWorkerOptions extends SendDeps {
   connection: ConnectionOptions;
   queueName?: string;
@@ -393,6 +474,12 @@ export function createOutboundWorker(opts: OutboundWorkerOptions): Worker {
   return new Worker(
     queueName,
     async (job: Job) => {
+      if (job.name === SEND_REACTION_JOB) {
+        return processSendReaction(deps, job.data, {
+          attemptsMade: job.attemptsMade,
+          maxAttempts: job.opts.attempts ?? 1,
+        });
+      }
       if (job.name !== SEND_MESSAGE_JOB) throw new UnrecoverableError("unknown job name");
       return processSendMessage(deps, job.data, {
         attemptsMade: job.attemptsMade,

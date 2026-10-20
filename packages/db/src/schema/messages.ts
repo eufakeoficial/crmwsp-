@@ -48,6 +48,10 @@ export const messages = pgTable(
     /** Positional params for `templateId`, validated against the template placeholders. */
     templateParams: jsonb("template_params").$type<string[]>(),
     error: jsonb("error").$type<Record<string, unknown>>(),
+    /** Emoji reaction on this message (one per message: the other party reacts, never the author). */
+    reaction: text("reaction"),
+    /** Who reacted: the contact (to our message) or ai/user (to the contact's message). */
+    reactionBy: messageAuthor("reaction_by"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
