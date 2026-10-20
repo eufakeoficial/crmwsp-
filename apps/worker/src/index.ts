@@ -12,6 +12,7 @@ import { FOLLOW_UP_QUEUE_NAME, createFollowUpWorker, scheduleFollowUpTick } from
 import { CAPI_QUEUE_NAME, createCapiWorker, scheduleCapiTick, type FetchLike } from "./meta-capi/index.js";
 import { BROADCAST_QUEUE_NAME, createBroadcastWorker, scheduleBroadcastTick } from "./broadcasts/index.js";
 import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
+import { createMailerFromEnv, renderEmail } from "@crmwsp/mailer";
 import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotificationTick } from "./notifications/index.js";
 import { OWNER_MODE_QUEUE_NAME, createOwnerInterpreter, createOwnerModeWorker, createOwnerSender } from "./owner-mode/index.js";
 import { WEBHOOK_QUEUE_NAME, createWebhookSender, createWebhookWorker, scheduleWebhookTick } from "./webhooks/index.js";
@@ -149,12 +150,22 @@ function main(): void {
     );
     // Owner notifications: SSE fan-out + optional owner WhatsApp through the outbound queue.
     notificationQueue = new Queue(NOTIFICATION_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    const mailer = createMailerFromEnv();
     notificationsWorker = createNotificationWorker({
       connection: createRedis(redisUrl),
       db: db.db,
       publisher,
       outboundQueue,
       sendOwnerText: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
+      sendOwnerEmail: async (msg) => {
+        if (!msg.to) return;
+        const { text, html } = renderEmail({
+          title: msg.title,
+          body: msg.body ?? "",
+          ...(process.env.PUBLIC_WEB_URL ? { ctaLabel: "Abrir CRMWSP", ctaUrl: `${process.env.PUBLIC_WEB_URL}/app` } : {}),
+        });
+        await mailer.send({ to: msg.to, subject: msg.title, text, html });
+      },
       logger,
     });
     void scheduleNotificationTick(notificationQueue).catch((err: unknown) =>
