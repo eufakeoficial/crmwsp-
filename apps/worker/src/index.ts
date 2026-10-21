@@ -44,6 +44,10 @@ const logger = {
 };
 
 function main(): void {
+  // CN-011: dev allowances need an explicit NODE_ENV; unset/unknown runs as production.
+  const nodeEnv = process.env["NODE_ENV"];
+  if (!nodeEnv) logger.error("worker: NODE_ENV is not set; running with production security defaults");
+  const devOrTest = nodeEnv === "development" || nodeEnv === "test";
   const redisUrl = process.env["REDIS_URL"] ?? "redis://localhost:6379";
   const databaseUrl = process.env["DATABASE_URL"];
   if (!databaseUrl) {
@@ -217,7 +221,7 @@ function main(): void {
       connection: createRedis(redisUrl),
       db: db.db,
       cipher,
-      send: createWebhookSender({ allowHttp: process.env["NODE_ENV"] !== "production" }),
+      send: createWebhookSender({ allowHttp: devOrTest }),
       logger,
     });
     void scheduleWebhookTick(webhookQueue).catch((err: unknown) =>

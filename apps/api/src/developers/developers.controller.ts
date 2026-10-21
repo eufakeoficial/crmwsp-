@@ -63,7 +63,9 @@ function endpointView(e: WebhookEndpoint): WebhookEndpointView {
 
 /** SSRF guard at registration (the worker re-checks + pins DNS at every delivery). */
 export function assertWebhookUrl(url: string): void {
-  const r = checkWebhookUrl(url, { allowHttp: process.env["NODE_ENV"] !== "production" });
+  // Fail closed (CN-011): http:// only with an explicit development/test NODE_ENV.
+  const nodeEnv = process.env["NODE_ENV"];
+  const r = checkWebhookUrl(url, { allowHttp: nodeEnv === "development" || nodeEnv === "test" });
   if (!r.ok) throw new ValidationError(`Webhook URL rejected (${r.reason})`);
 }
 

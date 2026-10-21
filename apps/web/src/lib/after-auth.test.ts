@@ -17,3 +17,16 @@ describe("postAuthDestination", () => {
     expect(safeNextPath("/" + "\\" + "evil.com")).toBeNull();
   });
 });
+
+describe("safeNextPath open-redirect hardening (CN-014)", () => {
+  it.each(["/%09/evil.com", "/\t/evil.com", "//evil.com", "/\\evil.com", "https://evil.com", "/\n/evil.com", "/ok\u007f", "/a\\b"])(
+    "rejects %j",
+    (next) => {
+      expect(safeNextPath(next)).toBeNull();
+    },
+  );
+
+  it("keeps a valid same-origin path with query and hash", () => {
+    expect(safeNextPath("/app/quotes?x=1#y")).toBe("/app/quotes?x=1#y");
+  });
+});

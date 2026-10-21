@@ -6,12 +6,10 @@ import { LlmProviderError, UnsafeBaseUrlError } from "../errors.js";
  * SSRF guard for user-supplied (BYOK) base URLs.
  *
  * Strategy: resolve the host with `dns.lookup({ all: true })` before EVERY request and
- * reject if ANY address is private/reserved. We do not pin the resolved IP because
- * `fetch` offers no portable way to connect to an IP while keeping SNI/Host for TLS
- * without adding an HTTP client dependency. Residual risk: DNS rebinding between our
- * lookup and fetch's own lookup (TOCTOU). Mitigations: short window, `redirect: 'error'`,
- * https-only in production, and the deployment egress policy should also block
- * internal ranges (defense in depth).
+ * reject if ANY address is private/reserved (fail fast, clear error). The connection itself
+ * goes through `createSafeFetch` (safe-fetch.ts), which re-checks inside the socket lookup and
+ * connects to that vetted address, closing the DNS-rebinding window (CN-009).
+ * Redirects are rejected and production is https-only.
  */
 
 const blocked = new BlockList();
@@ -79,7 +77,7 @@ export const defaultLookup: LookupFn = (hostname) => dnsLookup(hostname, { all: 
 export interface SafeUrlOptions {
   /** Allows http and local/private hosts (dev only, e.g. a local Ollama). Ignored in production. */
   allowInsecureLocal?: boolean;
-  /** Defaults to `process.env.NODE_ENV === 'production'`. */
+  /** Defaults to production unless NODE_ENV is explicitly "development" or "test". */
   production?: boolean;
   lookup?: LookupFn;
 }
@@ -87,7 +85,12 @@ export interface SafeUrlOptions {
 const LOCAL_NAMES = new Set(["localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback"]);
 
 function isProduction(opts: SafeUrlOptions): boolean {
-  return opts.production ?? process.env.NODE_ENV === "production";
+  return opts.production ?? !isDevOrTestEnv();
+}
+
+/** Dev allowances require an explicit NODE_ENV; unset or unknown values count as production (CN-011). */
+export function isDevOrTestEnv(env: string | undefined = process.env.NODE_ENV): boolean {
+  return env === "development" || env === "test";
 }
 
 /** Synchronous checks on the URL itself (scheme, credentials, literal host). Returns the parsed URL. */
