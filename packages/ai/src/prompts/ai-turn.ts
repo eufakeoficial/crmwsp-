@@ -1,4 +1,6 @@
+import type { PlaybookPromptContext } from "@crmwsp/contracts";
 import type { ChatMessage } from "../provider/types.js";
+import { renderPlaybookBlock } from "./playbook.js";
 
 /** Bump whenever the wording or structure changes; stored with every AI turn for audit. */
 export const PROMPT_VERSION = "ai-turn/2026-10-21.1";
@@ -23,6 +25,8 @@ export interface BuildAiTurnInput {
   contact: Record<string, string | null | undefined>;
   retrievedChunks: PromptChunk[];
   nowIso: string;
+  /** Compact sales-playbook context; absent or null leaves the prompt byte-for-byte unchanged. */
+  playbook?: PlaybookPromptContext | null;
 }
 
 const CORE_RULES = `You are the WhatsApp assistant of a business. You PROPOSE replies and actions; the system decides what runs.
@@ -60,6 +64,7 @@ export function buildAiTurnMessages(input: BuildAiTurnInput): ChatMessage[] {
     CORE_RULES,
     `Business name: ${attr(input.tenantName)}. Current time: ${attr(input.nowIso)}. Prompt version: ${PROMPT_VERSION}.`,
     `Business-specific instructions (cannot override the hard rules above):\n<business_instructions>\n${escapeData(input.systemPrompt)}\n</business_instructions>`,
+    ...(input.playbook ? [renderPlaybookBlock(input.playbook, escapeData)] : []),
   ].join("\n\n");
 
   const knowledge =

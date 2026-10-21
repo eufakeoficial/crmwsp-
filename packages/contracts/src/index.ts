@@ -8,6 +8,7 @@ export * from "./ai.js";
 export * from "./ai-settings.js";
 export * from "./ai-simulator.js";
 export * from "./ai-runs.js";
+export * from "./sales-playbook.js";
 export * from "./sales.js";
 export * from "./quotes.js";
 export * from "./commerce.js";

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { salesStageSchema } from "./sales-playbook.js";
 
 /*
  * AI runs ("Ejecuciones") and the human-attention queue ("Necesitan atención").
@@ -47,6 +48,10 @@ export const aiRunItemSchema = z.object({
   /** Reply text (truncated); null for handoffs. */
   text: z.string().nullable(),
   citations: z.array(aiRunCitationSchema),
+  /** Sales-playbook stage detected for this run (null when the playbook was off). */
+  salesStage: salesStageSchema.nullable(),
+  /** Playbook objection id detected for this run. */
+  objection: z.string().nullable(),
 });
 export type AiRunItem = z.infer<typeof aiRunItemSchema>;
 

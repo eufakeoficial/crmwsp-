@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AI_CLAIM_KINDS, REACTION_EMOJIS, aiTurnOutputSchema, normalizeReactionEmoji } from "@crmwsp/contracts";
+import { AI_CLAIM_KINDS, REACTION_EMOJIS, SALES_STAGES, aiTurnOutputSchema, normalizeReactionEmoji } from "@crmwsp/contracts";
 import type { AiTurnOutput } from "@crmwsp/contracts";
 import type { ResponseFormat } from "./provider/types.js";
 
@@ -52,6 +52,8 @@ export const aiTurnJsonSchema: JsonSchema = obj({
     },
   },
   reaction: nullable(obj({ emoji: { type: "string", enum: [...REACTION_EMOJIS] } })),
+  salesStage: nullable({ type: "string", enum: [...SALES_STAGES] }),
+  objection: nullable(str),
   confidence: num,
   needsHuman: { type: "boolean" },
   reason: str,
@@ -62,6 +64,9 @@ export function normalizeAiTurnOutput(raw: unknown): unknown {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
   const out: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
   if (out.reply === null) delete out.reply;
+  // Playbook detection is best effort: null, absent or off-list values never fail the turn.
+  if (typeof out.salesStage !== "string" || !(SALES_STAGES as readonly string[]).includes(out.salesStage)) delete out.salesStage;
+  if (typeof out.objection !== "string" || out.objection === "" || out.objection.length > 40) delete out.objection;
   // Reactions are best effort: null, malformed or off-list emojis are dropped, never fail the turn.
   if ("reaction" in out) {
     const r = out.reaction;

@@ -10,6 +10,7 @@ import {
   type PromptConversationMessage,
 } from "@crmwsp/ai";
 import { AI_ACTION_TYPES, aiActionSchema, normalizeReactionEmoji } from "@crmwsp/contracts";
+import type { PlaybookConfig, SalesStage } from "@crmwsp/contracts";
 import type { AiActionType, AiDecision, AiTurnOutput } from "@crmwsp/contracts";
 import { checkLimit, resolveEffectivePlan } from "@crmwsp/billing";
 import {
@@ -26,6 +27,7 @@ import {
   searchChunks,
   searchChunksText,
   tenants,
+  salesPlaybooks,
   usageLedger,
   withTenant,
   type AgentPolicies,
@@ -35,7 +37,7 @@ import {
   type LlmConnection,
   type Transaction,
 } from "@crmwsp/db";
-import { evaluateTurn, type TenantAiPolicies } from "@crmwsp/domain";
+import { buildPlaybookContext, evaluateTurn, isSalesStage, resolvePlaybook, sanitizeDetectedPlaybook, type TenantAiPolicies } from "@crmwsp/domain";
 import { UnrecoverableError } from "bullmq";
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { InboxEvent } from "../processors.js";
@@ -259,6 +261,9 @@ interface Prepared {
   transcripts: Map<string, string>;
   /** Trigger image while the contact has a `pending_payment` order: a receipt to review (T8). */
   receipt?: ReceiptImage;
+  /** Tenant sales playbook (defaults, disabled, when never saved) and the stage detected on the previous AI reply. */
+  playbook: PlaybookConfig;
+  previousStage: SalesStage | null;
 }
 
 /** Writes handoff rows inside `tx`; the conversation is moved to `pending` at most once. */
@@ -415,8 +420,37 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
       receipt = { attachmentId: img?.id ?? null, externalMediaId: img?.externalMediaId ?? null, mimeType: img?.mimeType ?? null, order };
     }
   }
+  const [playbookRow] = await tx.select({ enabled: salesPlaybooks.enabled, config: salesPlaybooks.config }).from(salesPlaybooks).limit(1);
+  const playbook = resolvePlaybook(playbookRow);
+  let previousStage: SalesStage | null = null;
+  if (playbook.enabled) {
+    const [prev] = await tx
+      .select({ stage: sql<string | null>`${aiActions.payload}->>'salesStage'` })
+      .from(aiActions)
+      .where(
+        and(
+          eq(aiActions.conversationId, conversationId),
+          inArray(aiActions.type, ["send_reply", "draft_reply"]),
+          sql`${aiActions.payload}->>'salesStage' is not null`,
+        ),
+      )
+      .orderBy(desc(aiActions.createdAt), desc(aiActions.id))
+      .limit(1);
+    previousStage = isSalesStage(prev?.stage) ? prev.stage : null;
+  }
   return {
-    prep: { conn, tenantName: tenant?.name ?? "", config, contact, history, triggerAudio, transcripts, ...(receipt ? { receipt } : {}) },
+    prep: {
+      conn,
+      tenantName: tenant?.name ?? "",
+      config,
+      contact,
+      history,
+      triggerAudio,
+      transcripts,
+      playbook,
+      previousStage,
+      ...(receipt ? { receipt } : {}),
+    },
   };
 }
 
@@ -449,7 +483,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   // 1. Short read transaction.
   const phase1 = await withTenant(deps.db, tenantId, (tx) => prepare(deps, tx, c));
   if ("done" in phase1) return phase1.done;
-  const { conn, tenantName, config, contact, triggerAudio, transcripts } = phase1.prep;
+  const { conn, tenantName, config, contact, triggerAudio, transcripts, playbook, previousStage } = phase1.prep;
 
   // Receipt image for a pending order: extract for a human reviewer; never marks the order paid.
   if (phase1.prep.receipt) {
@@ -501,6 +535,8 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   // 2. Provider calls, outside any transaction (no pooled connection held while the LLM thinks).
   let calls: ModelCall[];
   let hits: ChunkHit[] = [];
+  /** Objection ids offered in this turn's prompt: the only ones the model may report back. */
+  let offeredObjectionIds: string[] = [];
   let queryEmbeddingTokens: { model: string; tokens: number } | undefined;
   try {
     const provider = buildProvider(deps, tenantId, conn);
@@ -570,6 +606,8 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       const title = sourceTitles.get(h.sourceId);
       return { chunkId: h.id, content: h.content, ...(title ? { title } : {}) };
     });
+    const playbookCtx = buildPlaybookContext(playbook, { previousStage, customerText: query });
+    offeredObjectionIds = playbookCtx?.objections.map((o) => o.id) ?? [];
     const chatMessages = buildAiTurnMessages({
       systemPrompt: config?.systemPrompt ?? "",
       tenantName,
@@ -577,6 +615,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       contact: { name: contact?.name, phone: contact?.phoneE164, ...flattenExtracted(contact?.extracted ?? {}) },
       retrievedChunks,
       nowIso: now.toISOString(),
+      playbook: playbookCtx,
     });
     calls = await callModel(provider, conn, chatMessages);
   } catch (err) {
@@ -601,7 +640,16 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
 
   // 3. Short persistence transaction.
   return withTenant(deps.db, tenantId, (tx) =>
-    persist(tx, c, { conn, config, calls, hits, contextIds, confidenceThreshold, queryEmbeddingTokens }),
+    persist(tx, c, {
+      conn,
+      config,
+      calls,
+      hits,
+      contextIds,
+      confidenceThreshold,
+      queryEmbeddingTokens,
+      playbook: { enabled: playbook.enabled, offeredObjectionIds },
+    }),
   );
 }
 
@@ -701,6 +749,8 @@ interface PersistInput {
   contextIds: Set<string>;
   confidenceThreshold: number;
   queryEmbeddingTokens: { model: string; tokens: number } | undefined;
+  /** Sales playbook state of the turn: detection is stored only while it is enabled. */
+  playbook: { enabled: boolean; offeredObjectionIds: string[] };
 }
 
 async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<TurnTx> {
@@ -735,6 +785,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
   const final = p.calls[p.calls.length - 1]!;
   const output = final.result.parsed as AiTurnOutput;
   const modelUsed = final.model;
+  const detected = p.playbook.enabled ? sanitizeDetectedPlaybook(output, p.playbook.offeredObjectionIds) : {};
   // Auto only when nobody (human or handoff) owns the conversation; otherwise drafts.
   // An agent may have paused automations while the LLM was thinking: draft only (T23).
   const paused = await contactAutomationsPaused(tx, conv.contactId, c.now);
@@ -834,7 +885,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
           conversationId,
           messageId: triggerMessageId,
           type: "draft_reply",
-          payload: { text: reply.text, claims: reply.claims },
+          payload: { text: reply.text, claims: reply.claims, ...detected },
           citations,
           confidence: String(output.confidence),
           decision: "approve",
@@ -875,7 +926,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
           conversationId,
           messageId: triggerMessageId,
           type: "send_reply",
-          payload: { text: reply.text },
+          payload: { text: reply.text, ...detected },
           citations,
           confidence: String(output.confidence),
           decision: "auto",

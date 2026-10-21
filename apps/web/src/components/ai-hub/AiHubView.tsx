@@ -6,9 +6,12 @@ import { useEffect, useState, type JSX } from "react";
 import { PageHeader } from "@/components/app/EmptyState";
 import { buttonClasses, Card, StatusChip } from "@/components/ui";
 import { aiApi, knowledgeApi } from "@/lib/ai-api";
+import { computeCapabilityStatus, type AiCapabilityData } from "@/lib/ai-capabilities";
 import { computeHubStatus, type AiHubData, type HubFeatureKey } from "@/lib/ai-hub-status";
 import { ownerModeApi } from "@/lib/owner-mode-api";
+import { playbookApi } from "@/lib/playbook-api";
 import { voiceApi } from "@/lib/voice-api";
+import { AiCapabilities } from "./AiCapabilities";
 import { OrdersMock, OwnerMock, QuoteMock, SimulatorMock, SourcesMock, VoiceMock } from "./Mocks";
 
 const FEATURES: readonly { key: HubFeatureKey; title: string; text: string; href: string; mock: () => JSX.Element }[] = [
@@ -23,19 +26,20 @@ const FEATURES: readonly { key: HubFeatureKey; title: string; text: string; href
 const ok = <T,>(r: PromiseSettledResult<T>): T | undefined => (r.status === "fulfilled" ? r.value : undefined);
 
 export function AiHubView() {
-  const [data, setData] = useState<AiHubData | null>(null);
+  const [data, setData] = useState<AiCapabilityData | null>(null);
 
   useEffect(() => {
     let live = true;
-    void Promise.allSettled([aiApi.getConnection(), knowledgeApi.listSources(), voiceApi.get(), ownerModeApi.status()]).then(([c, s, v, o]) => {
-      if (live) setData({ connection: ok(c), sources: ok(s), voice: ok(v), owner: ok(o) });
+    void Promise.allSettled([aiApi.getConnection(), knowledgeApi.listSources(), voiceApi.get(), ownerModeApi.status(), aiApi.getAgentConfig(), playbookApi.get()]).then(([c, s, v, o, a, p]) => {
+      if (live) setData({ connection: ok(c), sources: ok(s), voice: ok(v), owner: ok(o), agent: ok(a), playbook: ok(p) });
     });
     return () => {
       live = false;
     };
   }, []);
 
-  const status = data ? computeHubStatus(data) : null;
+  const status = data ? computeHubStatus(data as AiHubData) : null;
+  const capabilities = data ? computeCapabilityStatus(data) : null;
   const connected = Boolean(data?.connection);
 
   return (
@@ -54,6 +58,11 @@ export function AiHubView() {
         </h2>
       </div>
 
+      <AiCapabilities status={capabilities} />
+
+      <div className="mt-8">
+        <h2 className="m-0 mb-3 text-[19px]">Empieza por aquí</h2>
+      </div>
       <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 md:grid-cols-2 desk:grid-cols-3">
         {FEATURES.map(({ key, title, text, href, mock: Mock }) => (
           <li key={key} className="flex">
