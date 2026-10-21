@@ -6,7 +6,7 @@ import { ShowcaseInbox } from "@/components/design/ShowcaseInbox";
 
 /** Internal catalogue of the design system. Not available in production. */
 export default function DesignPage() {
-  if (process.env.NODE_ENV === "production") notFound();
+  if (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test") notFound();
   return (
     <>
       <PageHeader title="Sistema de diseño" subtitle="Catálogo interno de componentes de CRMWSP. Solo disponible en desarrollo." />
