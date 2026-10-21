@@ -6,6 +6,9 @@ export interface SiteNavItem {
 /** Placeholder anchors for the future landing. */
 export const SITE_NAV: readonly SiteNavItem[] = [
   { href: "/#beneficios", label: "Beneficios" },
+  { href: "/#como-funciona", label: "Cómo funciona" },
+  { href: "/#demo", label: "Demo" },
+  { href: "/#precios", label: "Precios" },
   { href: "/#preguntas", label: "Preguntas" },
 ];
 
