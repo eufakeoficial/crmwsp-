@@ -31,7 +31,7 @@ import {
 } from "@crmwsp/db";
 import { pauseAfterAgentReply, renderTemplateBody, validateTemplateParams } from "@crmwsp/domain";
 import type { Queue } from "bullmq";
-import { CurrentTenant, CurrentTenantDb } from "../auth/decorators.js";
+import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { type HttpRequest, type RequestTenant, headerValue } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
@@ -182,6 +182,7 @@ export class ConversationsController {
 
   /** Agent reaction to a contact message (`emoji: null` removes it). Delivered by the worker. */
   @Post(":id/messages/:messageId/reaction")
+  @Roles("owner", "admin", "agent")
   @HttpCode(200)
   async react(
     @CurrentTenantDb() db: TenantDb,
@@ -221,23 +222,29 @@ export class ConversationsController {
   }
 
   @Post(":id/read")
+  // Read state is shared by the whole team (conversations.last_read_at), not per user:
+  // a viewer marking a conversation read would hide it from the agents' unread folder.
+  @Roles("owner", "admin", "agent")
   @HttpCode(204)
-  async read(@CurrentTenantDb() db: TenantDb, @Param("id") id: string): Promise<void> {
+  async read(@CurrentTenantDb() db: TenantDb, @CurrentTenant() tenant: RequestTenant, @Param("id") id: string): Promise<void> {
     if (!isUuid(id)) throw new NotFoundError();
-    const [row] = await db.run((tx) =>
-      tx
+    const [row] = await db.run(async (tx) => {
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
+      return tx
         .update(conversations)
         .set({ lastReadAt: sql`now()`, markedUnread: false })
         .where(eq(conversations.id, id))
-        .returning({ id: conversations.id }),
-    );
+        .returning({ id: conversations.id });
+    });
     if (!row) throw new NotFoundError();
     await this.hub.publish(db.tenantId, { type: "conversation.updated", conversationId: id });
   }
 
   @Patch(":id")
+  @Roles("owner", "admin", "agent")
   async update(
     @CurrentTenantDb() db: TenantDb,
+    @CurrentTenant() tenant: RequestTenant,
     @Param("id") id: string,
     @Body() body: unknown,
     @Req() req: HttpRequest,
@@ -252,6 +259,7 @@ export class ConversationsController {
     if (expected === undefined) throw new ValidationError("lockVersion or If-Match is required");
 
     const result = await db.run(async (tx) => {
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
       const [before] = await tx
         .select({
           status: conversations.status,
@@ -268,10 +276,11 @@ export class ConversationsController {
       if (input.assignedUserId) {
         // memberships is tenant-scoped by RLS: users of other tenants are never found.
         const [member] = await tx
-          .select({ id: memberships.id })
+          .select({ role: memberships.role })
           .from(memberships)
           .where(eq(memberships.userId, input.assignedUserId));
-        if (!member) throw new ValidationError("Assignee is not a member of this tenant");
+        // Same rule as POST /inbox/conversations/:id/assign: viewers cannot own conversations.
+        if (!member || member.role === "viewer") throw new ValidationError("Assignee is not an agent of this tenant");
       }
 
       const set: Partial<typeof conversations.$inferInsert> = {};
@@ -319,6 +328,7 @@ export class ConversationsController {
   }
 
   @Post(":id/messages")
+  @Roles("owner", "admin", "agent")
   @HttpCode(202)
   async send(
     @CurrentTenantDb() db: TenantDb,
@@ -409,12 +419,19 @@ export class ConversationsController {
   }
   /** Manual template send: the only way to write outside the 24 h window (T21). */
   @Post(":id/template-messages")
+  @Roles("owner", "admin", "agent")
   @HttpCode(202)
-  async sendTemplate(@CurrentTenantDb() db: TenantDb, @Param("id") id: string, @Body() body: unknown): Promise<Message> {
+  async sendTemplate(
+    @CurrentTenantDb() db: TenantDb,
+    @CurrentTenant() tenant: RequestTenant,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ): Promise<Message> {
     if (!isUuid(id)) throw new NotFoundError();
     const input = parseOrThrow(sendTemplateMessageRequestSchema, body);
 
     const { message, created } = await db.run(async (tx) => {
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
       const findExisting = async () => {
         const [row] = await tx
           .select(messageColumns)

@@ -6,7 +6,7 @@ import {
   type NotificationList,
 } from "@crmwsp/contracts";
 import { and, desc, eq, gt, inArray, notificationReads, notifications, sql, type Transaction } from "@crmwsp/db";
-import { CurrentTenantDb } from "../auth/decorators.js";
+import { CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
@@ -69,6 +69,8 @@ export class NotificationsController {
 
   /** Marks some (or all recent) notifications as read for the current user. Idempotent. */
   @Post("read")
+  // Per-user read state of the caller's own notifications: harmless for viewers.
+  @Roles("owner", "admin", "agent", "viewer")
   @HttpCode(200)
   async markRead(@CurrentTenantDb() db: TenantDb, @Body() body: unknown): Promise<{ unreadCount: number }> {
     const input = parseOrThrow(markNotificationsReadRequestSchema, body);
