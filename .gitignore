@@ -12,3 +12,15 @@ dump.rdb
 
 # Capturas locales para revisión
 .screens/
+
+# Secrets and keys
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Local admin credentials and dev logs
+.dev-admin.local.txt
+.prod-admin.local.txt
+.dev-*.log
