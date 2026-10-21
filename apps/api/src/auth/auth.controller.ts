@@ -1,13 +1,14 @@
 import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res } from "@nestjs/common";
 import { type MeResponse, loginRequestSchema, signupRequestSchema } from "@crmwsp/contracts";
 import { type HttpReply, type HttpRequest, type RequestUser, headerValue } from "../common/http.js";
+import { clientIp } from "../common/client-ip.js";
 import { parseOrThrow } from "../common/zod.js";
 import { AuthService, type ClientInfo } from "./auth.service.js";
 import { CurrentUser, Public } from "./decorators.js";
 import { clearSessionCookie, readSessionToken, setSessionCookie } from "./session-token.js";
 
 const clientInfo = (req: HttpRequest): ClientInfo => ({
-  ip: req.ip || null,
+  ip: clientIp(req),
   userAgent: headerValue(req, "user-agent") ?? null,
 });
 
@@ -51,7 +52,7 @@ export class AuthController {
   @Public({ sameOrigin: true })
   @HttpCode(204)
   async logout(@Req() req: HttpRequest, @Res({ passthrough: true }) reply: HttpReply): Promise<void> {
-    await this.auth.logout(readSessionToken(req));
+    await this.auth.logout(readSessionToken(req), clientInfo(req));
     clearSessionCookie(reply);
   }
 
