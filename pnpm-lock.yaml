@@ -231,6 +231,9 @@ importers:
       ioredis:
         specifier: 6.0.0
         version: 6.0.0
+      undici:
+        specifier: 7.30.1
+        version: 7.30.1
     devDependencies:
       '@types/node':
         specifier: 22.20.5
