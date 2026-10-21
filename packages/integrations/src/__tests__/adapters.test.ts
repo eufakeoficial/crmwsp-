@@ -132,7 +132,7 @@ describe("Hotmart", () => {
   });
   it("accepts the hottok and normalizes", () => {
     const ev = hotmartConnector.verifyWebhook(enc(body), { "X-HOTMART-HOTTOK": "hot-secret" }, "hot-secret");
-    expect(ev).toMatchObject({ type: "purchase_approved", verification: "shared_token", eventId: "evt-1" });
+    expect(ev).toMatchObject({ type: "purchase_approved", verification: "shared_token", eventId: "PURCHASE_APPROVED:HP123" });
     expect(ev.sale).toMatchObject({ externalId: "HP123", amountMinor: 9750, currency: "BRL", buyer: { phone: "5511999999999" } });
   });
   it("rejects a wrong hottok", () => {
@@ -205,6 +205,33 @@ describe("Payhip", () => {
   it("rejects a wrong signature", () => {
     expect(() => payhipConnector.verifyWebhook(enc(body("0".repeat(64))), {}, key)).toThrow(InvalidSignatureError);
     expect(() => payhipConnector.verifyWebhook(enc(body(good)), {}, "other-key")).toThrow(InvalidSignatureError);
+  });
+});
+
+describe("weak webhook auth (CN-016)", () => {
+  it("flags the static/semi-public token schemes as weakAuth, and only those", () => {
+    expect(gumroadConnector.weakAuth).toBe(true);
+    expect(hotmartConnector.weakAuth).toBe(true);
+    expect(payhipConnector.weakAuth).toBe(true);
+    expect(shopifyConnector.weakAuth ?? false).toBe(false);
+    expect(kiwifyConnector.weakAuth ?? false).toBe(false);
+    expect(eduzzConnector.weakAuth ?? false).toBe(false);
+  });
+
+  it("Hotmart dedupes by sale (event + transaction), not by the replayable envelope id", () => {
+    const mk = (id: string) =>
+      JSON.stringify({ id, event: "PURCHASE_APPROVED", data: { purchase: { transaction: "HP9", price: { value: 1, currency_value: "BRL" } } } });
+    const a = hotmartConnector.verifyWebhook(enc(mk("evt-a")), { "x-hotmart-hottok": "t" }, "t");
+    const b = hotmartConnector.verifyWebhook(enc(mk("evt-b")), { "x-hotmart-hottok": "t" }, "t");
+    expect(a.eventId).toBe(b.eventId);
+  });
+
+  it("Payhip and Gumroad event ids are bound to the sale id", () => {
+    const key = "k";
+    const sig = createHash("sha256").update(key).digest("hex");
+    const ev = payhipConnector.verifyWebhook(enc(JSON.stringify({ id: "ph-7", type: "paid", signature: sig })), {}, key);
+    expect(ev.eventId).toBe("paid:ph-7");
+    expect(gumroadConnector.verifyWebhook(enc("seller_id=s&sale_id=g-7"), {}, "s").eventId).toBe("g-7:approved");
   });
 });
 

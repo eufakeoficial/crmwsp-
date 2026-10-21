@@ -123,6 +123,12 @@ export interface CommerceConnector {
   readonly provider: CommerceProvider;
   readonly verification: VerificationScheme;
   /**
+   * True when the webhook is authenticated only by a static or semi-public value (no body
+   * signature, no replay protection). The UI must warn; the API applies a tighter
+   * per-connection rate limit and relies on event-id dedupe.
+   */
+  readonly weakAuth?: boolean;
+  /**
    * Verifies the request with the tenant's secret and normalizes it. `rawBody` MUST be the exact
    * bytes received. Throws InvalidSignatureError (reject, 400) or CommercePayloadError (400).
    */
