@@ -7,6 +7,7 @@ import { ElevenLabsTTSProvider, type TTSProvider } from "@crmwsp/ai";
 import { AI_QUEUE, TTS_PROVIDER, aiQueueName } from "./ai.constants.js";
 import { VoiceController } from "./voice.controller.js";
 import { AiActionsController } from "./ai-actions.controller.js";
+import { AiRunsController } from "./ai-runs.controller.js";
 import { AiController } from "./ai.controller.js";
 import { BotTemplatesController } from "./bot-templates.controller.js";
 import { LlmProviderFactory } from "./llm-provider.factory.js";
@@ -18,7 +19,7 @@ import { BillingModule } from "../billing/billing.module.js";
 
 @Module({
   imports: [AuthModule, ChannelsModule, BillingModule],
-  controllers: [AiController, AiActionsController, BotTemplatesController, VoiceController, SimulatorController, ImproveTextController],
+  controllers: [AiController, AiActionsController, AiRunsController, BotTemplatesController, VoiceController, SimulatorController, ImproveTextController],
   providers: [
     LlmProviderFactory,
     SimulatorService,
