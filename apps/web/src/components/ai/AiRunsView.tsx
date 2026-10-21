@@ -174,7 +174,7 @@ export function AiRunsView() {
   const { tenant } = useSession();
   return (
     <>
-      <PageHeader title="IA" subtitle="Qué hizo la IA en cada conversación y en qué fuentes se apoyó." />
+      <PageHeader title="IA" subtitle="Revisa qué respondió la IA en cada conversación y en qué información se apoyó." />
       <AiSectionTabs />
       {canViewAi(tenant?.role) ? <Body /> : <EmptyState title="Sin acceso">Pide a un propietario o administrador que te dé acceso.</EmptyState>}
     </>

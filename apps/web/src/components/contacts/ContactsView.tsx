@@ -154,7 +154,7 @@ export function ContactsView() {
 
   return (
     <>
-      <PageHeader title="Contactos" subtitle="Filtra, segmenta y actúa sobre tus clientes." />
+      <PageHeader title="Contactos" subtitle="Tu lista de clientes y personas que te escribieron: busca, filtra y agrupa para dar seguimiento." />
       <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
         <aside className="flex flex-col gap-4 text-sm">
           <section>
@@ -253,8 +253,8 @@ export function ContactsView() {
           {items === null ? (
             <p className="text-muted" aria-busy="true">Cargando contactos…</p>
           ) : items.length === 0 && !error ? (
-            <EmptyState title={query || filter.conditions.length ? "Sin resultados" : "Aún no hay contactos"}>
-              {query || filter.conditions.length ? "Prueba con otros filtros." : "Los contactos aparecerán cuando alguien escriba a tu WhatsApp."}
+            <EmptyState title={query || filter.conditions.length ? "Sin resultados" : "Aún no hay contactos"} {...(query || filter.conditions.length ? {} : { action: { href: "/app/channels", label: "Conectar tu WhatsApp" } })}>
+              {query || filter.conditions.length ? "Prueba con otros filtros." : "Primero conecta tu WhatsApp: los contactos aparecerán cuando alguien te escriba."}
             </EmptyState>
           ) : (
             <ul className="m-0 flex list-none flex-col gap-2 p-0">

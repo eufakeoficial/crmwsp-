@@ -65,7 +65,7 @@ export default function TeamPage() {
 
   return (
     <>
-      <PageHeader title="Equipo" subtitle="Las personas con acceso a tu empresa." />
+      <PageHeader title="Equipo" subtitle="Invita a quienes atienden a tus clientes y define qué puede hacer cada persona." />
       {state.status === "ready" ? (
         <div className="mb-3 flex justify-end">
           <Button size="sm" variant="accent" onClick={() => setInviting(true)}>

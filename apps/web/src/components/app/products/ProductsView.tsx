@@ -75,7 +75,7 @@ export function ProductsView() {
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader title="Productos" subtitle="Catálogo con variantes y stock." />
+        <PageHeader title="Productos" subtitle="Lo que vendes, con precios y stock. La IA usa este catálogo para responder y cotizar." />
         {canManage ? (
           <Button variant="accent" onClick={() => setEditing("new")}>
             <Plus aria-hidden className="size-5" />Nuevo producto
@@ -105,7 +105,7 @@ export function ProductsView() {
         <p className="text-muted" aria-busy="true">Cargando productos…</p>
       ) : products.length === 0 && !error ? (
         <EmptyState title="Aún no hay productos">
-          {canManage ? "Crea tu primer producto con el botón de arriba." : "Pide a un administrador que cree el catálogo."}
+          {canManage ? "Primer paso: crea tu primer producto o servicio con el botón de arriba." : "Pide a un administrador que cree el catálogo."}
         </EmptyState>
       ) : (
         <div className="grid gap-3">

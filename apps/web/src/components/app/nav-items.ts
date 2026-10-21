@@ -31,6 +31,7 @@ export const AI_CHILDREN: readonly NavItem[] = [
 /** Tabs of the IA pages: the overview plus its subsections. */
 export const AI_SECTIONS: readonly NavItem[] = [{ key: "ai-overview", label: "Resumen", href: "/app/ai", icon: Sparkles }, ...AI_CHILDREN];
 
+/** Daily items, always visible. */
 export const NAV_MAIN: readonly NavItem[] = [
   { key: "home", label: "Inicio", href: "/app", icon: Gauge },
   { key: "inbox", label: "Inbox", href: "/app/inbox", icon: Inbox },
@@ -38,11 +39,15 @@ export const NAV_MAIN: readonly NavItem[] = [
   { key: "pipeline", label: "Pipeline", href: "/app/pipeline", icon: Kanban },
   { key: "quotes", label: "Presupuestos", href: "/app/quotes", icon: FileText },
   { key: "orders", label: "Pedidos", href: "/app/orders", icon: ShoppingBag },
+  { key: "ai", label: "IA", href: "/app/ai", icon: Sparkles, children: AI_CHILDREN },
+];
+
+/** Less frequent pages, grouped under a collapsible "Más" (collapsed unless the active route is inside). */
+export const NAV_MORE: readonly NavItem[] = [
   { key: "payment-reviews", label: "Comprobantes", href: "/app/payments/reviews", icon: Receipt },
   { key: "analytics", label: "Rentabilidad", href: "/app/analytics", icon: TrendingUp },
   { key: "broadcasts", label: "Campañas", href: "/app/broadcasts", icon: Megaphone },
   { key: "products", label: "Productos", href: "/app/products", icon: Package },
-  { key: "ai", label: "IA", href: "/app/ai", icon: Sparkles, children: AI_CHILDREN },
   { key: "channels", label: "Canales", href: "/app/channels", icon: Plug },
   { key: "team", label: "Equipo", href: "/app/team", icon: Users },
 ];
@@ -54,4 +59,9 @@ export const NAV_SECONDARY: readonly NavItem[] = [
 /** Active item from the path: `/app` only matches exactly, the rest match by prefix. */
 export function isActive(pathname: string, href: string): boolean {
   return href === "/app" ? pathname === "/app" : pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** True when the path belongs to any page inside the "Más" group. */
+export function isMoreActive(pathname: string): boolean {
+  return NAV_MORE.some((i) => isActive(pathname, i.href));
 }

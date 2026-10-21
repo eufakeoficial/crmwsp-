@@ -49,7 +49,7 @@ export function QuotesView() {
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader title="Presupuestos" subtitle="Crea, envía por WhatsApp y cobra tus presupuestos." />
+        <PageHeader title="Presupuestos" subtitle="Prepara el precio para un cliente, envíalo por WhatsApp y cobra cuando lo acepte." />
         {canWrite ? (
           <Button onClick={() => setEditing({ quote: null })}><Plus aria-hidden className="size-4" />Nuevo presupuesto</Button>
         ) : null}
@@ -67,8 +67,8 @@ export function QuotesView() {
       {quotes === null ? (
         <p className="text-muted" aria-busy="true">Cargando presupuestos…</p>
       ) : quotes.length === 0 && !error ? (
-        <EmptyState title="Aún no hay presupuestos">
-          {status === "all" ? "Crea el primero para enviarlo a tu cliente por WhatsApp." : "No hay presupuestos con este estado."}
+        <EmptyState title="Aún no hay presupuestos" {...(status === "all" ? { action: { href: "/app/contacts", label: "Elegir un contacto" } } : {})}>
+          {status === "all" ? "Crea el primero desde un contacto o una conversación y envíalo por WhatsApp." : "No hay presupuestos con este estado."}
         </EmptyState>
       ) : (
         <ul className="m-0 flex list-none flex-col gap-2 p-0">

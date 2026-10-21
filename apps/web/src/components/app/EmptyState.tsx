@@ -1,6 +1,7 @@
 import { Hammer } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
-import { Card } from "@/components/ui";
+import { Card, buttonClasses } from "@/components/ui";
 
 /** Page title (large, tight tracking) with a muted subtitle. */
 export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
@@ -12,7 +13,8 @@ export function PageHeader({ title, subtitle }: { title: string; subtitle?: stri
   );
 }
 
-export function EmptyState({ title, children, soon = false }: { title: string; children?: ReactNode; soon?: boolean }) {
+/** Empty state: says what to do first; `action` adds a button to the right page. */
+export function EmptyState({ title, children, soon = false, action }: { title: string; children?: ReactNode; soon?: boolean; action?: { href: string; label: string } }) {
   return (
     <Card className="flex flex-col items-center py-10 text-center">
       {soon ? (
@@ -22,6 +24,7 @@ export function EmptyState({ title, children, soon = false }: { title: string; c
       ) : null}
       <p className="m-0 text-base font-bold">{title}</p>
       {children ? <p className="mt-2 mb-0 max-w-md text-sm text-muted">{children}</p> : null}
+      {action ? <Link href={action.href} className={buttonClasses("accent", "mt-4", "sm")}>{action.label}</Link> : null}
     </Card>
   );
 }

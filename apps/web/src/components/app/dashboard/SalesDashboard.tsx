@@ -49,7 +49,7 @@ export function SalesDashboard() {
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader title="Inicio" subtitle="Tus ventas por WhatsApp, día a día." />
+        <PageHeader title="Inicio" subtitle="El resumen de tu negocio: ventas por WhatsApp y qué hacer a continuación." />
         <div role="group" aria-label="Rango de fechas" className="flex gap-2">
           {RANGE_OPTIONS.map((d) => (
             <Chip

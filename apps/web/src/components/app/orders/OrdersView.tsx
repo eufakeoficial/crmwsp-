@@ -62,7 +62,7 @@ export function OrdersView() {
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader title="Pedidos" subtitle="Seguimiento de pedidos, pagos y entregas." />
+        <PageHeader title="Pedidos" subtitle="Las ventas confirmadas: qué se pidió, si está pagado y si ya se entregó." />
         <div className="flex gap-1.5" role="group" aria-label="Vista">
           <Chip active={mode === "list"} onClick={() => setMode("list")}>
             <List aria-hidden className="mr-1.5 size-4" />Lista

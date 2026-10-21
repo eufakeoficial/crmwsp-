@@ -112,7 +112,7 @@ export function PaymentReviewsView() {
     <div>
       <PageHeader
         title="Comprobantes de pago"
-        subtitle="La IA lee el comprobante, pero solo una persona puede confirmar el pago."
+        subtitle="Revisa los comprobantes de pago que envían tus clientes. La IA los lee, pero solo una persona confirma el pago."
       />
       <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Estado">
         {(Object.keys(STATUS_LABELS) as PaymentReviewStatus[]).map((s) => (

@@ -1,12 +1,13 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo, LogoMark } from "@/components/brand/Logo";
 import { cn } from "@/lib/cn";
 import { UserMenu } from "./UserMenu";
-import { NAV_MAIN, NAV_SECONDARY, type NavItem, isActive } from "./nav-items";
+import { NAV_MAIN, NAV_MORE, NAV_SECONDARY, type NavItem, isActive, isMoreActive } from "./nav-items";
 
 /** Red counters per nav key, e.g. `{ inbox: 3 }`. Empty until real data exists. */
 export type NavCounts = Readonly<Record<string, number>>;
@@ -47,6 +48,9 @@ function SubLinks({ items, pathname, counts, onNavigate }: { items: readonly Nav
 
 export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNavigate?: () => void }) {
   const pathname = usePathname();
+  const [moreToggled, setMoreToggled] = useState(false);
+  // Expanded by default only when the current page lives inside the group.
+  const moreOpen = moreToggled || isMoreActive(pathname);
   const render = (items: readonly NavItem[]) =>
     items.map((i) => (
       <div key={i.key} className="flex flex-col gap-0.5">
@@ -57,6 +61,25 @@ export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNa
   return (
     <>
       {render(NAV_MAIN)}
+      <div className="flex flex-col gap-0.5">
+        <button
+          type="button"
+          aria-expanded={moreOpen}
+          aria-controls="nav-more"
+          onClick={() => setMoreToggled((v) => !v)}
+          className="flex min-h-[34px] w-full cursor-pointer items-center gap-2.5 rounded-full border-0 bg-transparent px-3 py-0.5 text-left text-[13px] font-semibold text-white hover:bg-ink-2"
+        >
+          <ChevronDown aria-hidden className={cn("size-4 flex-none transition-transform", moreOpen ? "" : "-rotate-90")} />
+          <span className="flex-1">Más</span>
+        </button>
+        {moreOpen ? (
+          <div id="nav-more" className="ml-5 flex flex-col gap-0.5 border-l border-ink-4 pl-2">
+            {NAV_MORE.map((i) => (
+              <SidebarLink key={i.key} item={i} active={isActive(pathname, i.href)} count={counts[i.key]} {...(onNavigate ? { onNavigate } : {})} />
+            ))}
+          </div>
+        ) : null}
+      </div>
       <span aria-hidden className="mx-2 my-2.5 h-px flex-none bg-ink-3" />
       {render(NAV_SECONDARY)}
     </>
@@ -82,7 +105,7 @@ export function AssistantCard() {
 /** Narrow icon-only rail (desktop) used on full-bleed screens such as the inbox. Labels live in the tooltip. */
 function AppRail({ counts = {} }: { counts?: NavCounts }) {
   const pathname = usePathname();
-  const items = [...NAV_MAIN, ...NAV_SECONDARY];
+  const items = [...NAV_MAIN, ...NAV_MORE, ...NAV_SECONDARY];
   return (
     <nav
       aria-label="Principal"

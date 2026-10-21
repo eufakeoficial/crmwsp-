@@ -81,7 +81,7 @@ export function PipelineBoard() {
 
   return (
     <>
-      <PageHeader title="Pipeline" subtitle="Tus oportunidades por etapa, desde el primer contacto hasta el cierre." />
+      <PageHeader title="Pipeline" subtitle="Tus ventas en curso ordenadas por etapa, desde el primer contacto hasta el cierre." />
       {error ? <div className="mb-4"><Alert>{errorMessage(error)}</Alert></div> : null}
       {truncated ? <div className="mb-4"><Alert>Se muestran las {items?.length} oportunidades más recientes.</Alert></div> : null}
 
