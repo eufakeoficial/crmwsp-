@@ -1,5 +1,6 @@
 import { Inject, Module, type MiddlewareConsumer, type NestModule } from "@nestjs/common";
 import { HttpAdapterHost } from "@nestjs/core";
+import { createSafeFetch } from "@crmwsp/ai";
 import type { FetchLike } from "@crmwsp/integrations";
 import { AuthModule } from "../auth/auth.module.js";
 import { ChannelsModule } from "../channels/channels.module.js";
@@ -31,9 +32,14 @@ function installBodyLimit(host: HttpAdapterHost): true {
   return true;
 }
 
-/** Node fetch with a hard timeout; never follows redirects (the token must not leave the shop). */
+/**
+ * DNS-pinned fetch (rejects private/loopback addresses at socket lookup, CN-009) with a hard
+ * timeout; never follows redirects (the token must not leave the shop). WooCommerce site URLs are
+ * tenant-supplied, so every catalog call goes through it.
+ */
+const safeFetch = createSafeFetch();
 const timedFetch: FetchLike = (url, init) =>
-  fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(15_000) });
+  safeFetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(15_000) });
 
 @Module({
   imports: [AuthModule, ChannelsModule],
