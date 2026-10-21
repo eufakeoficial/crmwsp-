@@ -1,5 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { MembershipRole, TenantStatus } from "@crmwsp/contracts";
+import { auditEvents, withTenant } from "@crmwsp/db";
 import { DB_HANDLE, type DbHandle } from "../common/http.js";
 
 export interface LoginRow {
@@ -80,5 +81,29 @@ export class AuthRepository {
     const rows = await this.handle.sql<{ tenant_id: string; slug: string; name: string; role: MembershipRole; status: TenantStatus }[]>`
       select tenant_id, slug, name, role, status from public.list_user_tenants(${userId})`;
     return rows.map((r) => ({ id: r.tenant_id, slug: r.slug, name: r.name, role: r.role, status: r.status }));
+  }
+
+  /**
+   * Auth audit rows. audit_events is tenant-scoped, so an event about a user is appended to every
+   * tenant that user belongs to (each tenant's owners see attempts on their members).
+   */
+  async writeAuthAudit(
+    tenantIds: readonly string[],
+    e: { action: string; userId: string | null; diff: Record<string, unknown>; ip: string | null },
+  ): Promise<void> {
+    for (const tenantId of tenantIds) {
+      await withTenant(this.handle.db, tenantId, async (tx) => {
+        await tx.insert(auditEvents).values({
+          tenantId,
+          actorType: e.userId ? "user" : "system",
+          actorId: e.userId,
+          entity: "auth",
+          entityId: e.userId,
+          action: e.action,
+          diff: e.diff,
+          ip: e.ip && e.ip !== "unknown" ? e.ip : null,
+        });
+      });
+    }
   }
 }

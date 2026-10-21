@@ -61,6 +61,7 @@ const HOTMART_REFUNDED = new Set(["PURCHASE_REFUNDED", "PURCHASE_CHARGEBACK"]);
 export const hotmartConnector: CommerceConnector = {
   provider: "hotmart",
   verification: "shared_token",
+  weakAuth: true,
   verifyWebhook(rawBody, headers, secret) {
     const body = parseJsonObject(rawBody);
     const given = header(headers, "x-hotmart-hottok") ?? str(body["hottok"], 256) ?? undefined;
@@ -76,7 +77,8 @@ export const hotmartConnector: CommerceConnector = {
     const type = classify(status);
     if (type !== "ignored" && !transaction) throw new CommercePayloadError("Hotmart purchase without transaction");
     const currency = currencyOf(price["currency_value"]);
-    const eventId = str(body["id"], 200) ?? `${name}:${transaction ?? "?"}`;
+    // Dedupe by sale: the envelope `id` can be varied by anyone holding the static hottok.
+    const eventId = transaction ? `${name}:${transaction}` : (str(body["id"], 200) ?? `${name}:?`);
     return event("hotmart", "shared_token", true, eventId, name, type, {
       externalId: transaction ?? "",
       status: status ?? "pending",
@@ -176,6 +178,7 @@ export const eduzzConnector: CommerceConnector = {
 export const gumroadConnector: CommerceConnector = {
   provider: "gumroad",
   verification: "shared_token",
+  weakAuth: true,
   verifyWebhook(rawBody, _headers, secret) {
     const f = parseForm(rawBody);
     if (!safeEqualText(f["seller_id"], secret)) throw new InvalidSignatureError();
@@ -207,6 +210,7 @@ export const gumroadConnector: CommerceConnector = {
 export const payhipConnector: CommerceConnector = {
   provider: "payhip",
   verification: "shared_token",
+  weakAuth: true,
   verifyWebhook(rawBody, _headers, secret) {
     const body = parseJsonObject(rawBody);
     const expected = createHash("sha256").update(secret, "utf8").digest("hex");

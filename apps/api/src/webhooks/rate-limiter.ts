@@ -1,8 +1,10 @@
+import { type CounterStore, defaultRateLimitStore } from "../common/rate-limit-store.js";
+
 export interface RateLimiterOptions {
   windowMs: number;
   maxPerToken: number;
   maxPerIp: number;
-  /** Max tracked keys before expired windows are swept. */
+  /** Kept for compatibility; the memory bound now lives in MemoryCounterStore. */
   maxKeys?: number;
 }
 
@@ -12,50 +14,28 @@ export const DEFAULT_RATE_LIMIT: RateLimiterOptions = {
   maxPerIp: 1_200,
 };
 
-interface Window {
-  count: number;
-  resetAt: number;
-}
+/**
+ * Per-connection cap for webhooks authenticated only by a static/semi-public value
+ * (`weakAuth` connectors: Gumroad, Hotmart, Payhip). Real sale volume is far below this.
+ */
+export const WEAK_AUTH_MAX_PER_TOKEN = 60;
 
 /**
- * Fixed-window, in-memory rate limiter keyed by webhook token and client IP.
- * TODO(F1): move to Redis (INCR + PEXPIRE) so limits hold across API replicas.
+ * Fixed-window limiter keyed by webhook token and client IP, over the shared CounterStore
+ * (Redis INCR + PEXPIRE in production, in-memory fallback; see common/rate-limit-store.ts).
  */
 export class WebhookRateLimiter {
-  private readonly windows = new Map<string, Window>();
-  private readonly maxKeys: number;
-
   constructor(
     private readonly options: RateLimiterOptions = DEFAULT_RATE_LIMIT,
-    private readonly now: () => number = Date.now,
-  ) {
-    this.maxKeys = options.maxKeys ?? 50_000;
-  }
+    private readonly store: CounterStore = defaultRateLimitStore(),
+  ) {}
 
-  /** Returns true when the request is allowed. Both buckets are charged. */
-  hit(token: string, ip: string): boolean {
-    const t = this.charge(`t:${token}`, this.options.maxPerToken);
-    const i = this.charge(`i:${ip}`, this.options.maxPerIp);
-    return t && i;
-  }
-
-  private charge(key: string, max: number): boolean {
-    const now = this.now();
-    let w = this.windows.get(key);
-    if (!w || w.resetAt <= now) {
-      if (this.windows.size >= this.maxKeys) this.sweep(now);
-      w = { count: 0, resetAt: now + this.options.windowMs };
-      this.windows.set(key, w);
-    }
-    w.count += 1;
-    return w.count <= max;
-  }
-
-  private sweep(now: number): void {
-    for (const [k, w] of this.windows) {
-      if (w.resetAt <= now) this.windows.delete(k);
-    }
-    // Still full (flood of distinct keys): drop everything rather than grow unbounded.
-    if (this.windows.size >= this.maxKeys) this.windows.clear();
+  /** Resolves true when the request is allowed. Both buckets are charged. */
+  async hit(token: string, ip: string, maxPerToken = this.options.maxPerToken): Promise<boolean> {
+    const [t, i] = await Promise.all([
+      this.store.incr(`wh:t:${token}`, this.options.windowMs),
+      this.store.incr(`wh:i:${ip}`, this.options.windowMs),
+    ]);
+    return t <= Math.min(maxPerToken, this.options.maxPerToken) && i <= this.options.maxPerIp;
   }
 }

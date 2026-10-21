@@ -34,6 +34,8 @@ export const commerceConnectionSchema = z.object({
   secretHint: z.string().nullable(),
   shopDomain: z.string().nullable(),
   hasAccessToken: z.boolean(),
+  /** Webhook authenticated only by a static/semi-public value: the UI must warn (CN-016). */
+  weakAuth: z.boolean(),
   webhookUrl: z.string(),
   lastSyncedAt: isoDateTimeSchema.nullable(),
   updatedAt: isoDateTimeSchema,

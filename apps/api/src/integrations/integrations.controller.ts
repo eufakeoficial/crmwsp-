@@ -34,6 +34,7 @@ function toView(row: CommerceConnection): CommerceConnectionView {
     secretHint: row.secretHint,
     shopDomain: row.shopDomain,
     hasAccessToken: row.accessTokenEncrypted !== null,
+    weakAuth: connectorFor(row.provider).weakAuth === true,
     webhookUrl: commerceWebhookUrlFor(row.provider, row.webhookToken),
     lastSyncedAt: row.lastSyncedAt ? row.lastSyncedAt.toISOString() : null,
     updatedAt: row.updatedAt.toISOString(),

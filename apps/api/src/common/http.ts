@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "node:http";
 import type { DbHandle } from "@crmwsp/db";
 import type { MembershipRole } from "@crmwsp/contracts";
 import type { TenantDb } from "../db/tenant-db.js";
@@ -21,6 +22,8 @@ export interface RequestTenant {
 export interface HttpRequest {
   headers: Record<string, string | string[] | undefined>;
   ip: string;
+  /** Underlying Node request (Fastify); read the caller IP with common/client-ip `clientIp(req)`. */
+  raw?: IncomingMessage;
   method?: string;
   user?: RequestUser;
   tenant?: RequestTenant;
