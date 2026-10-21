@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import "./src/lib/env-check";
 
 // The browser talks to its own origin; Next forwards /api/* to the API so the
 // __Host- session cookie works and the API's Origin check (WEB_ORIGINS) passes.
