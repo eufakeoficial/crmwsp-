@@ -22,6 +22,15 @@ export function MediaSlot({ kind, alt, src, poster, label, width, height, classN
   const frame = cn("relative w-full overflow-hidden rounded-[22px] border border-line bg-paper-2", className);
   const style = { aspectRatio: `${width} / ${height}` };
 
+  // A video without a file yet still shows its poster as a still image.
+  if (!src && kind === "video" && poster) {
+    return (
+      <div style={style} className={frame}>
+        <Image src={poster} alt={alt} fill sizes={sizes} priority={priority} className="object-cover" />
+      </div>
+    );
+  }
+
   if (!src) {
     const Icon = kind === "video" ? PlayCircle : ImageIcon;
     return (
