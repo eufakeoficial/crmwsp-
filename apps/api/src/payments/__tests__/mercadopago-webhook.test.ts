@@ -36,6 +36,7 @@ class FakeLedger implements PaymentLedger {
 
   async inTenant<T>(_tenantId: string, fn: (tx: PaymentLedgerTx) => Promise<T>, provider?: string): Promise<T> {
     this.providers.push(provider ?? "stripe");
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- fake tx closes over the fixture
     const self = this;
     return fn({
       async recordEvent(e) {

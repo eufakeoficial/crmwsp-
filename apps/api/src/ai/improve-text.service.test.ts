@@ -3,6 +3,7 @@ import { PlanLimitExceededError } from "@crmwsp/contracts";
 
 const budget = vi.hoisted(() => ({ exceeded: false }));
 vi.mock("@crmwsp/db", async (orig) => ({
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vi.mock needs the module type
   ...(await orig<typeof import("@crmwsp/db")>()),
   readBudget: async () => ({ exceeded: budget.exceeded }),
 }));

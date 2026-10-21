@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable, SetMetadata, createParamDecorator, type CanActivate, type ExecutionContext } from "@nestjs/common";
-import { Reflector } from "@nestjs/core";
+import type { Reflector } from "@nestjs/core";
 import { ForbiddenError, UnauthorizedError, type ApiKeyScope } from "@crmwsp/contracts";
 import { apiKeys, eq, sql, withTenant } from "@crmwsp/db";
 import { parseBearer } from "@crmwsp/domain";

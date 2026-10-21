@@ -2,9 +2,10 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { EncryptionNotConfiguredError } from "@crmwsp/contracts";
 import type { CipherBox } from "@crmwsp/crypto";
 import { eq, paymentConnections, withTenant, type DbHandle } from "@crmwsp/db";
+import type {
+  MercadoPagoProvider} from "@crmwsp/payments";
 import {
   InvalidSignatureError,
-  MercadoPagoProvider,
   PaymentProviderError,
   mercadoPagoEvent,
   parseMercadoPagoNotification,

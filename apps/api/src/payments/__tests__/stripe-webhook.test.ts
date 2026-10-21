@@ -54,6 +54,7 @@ class FakeLedger implements PaymentLedger {
 
   async inTenant<T>(tenantId: string, fn: (tx: PaymentLedgerTx) => Promise<T>): Promise<T> {
     const snap = JSON.stringify({ e: this.events, p: { ...this.payment, amountMinor: String(this.payment.amountMinor) } });
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- fake tx closes over the fixture
     const self = this;
     const tx: PaymentLedgerTx = {
       async recordEvent(e) {

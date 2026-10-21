@@ -5,7 +5,6 @@ import {
   AppError,
   ErrorCode,
   NotFoundError,
-  ValidationError,
   upsertCommerceConnectionRequestSchema,
   type CatalogSyncResult,
   type CommerceConnectionList,
