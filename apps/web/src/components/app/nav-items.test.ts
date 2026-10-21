@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAV_MAIN, NAV_MORE, NAV_SECONDARY, isActive, isMoreActive } from "./nav-items";
+import { AI_CHILDREN, AI_SECTIONS, NAV_MAIN, NAV_MORE, NAV_SECONDARY, isActive, isMoreActive } from "./nav-items";
 
 describe("isActive", () => {
   it("matches /app only exactly", () => {
@@ -26,5 +26,10 @@ describe("isActive", () => {
     expect(isMoreActive("/app/products/42")).toBe(true);
     expect(isMoreActive("/app/payments/reviews")).toBe(true);
     expect(isMoreActive("/app/inbox")).toBe(false);
+  });
+  it("lists the sales playbook as a child of IA, in the sidebar and in the IA tabs", () => {
+    expect(NAV_MAIN.find((i) => i.key === "ai")?.children).toBe(AI_CHILDREN);
+    expect(AI_CHILDREN.map((i) => i.href)).toContain("/app/ai/playbook");
+    expect(AI_SECTIONS.map((i) => i.label)).toEqual(["Resumen", "Ejecuciones", "Necesitan atención", "Playbook de ventas"]);
   });
 });

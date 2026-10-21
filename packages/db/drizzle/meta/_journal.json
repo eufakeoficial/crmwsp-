@@ -371,6 +371,20 @@
       "when": 1792560000000,
       "tag": "0057_platform_backoffice_sections",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792570000000,
+      "tag": "0058_sales_playbooks",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792570010000,
+      "tag": "0059_rls_sales_playbooks",
+      "breakpoints": true
     }
   ]
 }

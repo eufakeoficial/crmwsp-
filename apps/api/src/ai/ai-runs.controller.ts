@@ -2,10 +2,13 @@ import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 import {
   aiHandoffsQuerySchema,
   aiRunsQuerySchema,
+  aiRunsSummaryQuerySchema,
   type AiHandoffList,
   type AiRunCitation,
   type AiRunList,
   type AiRunOutcome,
+  type AiRunsSummary,
+  type PlaybookSummaryRow,
 } from "@crmwsp/contracts";
 import { eq, inArray, isUuid, knowledgeChunks, knowledgeSources, sql, type Transaction } from "@crmwsp/db";
 import {
@@ -14,6 +17,7 @@ import {
   AI_ERROR_REASON_PREFIX,
   AI_RUN_ACTION_TYPES,
   classifyAiRun,
+  isSalesStage,
 } from "@crmwsp/domain";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -23,6 +27,17 @@ import type { TenantDb } from "../db/tenant-db.js";
 import { decodeCursor, encodeCursor } from "../inbox/cursor.js";
 import type { SQL } from "../inbox/inbox.queries.js";
 import { loadInboxSettings, visibilityWhere } from "../inbox/inbox-v2.scope.js";
+
+/** `payments.verified_by` values that prove a charge (ADR 0012: manual is an audited human decision). */
+const PAID_VERIFIED_BY = ["webhook", "reconciliation", "manual"] as const;
+
+interface SummaryRow extends Record<string, unknown> {
+  key: string;
+  runs: number;
+  conversations: number;
+  quote_accepted: number;
+  paid_verified: number;
+}
 
 const EXCERPT_CHARS = 240;
 const TEXT_PREVIEW_CHARS = 600;
@@ -67,6 +82,8 @@ interface RunRow extends Record<string, unknown> {
   confidence: string | null;
   text: string | null;
   citations: Array<{ chunkId: string; sourceId?: string }> | null;
+  sales_stage: string | null;
+  objection: string | null;
   sort_us: string;
 }
 
@@ -120,6 +137,7 @@ export class AiRunsController {
         select a.id, a.type, a.created_at, a.conversation_id, ct.name as contact_name, ct.phone_e164 as contact_phone,
                a.decision_reason as reason, a.model, a.confidence::text as confidence,
                left(a.payload->>'text', ${TEXT_PREVIEW_CHARS}) as text, a.citations,
+               a.payload->>'salesStage' as sales_stage, a.payload->>'objection' as objection,
                ${CREATED_US}::text as sort_us
         from ai_actions a
         left join conversations c on c.id = a.conversation_id
@@ -153,11 +171,60 @@ export class AiRunsController {
               confidence: r.confidence === null ? null : Number(r.confidence),
               text: r.text,
               citations,
+              salesStage: isSalesStage(r.sales_stage) ? r.sales_stage : null,
+              objection: r.objection,
             },
           ];
         }),
         nextCursor: rows.length > q.limit && last ? encodeCursor({ t: last.sort_us, id: last.id }) : null,
       };
+    });
+  }
+
+  /**
+   * Read-only outcome attribution of the sales playbook: per detected stage / objection, how many AI
+   * replies carried it and how many of those conversations LATER got a quote accepted or an order paid.
+   * "Paid" counts only a succeeded payment verified by `webhook`, `reconciliation` or the audited
+   * `manual` mark (ADR 0012); a receipt image never counts. Nothing here changes any prompt.
+   */
+  @Get("runs/summary")
+  @Roles("owner", "admin")
+  async summary(@CurrentTenantDb() db: TenantDb, @Query() query: unknown): Promise<AiRunsSummary> {
+    const q = parseOrThrow(aiRunsSummaryQuerySchema, query);
+    return db.run(async (tx) => {
+      const group = async (dim: "stage" | "objection"): Promise<PlaybookSummaryRow[]> => {
+        const key = dim === "stage" ? sql`a.payload->>'salesStage'` : sql`a.payload->>'objection'`;
+        const rows = await tx.execute<SummaryRow>(sql`
+          with runs as (
+            select a.tenant_id, a.conversation_id, a.created_at, ${key} as k
+            from ai_actions a
+            where a.type in ('send_reply', 'draft_reply')
+              and a.conversation_id is not null
+              and ${key} is not null
+              and a.created_at >= now() - make_interval(days => ${q.days}::int)
+          ), flagged as (
+            select r.*,
+              exists (select 1 from quotes qt where qt.tenant_id = r.tenant_id and qt.conversation_id = r.conversation_id
+                      and qt.status = 'accepted' and qt.accepted_at >= r.created_at) as quote_accepted,
+              exists (select 1 from orders o join payments p on p.tenant_id = o.tenant_id and p.order_id = o.id
+                      where o.tenant_id = r.tenant_id and o.conversation_id = r.conversation_id
+                      and p.status = 'succeeded' and p.verified_by in (${list(PAID_VERIFIED_BY)}) and p.paid_at >= r.created_at) as paid_verified
+            from runs r
+          )
+          select k as key, count(*)::int as runs, count(distinct conversation_id)::int as conversations,
+                 count(distinct conversation_id) filter (where quote_accepted)::int as quote_accepted,
+                 count(distinct conversation_id) filter (where paid_verified)::int as paid_verified
+          from flagged group by k order by runs desc, k asc
+        `);
+        return rows.map((r) => ({
+          key: r.key,
+          runs: r.runs,
+          conversations: r.conversations,
+          quoteAccepted: r.quote_accepted,
+          paidVerified: r.paid_verified,
+        }));
+      };
+      return { days: q.days, byStage: await group("stage"), byObjection: await group("objection") };
     });
   }
 

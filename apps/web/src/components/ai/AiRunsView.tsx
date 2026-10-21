@@ -3,13 +3,15 @@
 import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { AI_RUN_MODES, AI_RUN_OUTCOMES, type AiRunItem, type AiRunMode, type AiRunOutcome } from "@crmwsp/contracts";
+import { AI_RUN_MODES, AI_RUN_OUTCOMES, type AiRunItem, type AiRunMode, type AiRunOutcome, type AiRunsSummary, type PlaybookSummaryRow } from "@crmwsp/contracts";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
-import { canViewAi } from "@/components/app/roles";
+import { canManageAi, canViewAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { Alert, Button, Card, Chip, StatusChip } from "@/components/ui";
 import { MODE_LABELS, OUTCOME_LABELS, OUTCOME_TONES, reasonLabel } from "@/lib/ai-runs";
 import { aiRunsApi } from "@/lib/ai-runs-api";
+import { STAGE_LABELS, objectionLabel, share } from "@/lib/playbook";
+import { playbookApi } from "@/lib/playbook-api";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage } from "@/lib/messages";
 import { AiSectionTabs } from "./AiSectionTabs";
@@ -29,6 +31,19 @@ function RunDetail({ run }: { run: AiRunItem }) {
           </>
         ) : null}
       </p>
+      {run.salesStage ? (
+        <p className="m-0">
+          <b>Etapa de venta: </b>
+          {STAGE_LABELS[run.salesStage]}
+          {run.objection ? (
+            <>
+              {" · "}
+              <b>Objeción: </b>
+              {objectionLabel(run.objection)}
+            </>
+          ) : null}
+        </p>
+      ) : null}
       <div>
         <b>Fuentes citadas</b>
         {run.citations.length === 0 ? (
@@ -73,6 +88,7 @@ function RunRow({ run }: { run: AiRunItem }) {
           )}
         </span>
         <StatusChip label={OUTCOME_LABELS[run.outcome]} tone={OUTCOME_TONES[run.outcome]} />
+        {run.salesStage ? <StatusChip label={run.objection ? `${STAGE_LABELS[run.salesStage]} · ${objectionLabel(run.objection)}` : STAGE_LABELS[run.salesStage]} tone="paper" /> : null}
         <span className="w-[88px] text-[13px]">{run.mode ? MODE_LABELS[run.mode] : "—"}</span>
         <span className="min-w-[90px] text-[13px] text-muted">{run.model ?? "—"}</span>
         <span className="text-[13px] text-muted">
@@ -84,7 +100,69 @@ function RunRow({ run }: { run: AiRunItem }) {
   );
 }
 
-function Body() {
+function SummaryTable({ title, rows, label }: { title: string; rows: PlaybookSummaryRow[]; label: (key: string) => string }) {
+  return (
+    <div className="min-w-0 flex-1 basis-[320px]">
+      <h3 className="m-0 mb-2 text-[15px]">{title}</h3>
+      {rows.length === 0 ? (
+        <p className="m-0 text-[13px] text-muted">Aún no hay ejecuciones con esta información.</p>
+      ) : (
+        <table className="w-full border-collapse text-left text-[13px]">
+          <thead>
+            <tr className="text-muted">
+              <th scope="col" className="py-1 pr-2 font-bold">{title === "Por etapa" ? "Etapa" : "Objeción"}</th>
+              <th scope="col" className="py-1 pr-2 font-bold">Ejecuciones</th>
+              <th scope="col" className="py-1 pr-2 font-bold">Conversaciones</th>
+              <th scope="col" className="py-1 pr-2 font-bold">Presupuesto aceptado</th>
+              <th scope="col" className="py-1 font-bold">Pago verificado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key} className="border-t border-line">
+                <th scope="row" className="py-1.5 pr-2 font-bold">{label(r.key)}</th>
+                <td className="py-1.5 pr-2">{r.runs}</td>
+                <td className="py-1.5 pr-2">{r.conversations}</td>
+                <td className="py-1.5 pr-2">{share(r.quoteAccepted, r.conversations)}</td>
+                <td className="py-1.5">{share(r.paidVerified, r.conversations)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+/** Read-only outcome attribution of the sales playbook (last 30 days). It never changes any prompt. */
+function PlaybookSummary() {
+  const [summary, setSummary] = useState<AiRunsSummary | null>(null);
+  useEffect(() => {
+    let live = true;
+    playbookApi
+      .summary(30)
+      .then((s) => live && setSummary(s))
+      .catch(() => undefined); // The summary is optional: the runs list works without it.
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!summary || (summary.byStage.length === 0 && summary.byObjection.length === 0)) return null;
+  return (
+    <Card className="sm:p-5">
+      <h2 className="m-0 text-[17px]">Resultados por etapa y objeción</h2>
+      <p className="mt-1 mb-3 text-[13px] text-muted">
+        Últimos {summary.days} días. Cuenta las conversaciones que después aceptaron un presupuesto o pagaron un pedido verificado (webhook, conciliación o marcado manual auditado). Es solo informativo: no cambia lo que hace la IA.
+      </p>
+      <div className="flex flex-wrap gap-6">
+        <SummaryTable title="Por etapa" rows={summary.byStage} label={(k) => STAGE_LABELS[k as keyof typeof STAGE_LABELS] ?? k} />
+        <SummaryTable title="Por objeción" rows={summary.byObjection} label={objectionLabel} />
+      </div>
+    </Card>
+  );
+}
+
+function Body({ showSummary }: { showSummary: boolean }) {
   const [outcome, setOutcome] = useState<AiRunOutcome | undefined>();
   const [mode, setMode] = useState<AiRunMode | undefined>();
   const [items, setItems] = useState<AiRunItem[] | null>(null);
@@ -125,6 +203,7 @@ function Body() {
 
   return (
     <div className="flex flex-col gap-4">
+      {showSummary ? <PlaybookSummary /> : null}
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtros">
         <Chip active={outcome === undefined} onClick={() => setOutcome(undefined)}>
           Todos los resultados
@@ -176,7 +255,7 @@ export function AiRunsView() {
     <>
       <PageHeader title="IA" subtitle="Revisa qué respondió la IA en cada conversación y en qué información se apoyó." />
       <AiSectionTabs />
-      {canViewAi(tenant?.role) ? <Body /> : <EmptyState title="Sin acceso">Pide a un propietario o administrador que te dé acceso.</EmptyState>}
+      {canViewAi(tenant?.role) ? <Body showSummary={canManageAi(tenant?.role)} /> : <EmptyState title="Sin acceso">Pide a un propietario o administrador que te dé acceso.</EmptyState>}
     </>
   );
 }

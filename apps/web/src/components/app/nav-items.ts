@@ -1,4 +1,4 @@
-import { AlertCircle, BookOpen, Bot, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -26,6 +26,7 @@ export const SETTINGS_SECTIONS: readonly NavItem[] = [
 export const AI_CHILDREN: readonly NavItem[] = [
   { key: "ai-runs", label: "Ejecuciones", href: "/app/ai/runs", icon: Bot },
   { key: "ai-handoffs", label: "Necesitan atención", href: "/app/ai/handoffs", icon: AlertCircle },
+  { key: "ai-playbook", label: "Playbook de ventas", href: "/app/ai/playbook", icon: Target },
 ];
 
 /** Tabs of the IA pages: the overview plus its subsections. */

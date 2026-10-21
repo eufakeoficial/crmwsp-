@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { salesStageSchema } from "./sales-playbook.js";
 
 /*
  * AI turn contract (ADR 0003: the AI proposes, the system executes).
@@ -106,6 +107,10 @@ export const aiTurnOutputSchema = z.strictObject({
   reply: aiReplySchema.optional(),
   /** Optional emoji reaction to the customer's message (validated against REACTION_EMOJIS server-side). */
   reaction: z.strictObject({ emoji: z.string().max(32) }).optional(),
+  /** Sales-playbook stage of this turn; only meaningful when the tenant enabled the playbook. */
+  salesStage: salesStageSchema.optional(),
+  /** Id of the playbook objection the customer raised, when one of the offered ones matched. */
+  objection: z.string().max(40).optional(),
   actions: z.array(aiActionSchema).max(20),
   confidence: confidenceSchema,
   needsHuman: z.boolean(),
