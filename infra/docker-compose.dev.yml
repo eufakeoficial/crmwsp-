@@ -13,7 +13,7 @@ services:
       POSTGRES_PASSWORD: crmwsp
       POSTGRES_DB: crmwsp
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -65,13 +65,16 @@ services:
   redis:
     image: redis:7-alpine
     container_name: crmwsp-redis
-    command: ["redis-server", "--appendonly", "yes"]
+    # Password from REDIS_PASSWORD (dev default "crmwsp_dev"); REDIS_URL in .env must match.
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-crmwsp_dev}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-crmwsp_dev}"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -89,8 +92,8 @@ services:
       RUSTFS_CONSOLE_ENABLE: "true"
       RUSTFS_CONSOLE_ADDRESS: ":9001"
     ports:
-      - "9000:9000"   # API S3
-      - "9001:9001"   # Consola web
+      - "127.0.0.1:9000:9000"   # API S3
+      - "127.0.0.1:9001:9001"   # Consola web
     volumes:
       - s3-data:/data
     healthcheck:
@@ -128,8 +131,8 @@ services:
     image: axllent/mailpit:v1.31.3
     container_name: crmwsp-mailpit
     ports:
-      - "8025:8025"   # UI web
-      - "1025:1025"   # SMTP
+      - "127.0.0.1:8025:8025"   # UI web
+      - "127.0.0.1:1025:1025"   # SMTP
     restart: unless-stopped
 
 volumes:

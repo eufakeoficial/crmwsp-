@@ -6,3 +6,10 @@ onlyBuiltDependencies:
   - sharp
   - "@nestjs/core"
   - "@swc/core"
+overrides:
+  # CN-003: fastify auth/validation bypass advisories (nest platform-fastify pins 5.11.3).
+  fastify: ">=5.12.5"
+  # CN-013: PostCSS bundled by Next.js (build-time advisory).
+  postcss: ">=8.5.23"
+  # CN-022: esbuild dev-server CORS (GHSA-67mh-4wv8-2f99), pulled by drizzle-kit.
+  esbuild: ">=0.25.0"
