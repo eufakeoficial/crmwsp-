@@ -1,11 +1,13 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Logo } from "@/components/brand/Logo";
+import { Logo, LogoMark } from "@/components/brand/Logo";
 import { cn } from "@/lib/cn";
-import { NAV_MAIN, NAV_SECONDARY, type NavItem, isActive } from "./nav-items";
+import { UserMenu } from "./UserMenu";
+import { NAV_MAIN, NAV_MORE, NAV_SECONDARY, type NavItem, isActive, isMoreActive } from "./nav-items";
 
 /** Red counters per nav key, e.g. `{ inbox: 3 }`. Empty until real data exists. */
 export type NavCounts = Readonly<Record<string, number>>;
@@ -18,11 +20,11 @@ export function SidebarLink({ item, active, count, onNavigate }: { item: NavItem
       {...(onNavigate ? { onClick: onNavigate } : {})}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex min-h-[50px] items-center gap-3 rounded-full px-4 py-1 no-underline",
+        "flex min-h-[34px] items-center gap-2.5 rounded-full px-3 py-0.5 text-[13px] no-underline",
         active ? "bg-lime font-extrabold text-ink" : "font-semibold text-white hover:bg-ink-2",
       )}
     >
-      <Icon aria-hidden className="size-5 flex-none" />
+      <Icon aria-hidden className="size-4 flex-none" />
       <span className="flex-1 whitespace-nowrap">{item.label}</span>
       {count ? (
         <span className="rounded-full bg-alert px-2 text-[12px] font-extrabold text-white">
@@ -46,9 +48,12 @@ function SubLinks({ items, pathname, counts, onNavigate }: { items: readonly Nav
 
 export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNavigate?: () => void }) {
   const pathname = usePathname();
+  const [moreToggled, setMoreToggled] = useState(false);
+  // Expanded by default only when the current page lives inside the group.
+  const moreOpen = moreToggled || isMoreActive(pathname);
   const render = (items: readonly NavItem[]) =>
     items.map((i) => (
-      <div key={i.key} className="flex flex-col gap-1">
+      <div key={i.key} className="flex flex-col gap-0.5">
         <SidebarLink item={i} active={isActive(pathname, i.href) && !i.children} count={counts[i.key]} {...(onNavigate ? { onNavigate } : {})} />
         {i.children && isActive(pathname, i.href) ? <SubLinks items={i.children} pathname={pathname} counts={counts} onNavigate={onNavigate} /> : null}
       </div>
@@ -56,31 +61,99 @@ export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNa
   return (
     <>
       {render(NAV_MAIN)}
+      <div className="flex flex-col gap-0.5">
+        <button
+          type="button"
+          aria-expanded={moreOpen}
+          aria-controls="nav-more"
+          onClick={() => setMoreToggled((v) => !v)}
+          className="flex min-h-[34px] w-full cursor-pointer items-center gap-2.5 rounded-full border-0 bg-transparent px-3 py-0.5 text-left text-[13px] font-semibold text-white hover:bg-ink-2"
+        >
+          <ChevronDown aria-hidden className={cn("size-4 flex-none transition-transform", moreOpen ? "" : "-rotate-90")} />
+          <span className="flex-1">Más</span>
+        </button>
+        {moreOpen ? (
+          <div id="nav-more" className="ml-5 flex flex-col gap-0.5 border-l border-ink-4 pl-2">
+            {NAV_MORE.map((i) => (
+              <SidebarLink key={i.key} item={i} active={isActive(pathname, i.href)} count={counts[i.key]} {...(onNavigate ? { onNavigate } : {})} />
+            ))}
+          </div>
+        ) : null}
+      </div>
       <span aria-hidden className="mx-2 my-2.5 h-px flex-none bg-ink-3" />
       {render(NAV_SECONDARY)}
     </>
   );
 }
 
-/** Reserved card for the AI assistant. Not interactive until the feature exists. */
+/** AI assistant card: links to the AI settings, where the assist mode (draft, human sends) is chosen. */
 export function AssistantCard() {
   return (
-    <div className="mt-auto flex flex-col items-start gap-2 rounded-[22px] bg-ink-2 p-3.5 text-white">
-      <span className="grid size-10 place-items-center rounded-xl bg-lime text-ink">
+    <div className="mt-auto flex flex-col items-start gap-2 rounded-[18px] bg-ink-2 p-3 text-white">
+      <span className="grid size-8 place-items-center rounded-lg bg-lime text-ink">
         <Sparkles aria-hidden className="size-5" />
       </span>
-      <b className="text-[15px]">Asistente de IA</b>
-      <span className="text-[13px] text-subtle">Próximamente: respuestas sugeridas con citas a tu catálogo.</span>
+      <b className="text-[13px]">Asistente de IA</b>
+      <span className="text-[12px] text-subtle">Modo asistente: la IA redacta y tú envías.</span>
+      <Link href="/app/ai" className="text-[13px] font-bold text-lime no-underline hover:underline">
+        Configurar la IA
+      </Link>
     </div>
   );
 }
 
-/** Floating black sidebar (desktop, from the `desk` breakpoint). */
-export function AppSidebar({ counts }: { counts?: NavCounts }) {
+/** Narrow icon-only rail (desktop) used on full-bleed screens such as the inbox. Labels live in the tooltip. */
+function AppRail({ counts = {} }: { counts?: NavCounts }) {
+  const pathname = usePathname();
+  const items = [...NAV_MAIN, ...NAV_MORE, ...NAV_SECONDARY];
   return (
-    <nav aria-label="Principal" className="fixed top-0 bottom-0 left-0 z-[25] hidden w-[260px] p-3 desk:block">
-      <div className="flex h-full flex-col gap-1 overflow-y-auto rounded-[28px] bg-ink px-3 py-[18px] text-white [scrollbar-color:var(--color-ink-4)_transparent] [scrollbar-width:thin]">
-        <Logo href="/app" inverted className="px-2 pb-[18px]" />
+    <nav
+      aria-label="Principal"
+      className="fixed inset-y-0 left-0 z-[25] hidden w-[72px] flex-col items-center bg-ink py-3 desk:flex"
+    >
+      <Link href="/app" aria-label="CRMWSP, ir al inicio" title="CRMWSP" className="mb-2 flex-none rounded-xl no-underline">
+        <LogoMark size={36} />
+      </Link>
+      <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto [scrollbar-width:none]">
+      {items.map((item) => {
+        const Icon = item.icon;
+        const active = isActive(pathname, item.href);
+        const count = counts[item.key];
+        return (
+          <Link
+            key={item.key}
+            href={item.href}
+            title={item.label}
+            aria-label={item.label}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "relative grid size-11 flex-none place-items-center rounded-xl no-underline",
+              active ? "bg-lime text-ink" : "text-white hover:bg-ink-2",
+            )}
+          >
+            <Icon aria-hidden className="size-5" />
+            {count ? (
+              <span className="absolute top-0.5 right-0.5 min-w-4 rounded-full bg-alert px-1 text-center text-[10px] leading-4 font-extrabold text-white">
+                {count}
+                <span className="sr-only"> sin leer</span>
+              </span>
+            ) : null}
+          </Link>
+        );
+      })}
+      </div>
+      <UserMenu placement="rail" className="pt-2 pb-10" />
+    </nav>
+  );
+}
+
+/** Floating black sidebar (desktop, from the `desk` breakpoint); `rail` swaps it for the icon-only rail. */
+export function AppSidebar({ counts, rail = false }: { counts?: NavCounts; rail?: boolean }) {
+  if (rail) return <AppRail {...(counts ? { counts } : {})} />;
+  return (
+    <nav aria-label="Principal" className="fixed top-0 bottom-0 left-0 z-[25] hidden w-[220px] p-3 desk:block">
+      <div className="flex h-full flex-col gap-1 overflow-y-auto rounded-[22px] bg-ink px-2.5 py-3.5 text-white [scrollbar-color:var(--color-ink-4)_transparent] [scrollbar-width:thin]">
+        <Logo href="/app" inverted className="px-2 pb-3" />
         <NavLinks {...(counts ? { counts } : {})} />
         <AssistantCard />
       </div>

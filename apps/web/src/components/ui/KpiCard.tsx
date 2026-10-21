@@ -20,13 +20,13 @@ export function KpiCard({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-center gap-3 rounded-[18px] bg-white p-3.5", className)}>
-      <span className={cn("grid size-11 flex-none place-items-center rounded-[14px]", TONE_SOFT[tone])}>
-        <Icon aria-hidden className="size-5" />
+    <div className={cn("flex items-center gap-2.5 rounded-[16px] bg-white p-3", className)}>
+      <span className={cn("grid size-9 flex-none place-items-center rounded-[12px]", TONE_SOFT[tone])}>
+        <Icon aria-hidden className="size-4" />
       </span>
       <span className="min-w-0">
         <span className="block text-xs text-muted">{label}</span>
-        <b className="block truncate text-[20px]">{value}</b>
+        <b className="block truncate text-[17px]">{value}</b>
         {note ? <span className="block text-xs text-muted">{note}</span> : null}
       </span>
     </div>

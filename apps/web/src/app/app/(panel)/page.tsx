@@ -1,10 +1,11 @@
-import { EmptyState, PageHeader } from "@/components/app/EmptyState";
+import { SalesDashboard } from "@/components/app/dashboard/SalesDashboard";
+import { GettingStartedCard } from "@/components/dashboard/GettingStartedCard";
 
 export default function HomePage() {
   return (
     <>
-      <PageHeader title="Inicio" subtitle="El resumen de tu negocio en WhatsApp." />
-      <EmptyState title="Próximamente" soon>Aquí verás tus métricas y tareas del día.</EmptyState>
+      <GettingStartedCard />
+      <SalesDashboard />
     </>
   );
 }

@@ -120,6 +120,257 @@
       "when": 1792464038896,
       "tag": "0016_quote_item_variant",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792497923321,
+      "tag": "0017_stripe_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792497928408,
+      "tag": "0018_rls_stripe_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792498548215,
+      "tag": "0019_follow_up_engine",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792499197926,
+      "tag": "0020_notifications_payment_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792499198926,
+      "tag": "0021_commerce_integrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792499199926,
+      "tag": "0022_rls_commerce_integrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792502620838,
+      "tag": "0023_billing_plans",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792502627686,
+      "tag": "0024_rls_billing_plans",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792502650000,
+      "tag": "0025_developer_platform",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792502660000,
+      "tag": "0026_rls_developer_platform",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792502700802,
+      "tag": "0027_ads_attribution_capi",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792502701802,
+      "tag": "0028_rls_ads_attribution_capi",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792502710000,
+      "tag": "0029_latam_connectors",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792502720000,
+      "tag": "0032_voice_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792502730000,
+      "tag": "0033_rls_voice_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792502740000,
+      "tag": "0034_broadcasts",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792502750000,
+      "tag": "0035_rls_broadcasts",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792502760000,
+      "tag": "0036_messages_template",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792519981785,
+      "tag": "0037_contact_segments",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792519991785,
+      "tag": "0038_rls_contact_segments",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792520001785,
+      "tag": "0039_inbox_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792520011785,
+      "tag": "0040_rls_inbox_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792520021785,
+      "tag": "0041_ai_scenarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792520031785,
+      "tag": "0042_rls_ai_scenarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792520041785,
+      "tag": "0043_owner_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792520051785,
+      "tag": "0044_rls_owner_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792520061785,
+      "tag": "0045_order_extractions",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792520071785,
+      "tag": "0046_rls_order_extractions",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792522194015,
+      "tag": "0049_team_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792522223442,
+      "tag": "0050_rls_team_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1792530000000,
+      "tag": "0051_platform_admin",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792530010000,
+      "tag": "0052_rls_platform_admin",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792540000000,
+      "tag": "0053_message_reactions",
+      "breakpoints": true
+    },
+    {
+      "when": 1792550000000,
+      "tag": "0055_meta_ads_sync",
+      "breakpoints": true,
+      "idx": 55
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792550010000,
+      "tag": "0056_rls_meta_ads_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1792560000000,
+      "tag": "0057_platform_backoffice_sections",
+      "breakpoints": true
     }
   ]
 }

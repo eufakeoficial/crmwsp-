@@ -3,6 +3,7 @@ import type { PgTableExtraConfigValue } from "drizzle-orm/pg-core";
 import { bigint, foreignKey, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { aiActions } from "./ai-actions.js";
 import { conversations } from "./conversations.js";
+import { messageTemplates } from "./engagement.js";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
@@ -42,7 +43,15 @@ export const messages = pgTable(
     clientMessageId: uuid("client_message_id"),
     /** AI action that produced this message (composite FK to ai_actions below). */
     aiActionId: uuid("ai_action_id"),
+    /** Template sent manually from the inbox (T21; composite FK to message_templates below). */
+    templateId: uuid("template_id"),
+    /** Positional params for `templateId`, validated against the template placeholders. */
+    templateParams: jsonb("template_params").$type<string[]>(),
     error: jsonb("error").$type<Record<string, unknown>>(),
+    /** Emoji reaction on this message (one per message: the other party reacts, never the author). */
+    reaction: text("reaction"),
+    /** Who reacted: the contact (to our message) or ai/user (to the contact's message). */
+    reactionBy: messageAuthor("reaction_by"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -53,6 +62,11 @@ export const messages = pgTable(
       name: "messages_tenant_ai_action_fk",
       columns: [t.tenantId, t.aiActionId],
       foreignColumns: [aiActions.tenantId, aiActions.id],
+    }).onDelete("set null"),
+    foreignKey({
+      name: "messages_tenant_template_fk",
+      columns: [t.tenantId, t.templateId],
+      foreignColumns: [messageTemplates.tenantId, messageTemplates.id],
     }).onDelete("set null"),
     index("messages_tenant_conversation_created_idx").on(t.tenantId, t.conversationId, t.createdAt),
     uniqueIndex("messages_tenant_external_id_unique")

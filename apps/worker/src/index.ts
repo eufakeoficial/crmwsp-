@@ -1,18 +1,39 @@
+import { ElevenLabsTTSProvider } from "@crmwsp/ai";
 import { pathToFileURL } from "node:url";
+import { parsePdf } from "@crmwsp/knowledge";
 import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
 import { createDb } from "@crmwsp/db";
 import { GupshupProvider } from "@crmwsp/whatsapp";
 import { Queue } from "bullmq";
-import { createAiWorker } from "./ai/index.js";
+import { createAiWorker, createBspMediaLoader } from "./ai/index.js";
 import { AI_QUEUE_NAME, OUTBOUND_QUEUE_NAME, createRedis } from "./queue.js";
 import { createInboundWorker } from "./worker.js";
 import { createOutboundWorker } from "./outbound.js";
+import { FOLLOW_UP_QUEUE_NAME, createFollowUpWorker, scheduleFollowUpTick } from "./followups/index.js";
+import { CAPI_QUEUE_NAME, createCapiWorker, scheduleCapiTick, type FetchLike } from "./meta-capi/index.js";
+import { META_ADS_QUEUE_NAME, createMetaAdsWorker, scheduleMetaAdsTick, type MetaGetFetch } from "./meta-ads/index.js";
+import { BROADCAST_QUEUE_NAME, createBroadcastWorker, scheduleBroadcastTick } from "./broadcasts/index.js";
+import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
+import { createMailerFromEnv, renderEmail } from "@crmwsp/mailer";
+import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotificationTick } from "./notifications/index.js";
+import { OWNER_MODE_QUEUE_NAME, createOwnerInterpreter, createOwnerModeWorker, createOwnerSender } from "./owner-mode/index.js";
+import { WEBHOOK_QUEUE_NAME, createWebhookSender, createWebhookWorker, scheduleWebhookTick } from "./webhooks/index.js";
+import { ORDER_EXTRACTION_QUEUE_NAME, createOrderExtractionWorker } from "./order-extraction/index.js";
 
 export * from "./queue.js";
 export * from "./processors.js";
 export * from "./status.js";
 export * from "./outbound.js";
 export * from "./ai/index.js";
+export * from "./followups/index.js";
+export * from "./meta-capi/index.js";
+export * from "./meta-ads/index.js";
+export * from "./notifications/index.js";
+export * from "./media/index.js";
+export * from "./webhooks/index.js";
+export * from "./broadcasts/index.js";
+export * from "./owner-mode/index.js";
+export * from "./order-extraction/index.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -23,6 +44,10 @@ const logger = {
 };
 
 function main(): void {
+  // CN-011: dev allowances need an explicit NODE_ENV; unset/unknown runs as production.
+  const nodeEnv = process.env["NODE_ENV"];
+  if (!nodeEnv) logger.error("worker: NODE_ENV is not set; running with production security defaults");
+  const devOrTest = nodeEnv === "development" || nodeEnv === "test";
   const redisUrl = process.env["REDIS_URL"] ?? "redis://localhost:6379";
   const databaseUrl = process.env["DATABASE_URL"];
   if (!databaseUrl) {
@@ -37,6 +62,15 @@ function main(): void {
   // Producer for AI turns scheduled by ingest (the API enqueues embed-source / execute-ai-action).
   const aiQueue = new Queue(AI_QUEUE_NAME, { connection: createRedis(redisUrl) });
 
+  // Producer for store-media jobs (inbound media copied to S3); disabled when S3_* is not configured.
+  const mediaStore = mediaStoreFromEnv();
+  const mediaQueue = mediaStore ? new Queue(MEDIA_QUEUE_NAME, { connection: createRedis(redisUrl) }) : undefined;
+  // Producer for F4 order detection on inbound voice notes, photos and PDFs.
+  const orderExtractionQueue = new Queue(ORDER_EXTRACTION_QUEUE_NAME, { connection: createRedis(redisUrl) });
+
+  // Producer for owner-mode commands (F9): inbound from verified owner phones.
+  const ownerQueue = new Queue(OWNER_MODE_QUEUE_NAME, { connection: createRedis(redisUrl) });
+
   const worker = createInboundWorker({
     connection,
     concurrency: Number.isInteger(concurrency) && concurrency > 0 ? concurrency : 5,
@@ -44,6 +78,9 @@ function main(): void {
     provider: new GupshupProvider(),
     publisher,
     aiQueue,
+    ownerQueue,
+    ...(mediaQueue ? { mediaQueue } : {}),
+    orderExtractionQueue,
     logger,
   });
   worker.on("failed", (job, err) =>
@@ -56,6 +93,21 @@ function main(): void {
   let ai: ReturnType<typeof createAiWorker> | undefined;
   let outboundQueue: Queue | undefined;
   let lockRedis: ReturnType<typeof createRedis> | undefined;
+  let followUps: ReturnType<typeof createFollowUpWorker> | undefined;
+  let followUpQueue: Queue | undefined;
+  let notificationsWorker: ReturnType<typeof createNotificationWorker> | undefined;
+  let notificationQueue: Queue | undefined;
+  let mediaWorker: ReturnType<typeof createMediaWorker> | undefined;
+  let capiWorker: ReturnType<typeof createCapiWorker> | undefined;
+  let capiQueue: Queue | undefined;
+  let metaAdsWorker: ReturnType<typeof createMetaAdsWorker> | undefined;
+  let metaAdsQueue: Queue | undefined;
+  let webhooksWorker: ReturnType<typeof createWebhookWorker> | undefined;
+  let webhookQueue: Queue | undefined;
+  let broadcastWorker: ReturnType<typeof createBroadcastWorker> | undefined;
+  let broadcastQueue: Queue | undefined;
+  let ownerWorker: ReturnType<typeof createOwnerModeWorker> | undefined;
+  let orderExtractionWorker: ReturnType<typeof createOrderExtractionWorker> | undefined;
   try {
     const keys = loadMasterKeysFromEnv(process.env);
     const cipher = createCipherBox(keys);
@@ -67,6 +119,7 @@ function main(): void {
       publisher,
       cipher,
       logger,
+      ...(mediaStore ? { voice: { tts: new ElevenLabsTTSProvider(), store: mediaStore } } : {}),
     });
     outboundQueue = new Queue(OUTBOUND_QUEUE_NAME, { connection: createRedis(redisUrl) });
     // AI jobs also need the master keys (BYOK LLM keys are encrypted).
@@ -80,9 +133,111 @@ function main(): void {
       cipher,
       outboundQueue,
       lockRedis,
+      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider(), store: mediaStore }),
       logger,
     });
+    // F4: order detection on voice notes, photos and PDFs (PDF text via @crmwsp/knowledge).
+    orderExtractionWorker = createOrderExtractionWorker({
+      connection: createRedis(redisUrl),
+      db: db.db,
+      cipher,
+      publisher,
+      outboundQueue,
+      aiQueue,
+      pdfText: async (bytes) => (await parsePdf(bytes)).text,
+      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider(), store: mediaStore }),
+      logger,
+    });
+    orderExtractionWorker.on("failed", (job, err) =>
+      logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
+    );
+    if (mediaStore) {
+      mediaWorker = createMediaWorker({
+        connection: createRedis(redisUrl),
+        db: db.db,
+        store: mediaStore,
+        loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider() }),
+        logger,
+      });
+      mediaWorker.on("failed", (job, err) =>
+        logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
+      );
+    }
     ai.on("failed", (job, err) =>
+      logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
+    );
+    // Follow-up scheduler: only enqueues onto the outbound queue, so it runs with it.
+    followUpQueue = new Queue(FOLLOW_UP_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    followUps = createFollowUpWorker({ connection: createRedis(redisUrl), db: db.db, outboundQueue, logger });
+    void scheduleFollowUpTick(followUpQueue).catch((err: unknown) =>
+      logger.warn(`follow-up scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
+    // Broadcast campaigns: rate-limited batches onto the outbound queue.
+    broadcastQueue = new Queue(BROADCAST_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    broadcastWorker = createBroadcastWorker({ connection: createRedis(redisUrl), db: db.db, outboundQueue, logger });
+    void scheduleBroadcastTick(broadcastQueue).catch((err: unknown) =>
+      logger.warn(`broadcast scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
+    // Owner notifications: SSE fan-out + optional owner WhatsApp through the outbound queue.
+    notificationQueue = new Queue(NOTIFICATION_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    const mailer = createMailerFromEnv();
+    notificationsWorker = createNotificationWorker({
+      connection: createRedis(redisUrl),
+      db: db.db,
+      publisher,
+      outboundQueue,
+      sendOwnerText: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
+      sendOwnerEmail: async (msg) => {
+        if (!msg.to) return;
+        const { text, html } = renderEmail({
+          title: msg.title,
+          body: msg.body ?? "",
+          ...(process.env.PUBLIC_WEB_URL ? { ctaLabel: "Abrir CRMWSP", ctaUrl: `${process.env.PUBLIC_WEB_URL}/app` } : {}),
+        });
+        await mailer.send({ to: msg.to, subject: msg.title, text, html });
+      },
+      logger,
+    });
+    void scheduleNotificationTick(notificationQueue).catch((err: unknown) =>
+      logger.warn(`notification scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
+    // Meta Conversions API (Lead / Purchase of Click-to-WhatsApp contacts); tokens need the master keys.
+    const capiFetch: FetchLike = (url, init) => fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(15_000) });
+    capiQueue = new Queue(CAPI_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    capiWorker = createCapiWorker({ connection: createRedis(redisUrl), db: db.db, cipher, fetch: capiFetch, logger });
+    void scheduleCapiTick(capiQueue).catch((err: unknown) =>
+      logger.warn(`capi scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
+    // Meta Marketing API spend sync (every 6 h + "Sincronizar ahora" from the api); token needs the master keys.
+    const metaAdsFetch: MetaGetFetch = (url, init) => fetch(url, { ...init, redirect: "error", signal: AbortSignal.timeout(30_000) });
+    metaAdsQueue = new Queue(META_ADS_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    metaAdsWorker = createMetaAdsWorker({ connection: createRedis(redisUrl), db: db.db, cipher, fetch: metaAdsFetch, logger });
+    void scheduleMetaAdsTick(metaAdsQueue).catch((err: unknown) =>
+      logger.warn(`meta ads scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
+    // Outbound tenant webhooks (signed with the decrypted endpoint secret). http:// only outside production.
+    webhookQueue = new Queue(WEBHOOK_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    webhooksWorker = createWebhookWorker({
+      connection: createRedis(redisUrl),
+      db: db.db,
+      cipher,
+      send: createWebhookSender({ allowHttp: devOrTest }),
+      logger,
+    });
+    void scheduleWebhookTick(webhookQueue).catch((err: unknown) =>
+      logger.warn(`webhook scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
+    // Owner mode (F9): replies through the tenant channel; LLM key and BSP key need the master keys.
+    ownerWorker = createOwnerModeWorker({
+      connection: createRedis(redisUrl),
+      db: db.db,
+      send: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
+      interpret: createOwnerInterpreter({ db: db.db, cipher, logger }),
+      aiQueue,
+      outboundQueue,
+      logger,
+    });
+    ownerWorker.on("failed", (job, err) =>
       logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
     );
     outbound.on("failed", (job, err) =>
@@ -97,8 +252,8 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close()])
-      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close()]))
+    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
+      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), metaAdsQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close(), orderExtractionQueue.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));
   };

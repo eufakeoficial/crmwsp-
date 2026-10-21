@@ -136,7 +136,12 @@ describe.skipIf(!hasEnv)("AI settings, knowledge and approvals (e2e, real Postgr
     return { cookie: sessionCookieOf(res), tenant: (res.json() as { tenants: { id: string }[] }).tenants[0]!.id };
   }
 
+  const prevNodeEnv = process.env["NODE_ENV"];
+
   beforeAll(async () => {
+    // The custom-baseUrl policy stubs DNS only under NODE_ENV=test; a NODE_ENV inherited from
+    // .env or the shell (e.g. development) would resolve llm.example.com for real and fail.
+    process.env["NODE_ENV"] = "test";
     // Test-only master key, never written to files.
     process.env["ENCRYPTION_MASTER_KEY"] = randomBytes(32).toString("base64");
     process.env["ENCRYPTION_MASTER_KEY_ID"] = "1";
@@ -159,6 +164,8 @@ describe.skipIf(!hasEnv)("AI settings, knowledge and approvals (e2e, real Postgr
   });
 
   afterAll(async () => {
+    if (prevNodeEnv === undefined) delete process.env["NODE_ENV"];
+    else process.env["NODE_ENV"] = prevNodeEnv;
     if (app) await app.close();
     await queue?.obliterate({ force: true }).catch(() => undefined);
     await queue?.close();

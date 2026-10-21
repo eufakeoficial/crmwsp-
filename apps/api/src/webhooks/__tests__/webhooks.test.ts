@@ -10,6 +10,7 @@ import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PgInboundEventStore, type InboundEventStore } from "../inbound-event-store.js";
 import { WebhookRateLimiter, type RateLimiterOptions } from "../rate-limiter.js";
+import { MemoryCounterStore } from "../../common/rate-limit-store.js";
 import { UNAUTHORIZED_MIN_MS } from "../webhooks.controller.js";
 import { WebhooksModule } from "../webhooks.module.js";
 
@@ -219,16 +220,22 @@ describe.skipIf(!hasEnv)("POST /webhooks/gupshup/:webhookToken", () => {
 });
 
 describe("WebhookRateLimiter memory", () => {
-  it("never tracks more than maxKeys entries and drops expired windows", () => {
+  it("never tracks more than maxKeys entries and drops expired windows", async () => {
     let now = 0;
-    const rl = new WebhookRateLimiter({ windowMs: 1_000, maxPerToken: 5, maxPerIp: 5, maxKeys: 100 }, () => now);
-    const size = (): number => (rl as unknown as { windows: Map<string, unknown> }).windows.size;
-    for (let i = 0; i < 10_000; i++) rl.hit(`tok-${i}`, `ip-${i}`);
-    expect(size()).toBeLessThanOrEqual(100);
+    const store = new MemoryCounterStore(() => now, 100);
+    const rl = new WebhookRateLimiter({ windowMs: 1_000, maxPerToken: 5, maxPerIp: 5 }, store);
+    for (let i = 0; i < 10_000; i++) await rl.hit(`tok-${i}`, `ip-${i}`);
+    expect(store.size).toBeLessThanOrEqual(100);
     now = 5_000;
-    rl.hit("fresh", "fresh-ip");
-    // Full map with all windows expired gets swept on the next new key.
-    for (let i = 0; i < 200; i++) rl.hit(`late-${i}`, "fresh-ip");
-    expect(size()).toBeLessThanOrEqual(100);
+    await rl.hit("fresh", "fresh-ip");
+    for (let i = 0; i < 200; i++) await rl.hit(`late-${i}`, "fresh-ip");
+    expect(store.size).toBeLessThanOrEqual(100);
+  });
+
+  it("applies the tighter per-connection cap when asked (weakAuth providers)", async () => {
+    const rl = new WebhookRateLimiter({ windowMs: 60_000, maxPerToken: 600, maxPerIp: 1_200 }, new MemoryCounterStore());
+    const results: boolean[] = [];
+    for (let i = 0; i < 4; i++) results.push(await rl.hit("weak-token", `ip-${i}`, 3));
+    expect(results).toEqual([true, true, true, false]);
   });
 });

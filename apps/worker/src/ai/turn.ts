@@ -9,11 +9,15 @@ import {
   type PromptChunk,
   type PromptConversationMessage,
 } from "@crmwsp/ai";
-import { AI_ACTION_TYPES, aiActionSchema } from "@crmwsp/contracts";
+import { AI_ACTION_TYPES, aiActionSchema, normalizeReactionEmoji } from "@crmwsp/contracts";
 import type { AiActionType, AiDecision, AiTurnOutput } from "@crmwsp/contracts";
+import { checkLimit, resolveEffectivePlan } from "@crmwsp/billing";
 import {
   agentConfigs,
+  consumeUsage,
+  readPlanUsage,
   aiActions,
+  attachments,
   contacts,
   conversations,
   knowledgeSources,
@@ -33,12 +37,23 @@ import {
 } from "@crmwsp/db";
 import { evaluateTurn, type TenantAiPolicies } from "@crmwsp/domain";
 import { UnrecoverableError } from "bullmq";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { InboxEvent } from "../processors.js";
-import { AI_TURN_MAX_ATTEMPTS, SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS } from "../queue.js";
+import { AI_TURN_MAX_ATTEMPTS, SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS, SEND_REACTION_JOB, sendReactionJobId } from "../queue.js";
+import { insertNotification } from "../notifications/notify.js";
+import { contactAutomationsPaused, routeHandoff } from "../inbox/routing.js";
 import { applyConversationHandoff, runAction } from "./actions.js";
+import { extractReceipt, findPendingPaymentOrder, handleReceipt, pgReceiptPorts, type ReceiptImage } from "./receipt.js";
 import { maybeWarnBudget, readBudget } from "./budget.js";
 import { withRedisLock } from "./lock.js";
+import {
+  AUDIO_NOT_TRANSCRIBED,
+  DEFAULT_TRANSCRIPTION_MODEL,
+  transcribeAttachment,
+  voiceNoteText,
+  type AudioAttachment,
+  type TranscribeOutcome,
+} from "./transcribe.js";
 import {
   InvalidModelOutputError,
   assertIds,
@@ -68,7 +83,7 @@ export interface AiTurnAttempt {
 }
 
 export type AiTurnResult =
-  | { outcome: "skipped"; reason: "ai-off" | "already-processed" | "no-llm-connection" }
+  | { outcome: "skipped"; reason: "ai-off" | "already-processed" | "no-llm-connection" | "automations-paused" }
   | { outcome: "handoff"; reason: string }
   | { outcome: "processed"; replied: boolean; drafted: boolean; handoff: boolean; actionIds: string[] };
 
@@ -82,6 +97,8 @@ interface TurnTx {
   events: Array<AiEvent | InboxEvent>;
   /** Queued AI reply that must be handed to the `outbound` queue after commit. */
   enqueueMessageId?: string;
+  /** Emoji reaction stored on the trigger message; delivered through the `outbound` queue after commit. */
+  reaction?: { messageId: string; emoji: string };
   connection?: LlmConnection;
 }
 
@@ -122,7 +139,8 @@ function buildQuery(history: Array<{ author: string; body: string | null; type: 
   for (let i = history.length - 1; i >= 0 && picked.length < QUERY_MESSAGES; i--) {
     const m = history[i]!;
     if (m.author !== "contact") break;
-    if (m.body?.trim()) picked.unshift(m.body.trim());
+    const text = m.body?.trim().replace(/^\[voice note\]\s*/, "");
+    if (text && text !== AUDIO_NOT_TRANSCRIBED) picked.unshift(text);
   }
   return picked.join("\n").slice(0, QUERY_MAX_CHARS);
 }
@@ -198,6 +216,18 @@ export async function processAiTurn(
       { ...SEND_MESSAGE_JOB_OPTIONS, jobId: out.enqueueMessageId },
     );
   }
+  if (out.reaction) {
+    // Best effort: the reply (if any) is already queued and a lost reaction must not fail the turn.
+    try {
+      await deps.outboundQueue.add(
+        SEND_REACTION_JOB,
+        { tenantId, messageId: out.reaction.messageId, emoji: out.reaction.emoji },
+        { ...SEND_MESSAGE_JOB_OPTIONS, jobId: sendReactionJobId(out.reaction.messageId) },
+      );
+    } catch {
+      /* the inbox shows the stored reaction; the BSP send is retried only by a new enqueue */
+    }
+  }
   await publishEvents(deps, tenantId, out.events);
   if (out.connection) await maybeWarnBudget(deps, tenantId, out.connection);
   return out.result;
@@ -224,6 +254,11 @@ interface Prepared {
   config: typeof agentConfigs.$inferSelect | undefined;
   contact: typeof contacts.$inferSelect | undefined;
   history: HistoryRow[];
+  /** Trigger audio attachment (voice note) and stored transcripts of earlier voice notes by message id. */
+  triggerAudio: AudioAttachment | undefined;
+  transcripts: Map<string, string>;
+  /** Trigger image while the contact has a `pending_payment` order: a receipt to review (T8). */
+  receipt?: ReceiptImage;
 }
 
 /** Writes handoff rows inside `tx`; the conversation is moved to `pending` at most once. */
@@ -234,6 +269,15 @@ function handoffWriter(tx: Transaction, c: TurnCtx, events: Array<AiEvent | Inbo
     handedOff = true;
     // Unassigned conversations go to `pending`; an assigned agent already owns it.
     await applyConversationHandoff(tx, c.conversationId, c.now);
+    await routeHandoff(tx, c.tenantId, c.conversationId, c.now);
+    await insertNotification(tx, c.tenantId, {
+      kind: "handoff",
+      title: "Una conversación necesita atención humana",
+      entity: "conversation",
+      entityId: c.conversationId,
+      conversationId: c.conversationId,
+      dedupeKey: `handoff:${actionId}`,
+    });
     events.push(
       { type: "ai.handoff", conversationId: c.conversationId, actionId },
       { type: "conversation.updated", conversationId: c.conversationId, messageId: c.triggerMessageId },
@@ -291,7 +335,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
   if (!conv) throw new UnrecoverableError("conversation not found");
 
   const [trigger] = await tx
-    .select({ id: messages.id, direction: messages.direction, conversationId: messages.conversationId })
+    .select({ id: messages.id, direction: messages.direction, conversationId: messages.conversationId, type: messages.type })
     .from(messages)
     .where(eq(messages.id, triggerMessageId))
     .limit(1);
@@ -300,6 +344,10 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
   }
 
   if (conv.aiMode === "off") return { done: { result: { outcome: "skipped", reason: "ai-off" }, events } };
+  // Paused by an agent (manually or while replying): no AI turn at all (T23).
+  if (await contactAutomationsPaused(tx, conv.contactId, c.now)) {
+    return { done: { result: { outcome: "skipped", reason: "automations-paused" }, events } };
+  }
 
   const replay = await replayGuard(tx, c);
   if (replay) return { done: replay };
@@ -318,6 +366,13 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
     return { done: { result: { outcome: "handoff", reason: "budget_exceeded" }, events, connection: conn } };
   }
 
+  // Plan limit (monthly AI messages): same contract as the budget, the AI stops, the inbox doesn't.
+  const usage = await readPlanUsage(tx);
+  if (!checkLimit(resolveEffectivePlan(usage.plan, usage.limitsOverride), "ai_messages", usage.aiMessages, 1).allowed) {
+    await handoffWriter(tx, c, events).record("plan_limit_reached", null);
+    return { done: { result: { outcome: "handoff", reason: "plan_limit_reached" }, events, connection: conn } };
+  }
+
   const [tenant] = await tx.select({ name: tenants.name }).from(tenants).limit(1);
   const [config] = await tx.select().from(agentConfigs).where(eq(agentConfigs.isActive, true)).limit(1);
   const [contact] = await tx.select().from(contacts).where(eq(contacts.id, conv.contactId)).limit(1);
@@ -327,7 +382,42 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
     .where(eq(messages.conversationId, conversationId))
     .orderBy(desc(messages.createdAt), desc(messages.id))
     .limit(HISTORY_LIMIT);
-  return { prep: { conn, tenantName: tenant?.name ?? "", config, contact, history: historyDesc.reverse() } };
+  const history = historyDesc.reverse();
+  const audioIds = history.filter((m) => m.type === "audio").map((m) => m.id);
+  if (trigger.type === "audio" && !audioIds.includes(trigger.id)) audioIds.push(trigger.id);
+  const transcripts = new Map<string, string>();
+  let triggerAudio: AudioAttachment | undefined;
+  if (audioIds.length > 0) {
+    const rows = await tx
+      .select({
+        id: attachments.id,
+        messageId: attachments.messageId,
+        externalMediaId: attachments.externalMediaId,
+        mimeType: attachments.mimeType,
+        transcript: attachments.transcript,
+      })
+      .from(attachments)
+      .where(inArray(attachments.messageId, audioIds));
+    for (const r of rows) {
+      if (r.transcript?.trim()) transcripts.set(r.messageId, r.transcript.trim());
+      if (r.messageId === triggerMessageId && !triggerAudio) triggerAudio = r;
+    }
+  }
+  let receipt: ReceiptImage | undefined;
+  if (trigger.type === "image") {
+    const order = await findPendingPaymentOrder(tx, conv.contactId);
+    if (order) {
+      const [img] = await tx
+        .select({ id: attachments.id, externalMediaId: attachments.externalMediaId, mimeType: attachments.mimeType })
+        .from(attachments)
+        .where(eq(attachments.messageId, triggerMessageId))
+        .limit(1);
+      receipt = { attachmentId: img?.id ?? null, externalMediaId: img?.externalMediaId ?? null, mimeType: img?.mimeType ?? null, order };
+    }
+  }
+  return {
+    prep: { conn, tenantName: tenant?.name ?? "", config, contact, history, triggerAudio, transcripts, ...(receipt ? { receipt } : {}) },
+  };
 }
 
 /**
@@ -359,7 +449,52 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   // 1. Short read transaction.
   const phase1 = await withTenant(deps.db, tenantId, (tx) => prepare(deps, tx, c));
   if ("done" in phase1) return phase1.done;
-  const { conn, tenantName, config, contact, history } = phase1.prep;
+  const { conn, tenantName, config, contact, triggerAudio, transcripts } = phase1.prep;
+
+  // Receipt image for a pending order: extract for a human reviewer; never marks the order paid.
+  if (phase1.prep.receipt) {
+    const image = phase1.prep.receipt;
+    const out = await handleReceipt(
+      {
+        inTx: pgReceiptPorts(deps.db, tenantId, c.conversationId, triggerMessageId),
+        extract: async () => {
+          let provider: LLMProvider;
+          try {
+            provider = buildProvider(deps, tenantId, conn);
+          } catch (err) {
+            logger.warn(`receipt provider unavailable (${err instanceof Error ? err.name : "unknown"})`);
+            return { status: "failed", reason: "credentials_unavailable" };
+          }
+          return extractReceipt(image, {
+            tenantId,
+            conversationId: c.conversationId,
+            provider,
+            supported: conn.capabilities.vision === true,
+            model: visionModelFor(conn),
+            loadMedia: deps.loadMedia,
+            logger,
+          });
+        },
+        canAutoReply: (conv) => aiMayAutoReply(conv) && sessionWindowOpen(conv.lastInboundAt, now),
+        replyClientMessageId: aiReplyClientMessageId(triggerMessageId),
+      },
+      { conversationId: c.conversationId, messageId: triggerMessageId, image },
+    );
+    if (out.outcome === "already-processed") {
+      return {
+        result: { outcome: "skipped", reason: "already-processed" },
+        events: out.events,
+        ...(out.enqueueMessageId ? { enqueueMessageId: out.enqueueMessageId } : {}),
+      };
+    }
+    return {
+      result: { outcome: "processed", replied: out.replied, drafted: false, handoff: false, actionIds: [] },
+      events: out.events,
+      ...(out.enqueueMessageId ? { enqueueMessageId: out.enqueueMessageId } : {}),
+      connection: conn,
+    };
+  }
+  let history = phase1.prep.history;
   const contextIds = new Set(history.map((m) => m.id));
   const confidenceThreshold = config ? Number(config.confidenceThreshold) : DEFAULT_CONFIDENCE_THRESHOLD;
 
@@ -369,6 +504,39 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   let queryEmbeddingTokens: { model: string; tokens: number } | undefined;
   try {
     const provider = buildProvider(deps, tenantId, conn);
+
+    // Voice note: transcribe once (BYOK provider), persist, and let the turn see the text.
+    // Any failure degrades to a marker; the transcript is stored before the chat call so a retry
+    // of this job never pays for the same audio twice.
+    if (triggerAudio) {
+      const outcome = await transcribeAttachment(triggerAudio, {
+        tenantId,
+        conversationId: c.conversationId,
+        provider,
+        supported: conn.capabilities.transcription === true,
+        model: transcriptionModelFor(conn),
+        loadMedia: deps.loadMedia,
+        logger,
+      });
+      if (outcome.status === "transcribed") {
+        try {
+          await withTenant(deps.db, tenantId, (tx) => persistTranscript(tx, c, triggerAudio.id, outcome));
+        } catch (err) {
+          logger.warn(`ai-turn ${triggerMessageId} could not persist transcript (${err instanceof Error ? err.name : "unknown"})`);
+        }
+      } else if (outcome.status !== "cached") {
+        logger.warn(`ai-turn ${triggerMessageId} voice note not transcribed (${outcome.reason})`);
+      }
+      const text = outcome.status === "cached" || outcome.status === "transcribed" ? outcome.text : undefined;
+      if (text) transcripts.set(triggerMessageId, text);
+      history = history.map((m) =>
+        m.type === "audio" && m.id === triggerMessageId ? { ...m, body: voiceNoteText(outcome) } : m,
+      );
+    }
+    // Earlier voice notes with a stored transcript.
+    history = history.map((m) =>
+      m.type === "audio" && !m.body?.trim() && transcripts.has(m.id) ? { ...m, body: `[voice note] ${transcripts.get(m.id)}` } : m,
+    );
     const query = buildQuery(history);
     let sourceTitles = new Map<string, string>();
     if (query !== "") {
@@ -437,6 +605,48 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   );
 }
 
+function visionModelFor(conn: LlmConnection): string {
+  const configured = conn.capabilities.visionModel;
+  return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : conn.modelCheap;
+}
+
+function transcriptionModelFor(conn: LlmConnection): string {
+  const configured = (conn.capabilities as { transcriptionModel?: unknown }).transcriptionModel;
+  return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : DEFAULT_TRANSCRIPTION_MODEL;
+}
+
+/** Stores the transcript once (first writer wins) and books the transcription cost in the ledger. */
+async function persistTranscript(
+  tx: Transaction,
+  c: TurnCtx,
+  attachmentId: string,
+  t: Extract<TranscribeOutcome, { status: "transcribed" }>,
+): Promise<void> {
+  await tx
+    .update(attachments)
+    .set({ transcript: t.text })
+    .where(and(eq(attachments.id, attachmentId), sql`${attachments.transcript} is null`));
+  await tx.insert(usageLedger).values({
+    tenantId: c.tenantId,
+    kind: "transcription_seconds",
+    quantity: String(t.seconds),
+    unit: "seconds",
+    costMinor: BigInt(t.costMinor),
+    currency: "USD",
+    refType: "conversation",
+    refId: c.conversationId,
+    meta: {
+      model: t.model,
+      attachmentId,
+      messageId: c.triggerMessageId,
+      durationEstimated: t.durationEstimated,
+      verified: t.verified,
+      priceKnown: t.priceKnown,
+      unit: "usd_microcents",
+    },
+  });
+}
+
 async function recordUsage(
   tx: Transaction,
   c: TurnCtx,
@@ -499,6 +709,9 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
 
   // The provider cost was incurred whatever happens next.
   await recordUsage(tx, c, p.calls, p.queryEmbeddingTokens);
+  // One AI message per turn that reached the provider. Recorded uncapped: the cap is enforced
+  // before the provider call (prepare), and the cost was incurred anyway.
+  if (p.calls.length > 0) await consumeUsage(tx, tenantId, "ai_messages", 1, null);
 
   // Re-validate under a row lock: the conversation may have changed while the LLM was thinking.
   const [conv] = await tx
@@ -507,6 +720,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
       assignedUserId: conversations.assignedUserId,
       status: conversations.status,
       lastInboundAt: conversations.lastInboundAt,
+      contactId: conversations.contactId,
     })
     .from(conversations)
     .where(eq(conversations.id, conversationId))
@@ -522,7 +736,9 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
   const output = final.result.parsed as AiTurnOutput;
   const modelUsed = final.model;
   // Auto only when nobody (human or handoff) owns the conversation; otherwise drafts.
-  const mode: "auto" | "assist" = aiMayAutoReply(conv) ? "auto" : "assist";
+  // An agent may have paused automations while the LLM was thinking: draft only (T23).
+  const paused = await contactAutomationsPaused(tx, conv.contactId, c.now);
+  const mode: "auto" | "assist" = aiMayAutoReply(conv) && !paused ? "auto" : "assist";
 
   const validChunkIds = new Set(p.hits.map((h) => h.id));
   const chunkCitations = new Map<string, AiCitation>(
@@ -582,6 +798,15 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
         .set({ status: outcome.status, result: outcome.result, ...(outcome.status === "approved" ? {} : { executedAt: now }) })
         .where(eq(aiActions.id, row.id));
     } else if (decision === "approve") {
+      await insertNotification(tx, tenantId, {
+        kind: "approval_requested",
+        title: "La IA pide aprobación para una acción",
+        body: action?.type ?? null,
+        entity: "ai_action",
+        entityId: row.id,
+        conversationId,
+        dedupeKey: `approval:${row.id}`,
+      });
       events.push({ type: "ai.action_pending", conversationId, actionId: row.id });
     }
   }
@@ -680,10 +905,35 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
     actionIds.push(await handoff.record(evaluation.reply.reason.slice(0, 200), modelUsed));
   }
 
+  // Reaction: low-risk and automatic, but only where the AI may act on its own (mode "auto" excludes
+  // ai_mode assist/off, assigned or closed conversations and paused contacts) and never on a turn
+  // that escalated to a human. Stored first (idempotent: at most one reaction per message).
+  let reaction: { messageId: string; emoji: string } | undefined;
+  const reactionEmoji = normalizeReactionEmoji(output.reaction?.emoji);
+  if (reactionEmoji && mode === "auto" && !handoff.handedOff() && sessionWindowOpen(conv.lastInboundAt, now)) {
+    const [reacted] = await tx
+      .update(messages)
+      .set({ reaction: reactionEmoji, reactionBy: "ai" })
+      .where(
+        and(
+          eq(messages.id, triggerMessageId),
+          eq(messages.direction, "inbound"),
+          isNull(messages.reaction),
+          isNotNull(messages.externalId),
+        ),
+      )
+      .returning({ id: messages.id });
+    if (reacted) {
+      reaction = { messageId: reacted.id, emoji: reactionEmoji };
+      events.push({ type: "message.status", conversationId, messageId: reacted.id });
+    }
+  }
+
   return {
     result: { outcome: "processed", replied, drafted, handoff: handoff.handedOff(), actionIds },
     events,
     connection: p.conn,
     ...(enqueueMessageId ? { enqueueMessageId } : {}),
+    ...(reaction ? { reaction } : {}),
   };
 }

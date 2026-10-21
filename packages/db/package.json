@@ -11,7 +11,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/migrate.ts"
+    "db:migrate": "tsx src/migrate.ts",
+    "db:seed-demo": "tsx scripts/seed-demo.ts",
+    "platform-admin:grant": "tsx scripts/platform-admin.ts grant",
+    "platform-admin:revoke": "tsx scripts/platform-admin.ts revoke",
+    "platform-admin:list": "tsx scripts/platform-admin.ts list"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",

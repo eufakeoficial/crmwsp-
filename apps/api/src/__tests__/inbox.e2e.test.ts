@@ -16,6 +16,7 @@ import {
   inArray,
   memberships,
   messages,
+  messageTemplates,
   tenants,
   users,
   type DbHandle,
@@ -470,6 +471,82 @@ describe.skipIf(!hasEnv)("channels, inbox, outbound and SSE (e2e, real Postgres 
       expect(jobs).toHaveLength(1);
       // Reusing the id on another conversation is a conflict.
       expect((await asA("POST", `/conversations/${s.convA[3]}/messages`, { text: "x", clientMessageId })).statusCode).toBe(409);
+    });
+  });
+
+  describe("template send", () => {
+    async function seedTemplate(status: "approved" | "pending" = "approved"): Promise<string> {
+      const [t] = await migrator.db
+        .insert(messageTemplates)
+        .values({
+          tenantId: s.tenantA,
+          channelConnectionId: s.channelA,
+          name: `reactivar_${randomUUID().slice(0, 8)}`,
+          language: "es",
+          category: "utility",
+          status,
+          body: "Hola {{1}}, seguimos con {{2}}?",
+          externalId: "gs-tpl-1",
+        })
+        .returning({ id: messageTemplates.id });
+      return t!.id;
+    }
+
+    it("answers 400 when params do not match the placeholders, or the template is not approved", async () => {
+      const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
+      const { conversationId } = await seedConversation(s.tenantA, s.channelA, "+34600300001", old, old);
+      const templateId = await seedTemplate();
+      const url = `/conversations/${conversationId}/template-messages`;
+      const mismatch = await asA("POST", url, { templateId, params: ["Ana"], clientMessageId: randomUUID() });
+      expect(mismatch.statusCode).toBe(400);
+      const pending = await asA("POST", url, { templateId: await seedTemplate("pending"), params: ["Ana", "x"], clientMessageId: randomUUID() });
+      expect(pending.statusCode).toBe(400);
+      expect(await migrator.db.select().from(messages).where(eq(messages.conversationId, conversationId))).toHaveLength(0);
+    });
+
+    it("queues a template message outside the window and enqueues one job without params", async () => {
+      const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
+      const { conversationId } = await seedConversation(s.tenantA, s.channelA, "+34600300002", old, old);
+      const templateId = await seedTemplate();
+      const res = await asA("POST", `/conversations/${conversationId}/template-messages`, { templateId, params: ["Ana", "la reforma"], clientMessageId: randomUUID() });
+      expect(res.statusCode).toBe(202);
+      const m = res.json() as { id: string; type: string; status: string; body: string };
+      expect(m).toMatchObject({ type: "template", status: "queued", body: "Hola Ana, seguimos con la reforma?" });
+      const [row] = await migrator.db.select().from(messages).where(eq(messages.id, m.id));
+      expect(row).toMatchObject({ templateId, templateParams: ["Ana", "la reforma"] });
+      const job = await outboundQueue.getJob(m.id);
+      expect(job?.data).toEqual({ tenantId: s.tenantA, messageId: m.id });
+      // Tenant B cannot use A's conversation.
+      const other = await inject({
+        method: "POST",
+        url: `/conversations/${conversationId}/template-messages`,
+        payload: { templateId, params: ["Ana", "x"], clientMessageId: randomUUID() },
+        cookie: s.cookieB,
+        tenant: s.tenantB,
+      });
+      expect(other.statusCode).toBe(404);
+    });
+
+    it("same clientMessageId twice creates one template message and one job", async () => {
+      const old = new Date(Date.now() - 25 * 60 * 60 * 1000);
+      const { conversationId } = await seedConversation(s.tenantA, s.channelA, "+34600300003", old, old);
+      const templateId = await seedTemplate();
+      const payload = { templateId, params: ["Ana", "x"], clientMessageId: randomUUID() };
+      const url = `/conversations/${conversationId}/template-messages`;
+      const r1 = await asA("POST", url, payload);
+      const r2 = await asA("POST", url, payload);
+      expect([r1.statusCode, r2.statusCode]).toEqual([202, 202]);
+      const id = (r1.json() as { id: string }).id;
+      expect((r2.json() as { id: string }).id).toBe(id);
+      const concurrent = { ...payload, clientMessageId: randomUUID() };
+      const both = await Promise.all([asA("POST", url, concurrent), asA("POST", url, concurrent)]);
+      expect(both.map((r) => r.statusCode)).toEqual([202, 202]);
+      const rows = await migrator.db.select().from(messages).where(eq(messages.conversationId, conversationId));
+      expect(rows).toHaveLength(2);
+      const jobs = (await outboundQueue.getJobs(["waiting", "delayed", "active", "completed", "failed"])).filter((j) =>
+        rows.some((r) => r.id === (j.data as { messageId?: string }).messageId),
+      );
+      expect(jobs).toHaveLength(2);
     });
   });
 

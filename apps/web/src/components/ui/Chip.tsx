@@ -3,7 +3,7 @@ import { cn } from "@/lib/cn";
 
 export function chipClasses(active: boolean, className?: string): string {
   return cn(
-    "inline-flex h-9 flex-none cursor-pointer items-center rounded-full border-[1.5px] px-3.5 text-[13px] font-bold whitespace-nowrap",
+    "inline-flex h-8 flex-none cursor-pointer items-center rounded-full border-[1.5px] px-3 text-[12px] font-bold whitespace-nowrap",
     active ? "border-ink bg-ink text-white" : "border-line-2 bg-white text-ink hover:border-ink",
     className,
   );
@@ -36,7 +36,7 @@ export function PillSelect({
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-9 cursor-pointer rounded-full border-[1.5px] border-line-2 bg-white px-2.5 text-[13px] font-bold text-ink"
+      className="h-8 cursor-pointer rounded-full border-[1.5px] border-line-2 bg-white px-2.5 text-[12px] font-bold text-ink"
     >
       {options.map((o) => (
         <option key={o}>{o}</option>

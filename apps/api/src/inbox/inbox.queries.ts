@@ -1,4 +1,4 @@
-import { MESSAGE_PREVIEW_MAX, type Conversation, type Message } from "@crmwsp/contracts";
+import { MESSAGE_PREVIEW_MAX, type Conversation, type InboxConversation, type Message } from "@crmwsp/contracts";
 import { asc, attachments, inArray, sql, type Transaction } from "@crmwsp/db";
 
 export type SQL = ReturnType<typeof sql>;
@@ -30,6 +30,19 @@ interface ConversationRow extends Record<string, unknown> {
   lm_created_at: Date | string | null;
   unread_count: number;
   sort_us: string;
+  inbox_status: InboxConversation["inboxStatus"];
+  marked_unread: boolean;
+  assigned_at: Date | string | null;
+  closed_at: Date | string | null;
+  contact_tags: string[] | null;
+  automations_paused_until: Date | string | null;
+  next_reminder_at: Date | string | null;
+}
+
+export interface SelectConversationsOptions {
+  order?: "newest" | "oldest";
+  /** User whose pending reminders feed `nextReminderAt` (null for none). */
+  reminderUserId?: string | null;
 }
 
 /** Sort key of the inbox: last activity (conversations without messages fall back to created_at). */
@@ -44,7 +57,10 @@ export async function selectConversations(
   tx: Transaction,
   where: SQL[],
   limit: number,
-): Promise<Array<{ dto: Conversation; sortUs: string }>> {
+  opts: SelectConversationsOptions = {},
+): Promise<Array<{ dto: Conversation; inbox: InboxConversation; sortUs: string }>> {
+  const dir = opts.order === "oldest" ? sql`asc` : sql`desc`;
+  const reminderUser = opts.reminderUserId ?? null;
   const filter = where.length > 0 ? sql`where ${sql.join(where, sql` and `)}` : sql``;
   const rows = await tx.execute<ConversationRow>(sql`
     select c.id, c.status, c.ai_mode, c.channel_connection_id, c.last_inbound_at, c.last_message_at,
@@ -56,7 +72,12 @@ export async function selectConversations(
            (select count(*)::int from messages m
              where m.tenant_id = c.tenant_id and m.conversation_id = c.id and m.direction = 'inbound'
                and (c.last_read_at is null or m.created_at > c.last_read_at)) as unread_count,
-           ${ACTIVITY_US}::text as sort_us
+           ${ACTIVITY_US}::text as sort_us,
+           c.inbox_status, c.marked_unread, c.assigned_at, c.closed_at,
+           ct.tags as contact_tags, ct.automations_paused_until,
+           (select min(r.remind_at) from conversation_reminders r
+             where r.tenant_id = c.tenant_id and r.conversation_id = c.id and r.done = false
+               and r.user_id = ${reminderUser}::uuid) as next_reminder_at
     from conversations c
     join contacts ct on ct.id = c.contact_id
     left join users u on u.id = c.assigned_user_id
@@ -66,11 +87,10 @@ export async function selectConversations(
       order by m.created_at desc, m.id desc limit 1
     ) lm on true
     ${filter}
-    order by ${ACTIVITY_US} desc, c.id desc
+    order by ${ACTIVITY_US} ${dir}, c.id ${dir}
     limit ${limit}`);
-  return rows.map((r) => ({
-    sortUs: r.sort_us,
-    dto: {
+  return rows.map((r) => {
+    const dto: Conversation = {
       id: r.id,
       status: r.status,
       aiMode: r.ai_mode,
@@ -98,8 +118,20 @@ export async function selectConversations(
       lockVersion: Number(r.lock_version),
       createdAt: iso(r.created_at) as string,
       updatedAt: iso(r.updated_at) as string,
-    },
-  }));
+    };
+    const inbox: InboxConversation = {
+      ...dto,
+      inboxStatus: r.inbox_status,
+      unread: dto.unreadCount > 0 || Boolean(r.marked_unread),
+      markedUnread: Boolean(r.marked_unread),
+      assignedAt: iso(r.assigned_at),
+      closedAt: iso(r.closed_at),
+      contactTags: r.contact_tags ?? [],
+      automationsPausedUntil: iso(r.automations_paused_until),
+      nextReminderAt: iso(r.next_reminder_at),
+    };
+    return { sortUs: r.sort_us, dto, inbox };
+  });
 }
 
 export interface MessageRowLike {
@@ -113,6 +145,8 @@ export interface MessageRowLike {
   authorUserId: string | null;
   clientMessageId: string | null;
   error: Record<string, unknown> | null;
+  reaction: string | null;
+  reactionBy: Message["author"] | null;
   sentAt: Date | null;
   createdAt: Date;
 }
@@ -139,6 +173,8 @@ export async function withAttachments(tx: Transaction, rows: MessageRowLike[]): 
     authorUserId: r.authorUserId,
     clientMessageId: r.clientMessageId,
     error: r.error,
+    reaction: r.reaction,
+    reactionBy: r.reactionBy,
     sentAt: r.sentAt ? r.sentAt.toISOString() : null,
     createdAt: r.createdAt.toISOString(),
     attachments: atts

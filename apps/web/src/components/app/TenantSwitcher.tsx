@@ -1,17 +1,16 @@
 "use client";
 
-import { Check, ChevronDown, LogOut } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { ROLE_LABELS } from "./roles";
 import { useSession } from "./SessionProvider";
 
-/** White pill with the active company and a lime chevron button; opens the company list and logout. */
+/** White pill with the active company and a lime chevron button; opens the company list. */
 export function TenantSwitcher() {
-  const { me, tenant, selectTenant, logout } = useSession();
+  const { me, tenant, selectTenant } = useSession();
   const [open, setOpen] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -43,7 +42,7 @@ export function TenantSwitcher() {
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls="tenant-menu"
-        className="flex h-12 w-full max-w-full cursor-pointer items-center gap-2 rounded-full bg-white pr-2 pl-4 text-[15px] font-bold text-ink"
+        className="flex h-9 w-full max-w-full cursor-pointer items-center gap-2 rounded-full bg-white pr-2 pl-3 text-[13px] font-bold text-ink"
       >
         <span className="sr-only">Empresa activa: </span>
         <span className="truncate" data-testid="active-tenant">{tenant?.name ?? "Sin empresa"}</span>
@@ -52,7 +51,7 @@ export function TenantSwitcher() {
         </span>
       </button>
       {open ? (
-        <div id="tenant-menu" className="absolute top-14 left-0 z-50 flex w-[280px] max-w-[calc(100vw-24px)] flex-col gap-0.5 rounded-[20px] bg-white p-2 shadow-[0_16px_40px_rgba(18,18,18,.22)]">
+        <div id="tenant-menu" className="absolute top-11 left-0 z-50 flex w-[280px] max-w-[calc(100vw-24px)] flex-col gap-0.5 rounded-[20px] bg-white p-2 shadow-[0_16px_40px_rgba(18,18,18,.22)]">
           <div className="flex items-center gap-2.5 border-b border-paper px-2.5 pt-2 pb-3">
             <Avatar name={me.user.name ?? me.user.email} round size="lg" />
             <span className="min-w-0">
@@ -77,18 +76,6 @@ export function TenantSwitcher() {
               {t.id === tenant?.id ? <Check aria-hidden className="size-4" /> : null}
             </button>
           ))}
-          <button
-            type="button"
-            disabled={loggingOut}
-            onClick={() => {
-              setLoggingOut(true);
-              void logout();
-            }}
-            className="mt-1 flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border-t border-paper px-2.5 font-bold text-danger hover:bg-paper disabled:opacity-50"
-          >
-            <LogOut aria-hidden className="size-[18px]" />
-            Cerrar sesión
-          </button>
         </div>
       ) : null}
     </div>

@@ -13,6 +13,7 @@ export const ErrorCode = {
   EncryptionNotConfigured: "ENCRYPTION_NOT_CONFIGURED",
   InsufficientStock: "INSUFFICIENT_STOCK",
   StorageNotConfigured: "STORAGE_NOT_CONFIGURED",
+  PlanLimitExceeded: "PLAN_LIMIT_EXCEEDED",
   Internal: "INTERNAL_ERROR",
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -68,6 +69,13 @@ export class ConflictError extends AppError {
   }
 }
 
+/** The tenant's plan does not allow this (limit reached or feature not included). 402. */
+export class PlanLimitExceededError extends AppError {
+  constructor(message = "Plan limit exceeded", options?: AppErrorOptions) {
+    super(ErrorCode.PlanLimitExceeded, message, 402, options);
+  }
+}
+
 export class RateLimitedError extends AppError {
   constructor(message = "Too many requests", options?: AppErrorOptions) {
     super(ErrorCode.RateLimited, message, 429, options);
@@ -81,7 +89,7 @@ export class TenantContextMissingError extends AppError {
   }
 }
 
-export type ExternalProvider = "gupshup" | "360dialog" | "openai" | "stripe" | "s3";
+export type ExternalProvider = "gupshup" | "360dialog" | "openai" | "stripe" | "mercadopago" | "s3";
 
 export class ExternalProviderError extends AppError {
   readonly provider: ExternalProvider;

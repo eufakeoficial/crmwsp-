@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { AuthShell } from "@/components/AuthShell";
-import { Alert, Button, Input, Label } from "@/components/ui";
+import { Alert, Button, Input, Label, PasswordInput } from "@/components/ui";
 import { api } from "@/lib/api";
-import { routeAfterAuth } from "@/lib/after-auth";
+import { postAuthDestination, routeAfterAuth } from "@/lib/after-auth";
+import { platformApi } from "@/lib/platform-api";
 import { errorMessage } from "@/lib/messages";
 
 export default function LoginPage() {
@@ -21,7 +22,10 @@ export default function LoginPage() {
     setBusy(true);
     try {
       const me = await api.login({ email: String(form.get("email")), password: String(form.get("password")) });
-      router.replace(routeAfterAuth(me));
+      const route = routeAfterAuth(me);
+      const next = new URLSearchParams(window.location.search).get("next");
+      const isPlatformAdmin = next ? false : await platformApi.me().then((r) => r.isPlatformAdmin, () => false);
+      router.replace(postAuthDestination(route, { next, isPlatformAdmin }));
     } catch (err) {
       setError(errorMessage(err, "login"));
       setBusy(false);
@@ -37,7 +41,7 @@ export default function LoginPage() {
         </div>
         <div className="space-y-1">
           <Label htmlFor="password">Contraseña</Label>
-          <Input id="password" name="password" type="password" autoComplete="current-password" required />
+          <PasswordInput id="password" name="password" autoComplete="current-password" required />
         </div>
         <Alert>{error}</Alert>
         <Button type="submit" variant="accent" size="lg" className="w-full" disabled={busy}>

@@ -1,22 +1,34 @@
 import type { CipherBox } from "@crmwsp/crypto";
+import { shouldSendVoiceReply, validateTemplateParams } from "@crmwsp/domain";
 import {
+  attachments,
+  broadcastRecipients,
+  broadcasts,
   channelConnections,
   contacts,
   conversations,
+  followUps,
   isUuid,
   messages,
+  messageTemplates,
+  usageLedger,
+  voiceSettings,
   withTenant,
   type Database,
+  type Transaction,
 } from "@crmwsp/db";
-import type { WhatsAppProvider } from "@crmwsp/whatsapp";
+import type { SendResult, WhatsAppConnection, WhatsAppProvider } from "@crmwsp/whatsapp";
 import { UnrecoverableError, Worker, type ConnectionOptions, type Job } from "bullmq";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { TTS_API_KEY_PURPOSE, sendVoiceOrText, type VoiceDeps } from "./voice.js";
 import { tenantChannel, type EventPublisher, type InboxEvent, type Logger } from "./processors.js";
 import {
   OUTBOUND_QUEUE_NAME,
   SEND_MESSAGE_JOB,
   SEND_MESSAGE_MAX_ATTEMPTS,
+  SEND_REACTION_JOB,
   type SendMessageJobData,
+  type SendReactionJobData,
 } from "./queue.js";
 
 /** AAD purpose of the encrypted Gupshup API key (same as apps/api channels). */
@@ -28,6 +40,8 @@ export interface SendDeps {
   publisher: EventPublisher;
   cipher: CipherBox;
   logger?: Logger;
+  /** Voice replies (TTS + object storage). Absent => AI replies always go as text. */
+  voice?: VoiceDeps;
 }
 
 export interface SendAttempt {
@@ -69,6 +83,141 @@ function sanitizeError(err: unknown): Record<string, unknown> {
   return { code: "internal_error" };
 }
 
+/** Template resolved for a type='template' message (via follow_ups.sent_message_id). */
+export interface OutboundTemplate {
+  externalId: string | null;
+  name: string;
+  language: string;
+  status: string;
+  variables: unknown[];
+}
+
+export interface OutboundPayload {
+  type: string;
+  body: string | null;
+  contactName: string | null;
+  template: OutboundTemplate | null;
+  /** Pre-resolved template params (broadcast recipients); otherwise derived from `template.variables`. */
+  params?: string[] | null;
+}
+
+/** Fills template params from the variable names stored on message_templates.variables. */
+export function resolveTemplateParams(variables: unknown[], ctx: { contactName: string | null }): string[] {
+  return variables.map((v) => {
+    if (v === "name" || v === "contact_name") {
+      if (!ctx.contactName) throw new UnrecoverableError("template variable has no value");
+      return ctx.contactName;
+    }
+    throw new UnrecoverableError("unsupported template variable");
+  });
+}
+
+/** Params stored on the message by a manual inbox send; null when absent (variables path). */
+export function manualTemplateParams(stored: unknown, templateBody: string | null): string[] | null {
+  if (stored === null || stored === undefined) return null;
+  if (!Array.isArray(stored) || !stored.every((p) => typeof p === "string")) {
+    throw new UnrecoverableError("invalid template params");
+  }
+  if (templateBody === null || validateTemplateParams(templateBody, stored) !== null) {
+    throw new UnrecoverableError("template params do not match the template");
+  }
+  return stored;
+}
+
+/** Picks the provider call for a message: approved templates go through sendTemplate, the rest as text. */
+export async function dispatchOutbound(
+  provider: WhatsAppProvider,
+  conn: WhatsAppConnection,
+  to: string,
+  msg: OutboundPayload,
+): Promise<SendResult> {
+  if (msg.type === "template") {
+    const t = msg.template;
+    if (!t) throw new UnrecoverableError("template message without template");
+    if (t.status !== "approved") throw new UnrecoverableError("template is not approved");
+    if (!t.externalId) throw new UnrecoverableError("template has no external id");
+    const params = msg.params ?? resolveTemplateParams(Array.isArray(t.variables) ? t.variables : [], { contactName: msg.contactName });
+    return provider.sendTemplate(conn, to, t.externalId, params);
+  }
+  if (!msg.body) throw new UnrecoverableError("message has no text");
+  return provider.sendText(conn, to, msg.body);
+}
+
+/**
+ * Voice-reply branch for AI text replies (T19). Returns the external id when the voice path handled
+ * the send (as audio, or as its text fallback), or null to continue with the normal dispatch.
+ */
+async function maybeSendVoice(
+  deps: SendDeps,
+  tx: Transaction,
+  m: {
+    tenantId: string;
+    messageId: string;
+    conversationId: string;
+    author: string;
+    type: string;
+    body: string | null;
+    to: string;
+    conn: WhatsAppConnection;
+  },
+): Promise<string | null> {
+  if (!deps.voice || m.author !== "ai" || m.type !== "text" || !m.body) return null;
+  const [vs] = await tx.select().from(voiceSettings).limit(1);
+  if (!vs || vs.replyMode === "off") return null;
+  const [lastIn] = await tx
+    .select({ type: messages.type })
+    .from(messages)
+    .where(and(eq(messages.conversationId, m.conversationId), eq(messages.direction, "inbound")))
+    .orderBy(desc(messages.createdAt))
+    .limit(1);
+  const apply = shouldSendVoiceReply({
+    mode: vs.replyMode,
+    configured: Boolean(vs.apiKeyEncrypted && vs.voiceId),
+    author: m.author,
+    messageType: m.type,
+    lastInboundType: lastIn?.type ?? null,
+  });
+  if (!apply || !vs.apiKeyEncrypted || !vs.voiceId) return null;
+  let ttsKey: string;
+  try {
+    ttsKey = deps.cipher.decrypt(vs.apiKeyEncrypted, { tenantId: m.tenantId, purpose: TTS_API_KEY_PURPOSE });
+  } catch {
+    (deps.logger ?? silent).warn(`voice reply ${m.messageId}: tts key unavailable, sending text`);
+    return null;
+  }
+  const out = await sendVoiceOrText(
+    deps.voice,
+    deps.provider,
+    m.conn,
+    m.to,
+    { tenantId: m.tenantId, messageId: m.messageId, text: m.body, apiKey: ttsKey, voiceId: vs.voiceId, modelId: vs.modelId },
+    deps.logger ?? silent,
+  );
+  if (out.kind === "audio") {
+    // The text stays in messages.body and is copied as the attachment transcript for the inbox.
+    await tx.update(messages).set({ type: "audio" }).where(eq(messages.id, m.messageId));
+    await tx.insert(attachments).values({
+      tenantId: m.tenantId,
+      messageId: m.messageId,
+      storageKey: out.storageKey,
+      mimeType: out.mimeType,
+      sizeBytes: out.sizeBytes,
+      transcript: m.body,
+    });
+    await tx.insert(usageLedger).values({
+      tenantId: m.tenantId,
+      kind: "tts_characters",
+      quantity: String(out.characters),
+      unit: "characters",
+      currency: "USD",
+      refType: "message",
+      refId: m.messageId,
+      meta: { provider: deps.voice.tts.name, model: vs.modelId },
+    });
+  }
+  return out.send.externalId;
+}
+
 async function publish(deps: SendDeps, tenantId: string, event: InboxEvent): Promise<void> {
   try {
     await deps.publisher.publish(tenantChannel(tenantId), JSON.stringify(event));
@@ -96,21 +245,47 @@ export async function processSendMessage(
     const [loaded] = await tx
       .select({
         status: messages.status,
+        type: messages.type,
         direction: messages.direction,
+        author: messages.author,
         body: messages.body,
         externalId: messages.externalId,
         conversationId: messages.conversationId,
         to: contacts.phoneE164,
+        contactName: contacts.name,
+        tplExternalId: messageTemplates.externalId,
+        tplName: messageTemplates.name,
+        tplLanguage: messageTemplates.language,
+        tplStatus: messageTemplates.status,
+        tplVariables: messageTemplates.variables,
+        tplBody: messageTemplates.body,
+        msgTemplateParams: messages.templateParams,
         connectionId: channelConnections.id,
         sourcePhone: channelConnections.phoneE164,
         appName: channelConnections.externalAppId,
         connectionStatus: channelConnections.status,
         credentials: channelConnections.credentialsEncrypted,
+        recipientId: broadcastRecipients.id,
+        recipientParams: broadcastRecipients.params,
+        broadcastStatus: broadcasts.status,
       })
       .from(messages)
       .innerJoin(conversations, eq(conversations.id, messages.conversationId))
       .innerJoin(contacts, eq(contacts.id, conversations.contactId))
       .innerJoin(channelConnections, eq(channelConnections.id, conversations.channelConnectionId))
+      // Template messages: messages.template_id (manual inbox send, T21) or one of the sources below.
+      // Template messages come from follow-ups: follow_ups.sent_message_id -> message, template_id -> template.
+      .leftJoin(followUps, eq(followUps.sentMessageId, messages.id))
+      // Broadcast messages: broadcast_recipients.message_id -> message, broadcasts.template_id -> template.
+      .leftJoin(broadcastRecipients, eq(broadcastRecipients.messageId, messages.id))
+      .leftJoin(broadcasts, eq(broadcasts.id, broadcastRecipients.broadcastId))
+      .leftJoin(
+        messageTemplates,
+        and(
+          eq(messageTemplates.id, sql`coalesce(${messages.templateId}, ${followUps.templateId}, ${broadcasts.templateId})`),
+          eq(messageTemplates.channelConnectionId, channelConnections.id),
+        ),
+      )
       .where(eq(messages.id, messageId))
       .limit(1)
       .for("update", { of: messages, skipLocked: true });
@@ -126,19 +301,61 @@ export async function processSendMessage(
     }
 
     try {
-      if (!loaded.body) throw new UnrecoverableError("message has no text");
+      if (loaded.broadcastStatus === "cancelled") throw new UnrecoverableError("broadcast cancelled");
       if (loaded.connectionStatus === "disabled") throw new UnrecoverableError("channel is disabled");
       if (!loaded.credentials || !loaded.appName) throw new UnrecoverableError("channel has no credentials");
       const apiKey = deps.cipher.decrypt(loaded.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
-      const { externalId } = await deps.provider.sendText(
-        { apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone },
+      const conn = { apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone };
+      const voiced = await maybeSendVoice(deps, tx, {
+        tenantId,
+        messageId,
+        conversationId: loaded.conversationId,
+        author: loaded.author,
+        type: loaded.type,
+        body: loaded.body,
+        to: loaded.to,
+        conn,
+      });
+      if (voiced) {
+        await tx
+          .update(messages)
+          .set({ externalId: voiced, status: "sent", sentAt: new Date(), error: null })
+          .where(and(eq(messages.id, messageId), eq(messages.status, "queued")));
+        return { res: { outcome: "sent", externalId: voiced } as SendMessageResult, conversationId: loaded.conversationId };
+      }
+      const { externalId } = await dispatchOutbound(
+        deps.provider,
+        conn,
         loaded.to,
-        loaded.body,
+        {
+          type: loaded.type,
+          body: loaded.body,
+          contactName: loaded.contactName,
+          params: loaded.recipientId
+            ? (loaded.recipientParams ?? [])
+            : manualTemplateParams(loaded.msgTemplateParams, loaded.tplBody),
+          template:
+            loaded.tplName !== null
+              ? {
+                  externalId: loaded.tplExternalId,
+                  name: loaded.tplName,
+                  language: loaded.tplLanguage ?? "",
+                  status: loaded.tplStatus ?? "",
+                  variables: loaded.tplVariables ?? [],
+                }
+              : null,
+        },
       );
       await tx
         .update(messages)
         .set({ externalId, status: "sent", sentAt: new Date(), error: null })
         .where(and(eq(messages.id, messageId), eq(messages.status, "queued")));
+      if (loaded.recipientId) {
+        await tx
+          .update(broadcastRecipients)
+          .set({ status: "sent", sentAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(broadcastRecipients.id, loaded.recipientId), eq(broadcastRecipients.status, "pending")));
+      }
       return { res: { outcome: "sent", externalId } as SendMessageResult, conversationId: loaded.conversationId };
     } catch (err) {
       const lastAttempt = attempt.attemptsMade + 1 >= attempt.maxAttempts;
@@ -150,11 +367,97 @@ export async function processSendMessage(
         .update(messages)
         .set({ status: "failed", error: sanitizeError(err) })
         .where(and(eq(messages.id, messageId), eq(messages.status, "queued")));
+      if (loaded.recipientId) {
+        const cancelled = loaded.broadcastStatus === "cancelled";
+        await tx
+          .update(broadcastRecipients)
+          .set({ status: cancelled ? "skipped" : "failed", error: sanitizeError(err), updatedAt: new Date() })
+          .where(and(eq(broadcastRecipients.id, loaded.recipientId), eq(broadcastRecipients.status, "pending")));
+      }
       (deps.logger ?? silent).warn(`send-message ${messageId} failed permanently`);
       return { res: { outcome: "failed" } as SendMessageResult, conversationId: loaded.conversationId };
     }
   });
   if (result.conversationId) {
+    await publish(deps, tenantId, { type: "message.status", conversationId: result.conversationId, messageId });
+  }
+  return result.res;
+}
+
+export type SendReactionResult = { outcome: "sent" } | { outcome: "skipped"; reason: "stale" | "not-found" } | { outcome: "failed" };
+
+function assertReactionData(data: unknown): SendReactionJobData {
+  const d = data as Partial<SendReactionJobData> | null;
+  if (!d || !isUuid(d.tenantId) || !isUuid(d.messageId) || typeof d.emoji !== "string" || d.emoji.length > 32) {
+    throw new UnrecoverableError("invalid job data");
+  }
+  return { tenantId: d.tenantId, messageId: d.messageId, emoji: d.emoji };
+}
+
+/**
+ * Sends an emoji reaction to an inbound message. The reaction is already stored on the row (so the
+ * inbox shows it); the job only delivers it. A job whose emoji no longer matches the row is stale
+ * and skipped. A permanent failure clears the stored reaction so the inbox never claims a reaction
+ * the customer did not get.
+ */
+export async function processSendReaction(
+  deps: SendDeps,
+  data: unknown,
+  attempt: SendAttempt = { attemptsMade: 0, maxAttempts: SEND_MESSAGE_MAX_ATTEMPTS },
+): Promise<SendReactionResult> {
+  const { tenantId, messageId, emoji } = assertReactionData(data);
+  const result = await withTenant(deps.db, tenantId, async (tx) => {
+    const [loaded] = await tx
+      .select({
+        direction: messages.direction,
+        externalId: messages.externalId,
+        reaction: messages.reaction,
+        reactionBy: messages.reactionBy,
+        conversationId: messages.conversationId,
+        to: contacts.phoneE164,
+        sourcePhone: channelConnections.phoneE164,
+        appName: channelConnections.externalAppId,
+        connectionStatus: channelConnections.status,
+        credentials: channelConnections.credentialsEncrypted,
+      })
+      .from(messages)
+      .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+      .innerJoin(contacts, eq(contacts.id, conversations.contactId))
+      .innerJoin(channelConnections, eq(channelConnections.id, conversations.channelConnectionId))
+      .where(eq(messages.id, messageId))
+      .limit(1);
+    if (!loaded || loaded.direction !== "inbound" || !loaded.externalId) {
+      return { res: { outcome: "skipped", reason: "not-found" } as SendReactionResult };
+    }
+    if ((loaded.reaction ?? "") !== emoji || loaded.reactionBy === "contact") {
+      return { res: { outcome: "skipped", reason: "stale" } as SendReactionResult };
+    }
+    try {
+      if (loaded.connectionStatus === "disabled") throw new UnrecoverableError("channel is disabled");
+      if (!loaded.credentials || !loaded.appName) throw new UnrecoverableError("channel has no credentials");
+      const apiKey = deps.cipher.decrypt(loaded.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
+      await deps.provider.sendReaction(
+        { apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone },
+        { to: loaded.to, messageExternalId: loaded.externalId, emoji },
+      );
+      return { res: { outcome: "sent" } as SendReactionResult, conversationId: loaded.conversationId };
+    } catch (err) {
+      const lastAttempt = attempt.attemptsMade + 1 >= attempt.maxAttempts;
+      if (isRetryable(err) && !lastAttempt) {
+        (deps.logger ?? silent).warn(`send-reaction ${messageId} transient failure (attempt ${attempt.attemptsMade + 1})`);
+        throw err;
+      }
+      if (emoji !== "") {
+        await tx
+          .update(messages)
+          .set({ reaction: null, reactionBy: null })
+          .where(and(eq(messages.id, messageId), eq(messages.reaction, emoji)));
+      }
+      (deps.logger ?? silent).warn(`send-reaction ${messageId} failed permanently`);
+      return { res: { outcome: "failed" } as SendReactionResult, conversationId: loaded.conversationId };
+    }
+  });
+  if (result.conversationId && result.res.outcome === "failed") {
     await publish(deps, tenantId, { type: "message.status", conversationId: result.conversationId, messageId });
   }
   return result.res;
@@ -171,6 +474,12 @@ export function createOutboundWorker(opts: OutboundWorkerOptions): Worker {
   return new Worker(
     queueName,
     async (job: Job) => {
+      if (job.name === SEND_REACTION_JOB) {
+        return processSendReaction(deps, job.data, {
+          attemptsMade: job.attemptsMade,
+          maxAttempts: job.opts.attempts ?? 1,
+        });
+      }
       if (job.name !== SEND_MESSAGE_JOB) throw new UnrecoverableError("unknown job name");
       return processSendMessage(deps, job.data, {
         attemptsMade: job.attemptsMade,

@@ -1,8 +1,10 @@
-import { Controller, Get, HttpCode, Inject, Param, Post, Req } from "@nestjs/common";
+import { Controller, Get, HttpCode, Inject, Optional, Param, Post, Req } from "@nestjs/common";
 import { ConflictError, NotFoundError, type PublicQuote } from "@crmwsp/contracts";
 import { auditEvents, eq, quoteItems, quotes, sql, tenants, type Transaction, withTenant } from "@crmwsp/db";
 import { Public } from "../auth/decorators.js";
-import { InMemoryRateLimiter, type RateLimitOptions } from "../auth/rate-limiter.js";
+import { type RateLimitOptions, StoreRateLimiter } from "../auth/rate-limiter.js";
+import { clientIp } from "../common/client-ip.js";
+import { RATE_LIMIT_STORE, type CounterStore, defaultRateLimitStore } from "../common/rate-limit-store.js";
 import { DB_HANDLE, type DbHandle, type HttpRequest } from "../common/http.js";
 import { parseAcceptToken } from "./quote.service.js";
 import { iso, toNumReq } from "./util.js";
@@ -18,25 +20,27 @@ export const DEFAULT_PUBLIC_QUOTE_RATE_LIMIT: RateLimitOptions = { limit: 120, w
 @Controller("public/quotes")
 @Public()
 export class PublicQuotesController {
-  private readonly limiter: InMemoryRateLimiter;
+  private readonly limiter: StoreRateLimiter;
 
   constructor(
     @Inject(DB_HANDLE) private readonly handle: DbHandle,
     @Inject(PUBLIC_QUOTE_RATE_LIMIT) limit: RateLimitOptions,
+    @Optional() @Inject(RATE_LIMIT_STORE) store?: CounterStore,
   ) {
-    this.limiter = new InMemoryRateLimiter(limit);
+    this.limiter = new StoreRateLimiter(limit, store ?? defaultRateLimitStore(), "pq");
   }
 
   @Get(":token")
   async view(@Param("token") token: string, @Req() req: HttpRequest): Promise<PublicQuote> {
-    this.limiter.consume(`pq:${req.ip}`);
+    await this.limiter.consume(clientIp(req));
     return this.inTenant(token, (tx, quoteId) => this.summary(tx, quoteId));
   }
 
   @Post(":token/accept")
   @HttpCode(200)
   async accept(@Param("token") token: string, @Req() req: HttpRequest): Promise<PublicQuote> {
-    this.limiter.consume(`pq:${req.ip}`);
+    await this.limiter.consume(clientIp(req));
+    const ip = clientIp(req);
     return this.inTenant(token, async (tx, quoteId, tenantId) => {
       const [q] = await tx.select({ status: quotes.status, valid: sql<boolean>`${quotes.validUntil} > now()` }).from(quotes).where(eq(quotes.id, quoteId)).for("update");
       if (!q) throw new NotFoundError();
@@ -52,7 +56,7 @@ export class PublicQuotesController {
         action: "quote.accepted_by_link",
         // audit_actor_type has no 'public' value: the public link is recorded as system + actor=public.
         diff: { status: { from: "sent", to: "accepted" }, actor: "public" },
-        ip: req.ip && req.ip.length > 0 ? req.ip : null,
+        ip: ip === "unknown" ? null : ip,
       });
       return this.summary(tx, quoteId);
     });

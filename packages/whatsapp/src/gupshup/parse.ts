@@ -1,11 +1,13 @@
 import { e164PhoneSchema } from "@crmwsp/contracts";
-import type { DeliveryStatus, InboundWebhookResult, NormalizedInboundMessage } from "../types.js";
+import type { DeliveryStatus, InboundReferral, InboundWebhookResult, NormalizedInboundMessage } from "../types.js";
 import {
+  referralSchema,
   v2InboundMessageSchema,
   v2InteractivePayloadSchema,
   v2LocationPayloadSchema,
   v2MediaPayloadSchema,
   v2MessageEventSchema,
+  v2ReactionPayloadSchema,
   v2TextPayloadSchema,
   v3EnvelopeSchema,
   v3MessageSchema,
@@ -21,6 +23,30 @@ export const statusDedupeKey = (externalId: string, status: DeliveryStatus) => `
 export function toE164(phone: string): string | undefined {
   const candidate = phone.startsWith("+") ? phone : `+${phone}`;
   return e164PhoneSchema.safeParse(candidate).success ? candidate : undefined;
+}
+
+/**
+ * Normalizes a Meta referral object. Returns undefined unless it identifies the ad (source id) or
+ * the click (ctwa_clid): an empty or malformed referral never creates attribution.
+ */
+export function parseReferral(raw: unknown): InboundReferral | undefined {
+  const r = referralSchema.safeParse(raw);
+  if (!r.success) return undefined;
+  const d = r.data;
+  const clean = (v: string | undefined) => (v !== undefined && v.trim() !== "" ? v.trim() : undefined);
+  const out: InboundReferral = {};
+  const set = (k: keyof InboundReferral, v: string | undefined) => {
+    const c = clean(v);
+    if (c !== undefined) out[k] = c;
+  };
+  set("sourceId", d.source_id);
+  set("sourceType", d.source_type);
+  set("sourceUrl", d.source_url);
+  set("headline", d.headline);
+  set("body", d.body);
+  set("mediaType", d.media_type);
+  set("ctwaClid", d.ctwa_clid);
+  return out.sourceId || out.ctwaClid ? out : undefined;
 }
 
 const ignored = (reason: string): InboundWebhookResult => ({ kind: "ignored", reason });
@@ -66,6 +92,8 @@ function parseV2Message(body: unknown): InboundWebhookResult {
   const to = p.destination ? toE164(p.destination) : undefined;
   if (to) message.to = to;
   fillV2Content(message, p);
+  const referral = parseReferral(p.referral) ?? parseReferral(p.payload["referral"]);
+  if (referral) message.referral = referral;
   return { kind: "message", dedupeKey: messageDedupeKey(p.id), message };
 }
 
@@ -101,6 +129,14 @@ function fillV2Content(message: NormalizedInboundMessage, p: V2InboundMessage["p
       message.location = { latitude: l.data.latitude, longitude: l.data.longitude };
       if (l.data.name) message.location.name = l.data.name;
       if (l.data.address) message.location.address = l.data.address;
+      return;
+    }
+    case "reaction": {
+      const r = v2ReactionPayloadSchema.safeParse(p.payload);
+      const target = r.success ? (r.data.msgId ?? r.data.messageId ?? r.data.message_id ?? r.data.reactedMessageId ?? r.data.id) : undefined;
+      if (!r.success || !target) return;
+      message.type = "reaction";
+      message.reaction = { targetExternalId: target, emoji: r.data.emoji ?? "" };
       return;
     }
     case "button_reply":
@@ -179,6 +215,8 @@ function parseV3(body: unknown): InboundWebhookResult[] {
         const name = value.contacts?.find((c) => c.wa_id === m.data.from)?.profile?.name;
         if (name) message.contactName = name;
         fillV3Content(message, m.data);
+        const referral = parseReferral(m.data.referral);
+        if (referral) message.referral = referral;
         out.push({ kind: "message", dedupeKey: messageDedupeKey(m.data.id), message });
       }
       for (const rawStatus of value.statuses ?? []) {
@@ -246,6 +284,12 @@ function fillV3Content(message: NormalizedInboundMessage, m: V3Message): void {
       }
       return;
     }
+    case "reaction":
+      if (m.reaction) {
+        message.type = "reaction";
+        message.reaction = { targetExternalId: m.reaction.message_id, emoji: m.reaction.emoji ?? "" };
+      }
+      return;
     case "button":
       if (m.button) {
         message.type = "interactive";

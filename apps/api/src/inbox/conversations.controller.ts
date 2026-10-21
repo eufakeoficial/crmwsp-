@@ -8,6 +8,8 @@ import {
   listConversationsQuerySchema,
   listMessagesQuerySchema,
   sendMessageRequestSchema,
+  setReactionRequestSchema,
+  sendTemplateMessageRequestSchema,
   updateConversationRequestSchema,
   type Conversation,
   type ConversationListResponse,
@@ -16,30 +18,36 @@ import {
 } from "@crmwsp/contracts";
 import {
   and,
+  contacts,
   conversations,
   desc,
   eq,
   isUuid,
   memberships,
   messages,
+  messageTemplates,
   sql,
   type Transaction,
 } from "@crmwsp/db";
+import { pauseAfterAgentReply, renderTemplateBody, validateTemplateParams } from "@crmwsp/domain";
 import type { Queue } from "bullmq";
-import { CurrentTenantDb } from "../auth/decorators.js";
+import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
-import { type HttpRequest, headerValue } from "../common/http.js";
+import { type HttpRequest, type RequestTenant, headerValue } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { RealtimeHub } from "../events/realtime.hub.js";
 import { writeAudit } from "./audit.js";
 import { decodeCursor, encodeCursor } from "./cursor.js";
 import { ACTIVITY_US, selectConversations, withAttachments, type SQL } from "./inbox.queries.js";
+import { assertConversationVisible, loadInboxSettings, visibilityWhere } from "./inbox-v2.scope.js";
 import {
   OUTBOUND_QUEUE,
   SEND_MESSAGE_JOB,
   SEND_MESSAGE_JOB_OPTIONS,
+  SEND_REACTION_JOB,
   type SendMessageJobData,
+  type SendReactionJobData,
 } from "./outbound.constants.js";
 
 const MESSAGE_US = sql`(extract(epoch from ${messages.createdAt}) * 1000000)::bigint`;
@@ -55,6 +63,8 @@ const messageColumns = {
   authorUserId: messages.authorUserId,
   clientMessageId: messages.clientMessageId,
   error: messages.error,
+  reaction: messages.reaction,
+  reactionBy: messages.reactionBy,
   sentAt: messages.sentAt,
   createdAt: messages.createdAt,
 };
@@ -73,6 +83,22 @@ async function loadConversation(tx: Transaction, id: string): Promise<Conversati
   return row.dto;
 }
 
+/** "Pause automation while an agent replies": extends contacts.automations_paused_until (T23). */
+async function pauseAutomationsAfterAgentReply(tx: Transaction, tenantId: string, contactId: string): Promise<void> {
+  const settings = await loadInboxSettings(tx, tenantId);
+  if (settings.pauseAutomationOnAgentReplyMinutes <= 0) return;
+  const [ct] = await tx
+    .select({ until: contacts.automationsPausedUntil })
+    .from(contacts)
+    .where(eq(contacts.id, contactId))
+    .for("update");
+  if (!ct) return;
+  const next = pauseAfterAgentReply(ct.until, new Date(), settings.pauseAutomationOnAgentReplyMinutes);
+  if (next && next.getTime() !== ct.until?.getTime()) {
+    await tx.update(contacts).set({ automationsPausedUntil: next }).where(eq(contacts.id, contactId));
+  }
+}
+
 @Controller("conversations")
 @UseGuards(TenantGuard)
 export class ConversationsController {
@@ -82,7 +108,11 @@ export class ConversationsController {
   ) {}
 
   @Get()
-  async list(@CurrentTenantDb() db: TenantDb, @Query() query: unknown): Promise<ConversationListResponse> {
+  async list(
+    @CurrentTenantDb() db: TenantDb,
+    @CurrentTenant() tenant: RequestTenant,
+    @Query() query: unknown,
+  ): Promise<ConversationListResponse> {
     const q = parseOrThrow(listConversationsQuerySchema, query);
     const where: SQL[] = [];
     if (q.status) where.push(sql`c.status = ${q.status}`);
@@ -93,7 +123,10 @@ export class ConversationsController {
       const cur = decodeCursor(q.cursor);
       where.push(sql`(${ACTIVITY_US}, c.id) < (${cur.t}::bigint, ${cur.id}::uuid)`);
     }
-    const rows = await db.run((tx) => selectConversations(tx, where, q.limit + 1));
+    const rows = await db.run(async (tx) => {
+      const scope = visibilityWhere(await loadInboxSettings(tx, db.tenantId), tenant.role, db.userId);
+      return selectConversations(tx, scope ? [...where, scope] : where, q.limit + 1);
+    });
     const page = rows.slice(0, q.limit);
     const last = page[page.length - 1];
     return {
@@ -103,14 +136,22 @@ export class ConversationsController {
   }
 
   @Get(":id")
-  async detail(@CurrentTenantDb() db: TenantDb, @Param("id") id: string): Promise<Conversation> {
+  async detail(
+    @CurrentTenantDb() db: TenantDb,
+    @CurrentTenant() tenant: RequestTenant,
+    @Param("id") id: string,
+  ): Promise<Conversation> {
     if (!isUuid(id)) throw new NotFoundError();
-    return db.run((tx) => loadConversation(tx, id));
+    return db.run(async (tx) => {
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
+      return loadConversation(tx, id);
+    });
   }
 
   @Get(":id/messages")
   async messages(
     @CurrentTenantDb() db: TenantDb,
+    @CurrentTenant() tenant: RequestTenant,
     @Param("id") id: string,
     @Query() query: unknown,
   ): Promise<MessageListResponse> {
@@ -118,8 +159,7 @@ export class ConversationsController {
     const q = parseOrThrow(listMessagesQuerySchema, query);
     const cur = q.before ? decodeCursor(q.before) : undefined;
     return db.run(async (tx) => {
-      const [conv] = await tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, id));
-      if (!conv) throw new NotFoundError();
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
       const rows = await tx
         .select({ ...messageColumns, sortUs: sql<string>`${MESSAGE_US}::text` })
         .from(messages)
@@ -140,24 +180,71 @@ export class ConversationsController {
     });
   }
 
+  /** Agent reaction to a contact message (`emoji: null` removes it). Delivered by the worker. */
+  @Post(":id/messages/:messageId/reaction")
+  @Roles("owner", "admin", "agent")
+  @HttpCode(200)
+  async react(
+    @CurrentTenantDb() db: TenantDb,
+    @CurrentTenant() tenant: RequestTenant,
+    @Param("id") id: string,
+    @Param("messageId") messageId: string,
+    @Body() body: unknown,
+  ): Promise<Message> {
+    if (!isUuid(id) || !isUuid(messageId)) throw new NotFoundError();
+    const input = parseOrThrow(setReactionRequestSchema, body);
+    const { row, changed } = await db.run(async (tx) => {
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
+      const [current] = await tx
+        .select(messageColumns)
+        .from(messages)
+        .where(and(eq(messages.id, messageId), eq(messages.conversationId, id), eq(messages.direction, "inbound")))
+        .for("update");
+      if (!current) throw new NotFoundError();
+      const next = input.emoji;
+      if ((current.reaction ?? null) === next) return { row: current, changed: false };
+      const [updated] = await tx
+        .update(messages)
+        .set(next ? { reaction: next, reactionBy: "user" } : { reaction: null, reactionBy: null })
+        .where(eq(messages.id, messageId))
+        .returning(messageColumns);
+      return { row: updated ?? current, changed: true };
+    });
+    if (changed) {
+      const data: SendReactionJobData = { tenantId: db.tenantId, messageId, emoji: input.emoji ?? "" };
+      // Unique id per change: an earlier completed job for the same message must not swallow it.
+      await this.queue.add(SEND_REACTION_JOB, data, { ...SEND_MESSAGE_JOB_OPTIONS, jobId: `send-reaction-${messageId}-${Date.now()}` });
+      await this.hub.publish(db.tenantId, { type: "message.status", conversationId: id, messageId });
+    }
+    const [dto] = await db.run((tx) => withAttachments(tx, [row]));
+    if (!dto) throw new NotFoundError();
+    return dto;
+  }
+
   @Post(":id/read")
+  // Read state is shared by the whole team (conversations.last_read_at), not per user:
+  // a viewer marking a conversation read would hide it from the agents' unread folder.
+  @Roles("owner", "admin", "agent")
   @HttpCode(204)
-  async read(@CurrentTenantDb() db: TenantDb, @Param("id") id: string): Promise<void> {
+  async read(@CurrentTenantDb() db: TenantDb, @CurrentTenant() tenant: RequestTenant, @Param("id") id: string): Promise<void> {
     if (!isUuid(id)) throw new NotFoundError();
-    const [row] = await db.run((tx) =>
-      tx
+    const [row] = await db.run(async (tx) => {
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
+      return tx
         .update(conversations)
-        .set({ lastReadAt: sql`now()` })
+        .set({ lastReadAt: sql`now()`, markedUnread: false })
         .where(eq(conversations.id, id))
-        .returning({ id: conversations.id }),
-    );
+        .returning({ id: conversations.id });
+    });
     if (!row) throw new NotFoundError();
     await this.hub.publish(db.tenantId, { type: "conversation.updated", conversationId: id });
   }
 
   @Patch(":id")
+  @Roles("owner", "admin", "agent")
   async update(
     @CurrentTenantDb() db: TenantDb,
+    @CurrentTenant() tenant: RequestTenant,
     @Param("id") id: string,
     @Body() body: unknown,
     @Req() req: HttpRequest,
@@ -172,6 +259,7 @@ export class ConversationsController {
     if (expected === undefined) throw new ValidationError("lockVersion or If-Match is required");
 
     const result = await db.run(async (tx) => {
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
       const [before] = await tx
         .select({
           status: conversations.status,
@@ -188,10 +276,11 @@ export class ConversationsController {
       if (input.assignedUserId) {
         // memberships is tenant-scoped by RLS: users of other tenants are never found.
         const [member] = await tx
-          .select({ id: memberships.id })
+          .select({ role: memberships.role })
           .from(memberships)
           .where(eq(memberships.userId, input.assignedUserId));
-        if (!member) throw new ValidationError("Assignee is not a member of this tenant");
+        // Same rule as POST /inbox/conversations/:id/assign: viewers cannot own conversations.
+        if (!member || member.role === "viewer") throw new ValidationError("Assignee is not an agent of this tenant");
       }
 
       const set: Partial<typeof conversations.$inferInsert> = {};
@@ -202,6 +291,7 @@ export class ConversationsController {
       }
       if (input.assignedUserId !== undefined && input.assignedUserId !== before.assignedUserId) {
         set.assignedUserId = input.assignedUserId;
+        set.assignedAt = input.assignedUserId ? new Date() : null;
         diff["assignedUserId"] = { from: before.assignedUserId, to: input.assignedUserId };
       }
       if (input.aiMode !== undefined && input.aiMode !== before.aiMode) {
@@ -238,12 +328,19 @@ export class ConversationsController {
   }
 
   @Post(":id/messages")
+  @Roles("owner", "admin", "agent")
   @HttpCode(202)
-  async send(@CurrentTenantDb() db: TenantDb, @Param("id") id: string, @Body() body: unknown): Promise<Message> {
+  async send(
+    @CurrentTenantDb() db: TenantDb,
+    @CurrentTenant() tenant: RequestTenant,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ): Promise<Message> {
     if (!isUuid(id)) throw new NotFoundError();
     const input = parseOrThrow(sendMessageRequestSchema, body);
 
     const { message, created } = await db.run(async (tx) => {
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
       const findExisting = async () => {
         const [row] = await tx
           .select(messageColumns)
@@ -254,6 +351,7 @@ export class ConversationsController {
       const [conv] = await tx
         .select({
           id: conversations.id,
+          contactId: conversations.contactId,
           // Evaluated with the database clock, never the client's (nor this host's).
           inWindow: sql<boolean>`coalesce(${conversations.lastInboundAt} > now() - make_interval(secs => ${SERVICE_WINDOW_MS / 1000}), false)`,
         })
@@ -303,6 +401,7 @@ export class ConversationsController {
           updatedAt: new Date(),
         })
         .where(eq(conversations.id, id));
+      await pauseAutomationsAfterAgentReply(tx, db.tenantId, conv.contactId);
       return { message: inserted, created: true };
     });
 
@@ -312,6 +411,99 @@ export class ConversationsController {
       await this.queue.add(SEND_MESSAGE_JOB, data, { ...SEND_MESSAGE_JOB_OPTIONS, jobId: message.id });
     }
     if (created) {
+      await this.hub.publish(db.tenantId, { type: "message.created", conversationId: id, messageId: message.id });
+    }
+    const [dto] = await db.run((tx) => withAttachments(tx, [message]));
+    if (!dto) throw new NotFoundError();
+    return dto;
+  }
+  /** Manual template send: the only way to write outside the 24 h window (T21). */
+  @Post(":id/template-messages")
+  @Roles("owner", "admin", "agent")
+  @HttpCode(202)
+  async sendTemplate(
+    @CurrentTenantDb() db: TenantDb,
+    @CurrentTenant() tenant: RequestTenant,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ): Promise<Message> {
+    if (!isUuid(id)) throw new NotFoundError();
+    const input = parseOrThrow(sendTemplateMessageRequestSchema, body);
+
+    const { message, created } = await db.run(async (tx) => {
+      await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
+      const findExisting = async () => {
+        const [row] = await tx
+          .select(messageColumns)
+          .from(messages)
+          .where(eq(messages.clientMessageId, input.clientMessageId));
+        return row;
+      };
+      const [conv] = await tx
+        .select({ id: conversations.id, channelConnectionId: conversations.channelConnectionId })
+        .from(conversations)
+        .where(eq(conversations.id, id));
+      if (!conv) throw new NotFoundError();
+      // Idempotent retry: answer with the original message, never send (bill) twice.
+      const existing = await findExisting();
+      if (existing) {
+        if (existing.conversationId !== id) throw new ConflictError("clientMessageId already used");
+        return { message: existing, created: false };
+      }
+      const [tpl] = await tx
+        .select({ id: messageTemplates.id, body: messageTemplates.body, externalId: messageTemplates.externalId })
+        .from(messageTemplates)
+        .where(
+          and(
+            eq(messageTemplates.id, input.templateId),
+            eq(messageTemplates.channelConnectionId, conv.channelConnectionId),
+            eq(messageTemplates.status, "approved"),
+          ),
+        );
+      if (!tpl || !tpl.externalId) throw new ValidationError("Template is not approved for this channel");
+      const issue = validateTemplateParams(tpl.body, input.params);
+      if (issue) throw new ValidationError(`Invalid template params (${issue})`);
+
+      const [inserted] = await tx
+        .insert(messages)
+        .values({
+          tenantId: db.tenantId,
+          conversationId: id,
+          direction: "outbound",
+          type: "template",
+          body: renderTemplateBody(tpl.body, input.params),
+          status: "queued",
+          author: "user",
+          authorUserId: db.userId,
+          templateId: tpl.id,
+          templateParams: input.params,
+          clientMessageId: input.clientMessageId,
+        })
+        .onConflictDoNothing({
+          target: [messages.tenantId, messages.clientMessageId],
+          where: sql`${messages.clientMessageId} is not null`,
+        })
+        .returning(messageColumns);
+      if (!inserted) {
+        // Concurrent duplicate committed first.
+        const dup = await findExisting();
+        if (!dup || dup.conversationId !== id) throw new ConflictError("clientMessageId already used");
+        return { message: dup, created: false };
+      }
+      await tx
+        .update(conversations)
+        .set({
+          lastMessageAt: sql`greatest(coalesce(${conversations.lastMessageAt}, ${inserted.createdAt.toISOString()}::timestamptz), ${inserted.createdAt.toISOString()}::timestamptz)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, id));
+      return { message: inserted, created: true };
+    });
+
+    // Enqueued after commit, only for the request that created the message; params never travel in the job.
+    if (created) {
+      const data: SendMessageJobData = { tenantId: db.tenantId, messageId: message.id };
+      await this.queue.add(SEND_MESSAGE_JOB, data, { ...SEND_MESSAGE_JOB_OPTIONS, jobId: message.id });
       await this.hub.publish(db.tenantId, { type: "message.created", conversationId: id, messageId: message.id });
     }
     const [dto] = await db.run((tx) => withAttachments(tx, [message]));

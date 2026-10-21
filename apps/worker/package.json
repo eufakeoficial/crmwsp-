@@ -12,15 +12,20 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1150.0",
     "@crmwsp/ai": "workspace:*",
+    "@crmwsp/billing": "workspace:*",
     "@crmwsp/contracts": "workspace:*",
     "@crmwsp/crypto": "workspace:*",
     "@crmwsp/db": "workspace:*",
     "@crmwsp/domain": "workspace:*",
+    "@crmwsp/knowledge": "workspace:*",
+    "@crmwsp/mailer": "workspace:*",
     "@crmwsp/whatsapp": "workspace:*",
     "bullmq": "6.3.17",
     "drizzle-orm": "0.45.4",
-    "ioredis": "6.0.0"
+    "ioredis": "6.0.0",
+    "undici": "7.30.1"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

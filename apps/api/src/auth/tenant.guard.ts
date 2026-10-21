@@ -13,9 +13,13 @@ import { TenantDb } from "../db/tenant-db.js";
 import { AuthService } from "./auth.service.js";
 import { ROLES_KEY } from "./decorators.js";
 
+const READ_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD"]);
+const DEFAULT_WRITE_ROLES: readonly MembershipRole[] = ["owner", "admin", "agent"];
+
 /**
  * Must run after SessionGuard. Reads x-tenant-id, checks the user's
- * membership (and @Roles), then sets request.tenant and request.tenantDb.
+ * membership (and @Roles) and that the tenant is active, then sets
+ * request.tenant and request.tenantDb.
  */
 @Injectable()
 export class TenantGuard implements CanActivate {
@@ -32,11 +36,18 @@ export class TenantGuard implements CanActivate {
     if (!parsed.success) throw new ValidationError(`Missing or invalid ${TENANT_HEADER} header`);
     const membership = (await this.auth.listTenants(req.user.id)).find((t) => t.id === parsed.data);
     if (!membership) throw new ForbiddenError();
+    // Pending, rejected or suspended tenants can log in but cannot use the panel API (ADR 0011).
+    if (membership.status !== "active") {
+      throw new ForbiddenError("Tenant is not active", { details: { reason: "tenant_not_active", status: membership.status } });
+    }
     const roles = this.reflector.getAllAndOverride<MembershipRole[] | undefined>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-    if (roles && roles.length > 0 && !roles.includes(membership.role)) throw new ForbiddenError();
+    // Deny by default for writes: a non-GET/HEAD route without @Roles excludes viewers.
+    // Routes that viewers may legitimately call must opt in with an explicit @Roles(..., "viewer").
+    const effective = roles && roles.length > 0 ? roles : READ_METHODS.has(req.method ?? "") ? undefined : DEFAULT_WRITE_ROLES;
+    if (effective && !effective.includes(membership.role)) throw new ForbiddenError();
     req.tenant = { id: membership.id, role: membership.role };
     req.tenantDb = new TenantDb(this.handle.db, membership.id, req.user.id);
     return true;

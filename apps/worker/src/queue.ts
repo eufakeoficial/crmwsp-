@@ -39,6 +39,17 @@ export const SEND_MESSAGE_JOB_OPTIONS = {
   removeOnFail: { age: 7 * 24 * 3600 },
 } as const;
 
+/** Emoji reaction to an inbound message, sent through the outbound queue. */
+export const SEND_REACTION_JOB = "send-reaction";
+export interface SendReactionJobData {
+  tenantId: string;
+  messageId: string;
+  /** Empty string removes the reaction. */
+  emoji: string;
+}
+/** One reaction per message: a replayed enqueue collapses into the same job. */
+export const sendReactionJobId = (messageId: string): string => `send-reaction-${messageId}`;
+
 /** AI queue (embeddings, AI turns, approved-action execution). Payloads carry ids only. */
 export const AI_QUEUE_NAME = "ai";
 export const EMBED_SOURCE_JOB = "embed-source";

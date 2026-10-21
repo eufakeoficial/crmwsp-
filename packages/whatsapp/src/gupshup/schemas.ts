@@ -17,6 +17,28 @@ import { z } from "zod";
 const idSchema = z.string().min(1).max(256);
 const phoneDigitsSchema = z.string().regex(/^\+?[1-9]\d{1,14}$/);
 
+// ---------- Click-to-WhatsApp referral ----------
+
+/**
+ * Meta `referral` object (https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/payload-examples#click-to-whatsapp-ads).
+ * v3 forwards it unchanged on `messages[]`; Gupshup v2 carries the same keys under the message
+ * payload (`payload.referral`, or inside the content `payload.payload.referral`). Every field is
+ * optional and length-capped; unknown keys are ignored.
+ */
+const refStr = (max: number) => z.string().max(max).optional();
+export const referralSchema = z
+  .object({
+    source_url: refStr(2048),
+    source_id: refStr(256),
+    source_type: refStr(64),
+    headline: refStr(1024),
+    body: refStr(4096),
+    media_type: refStr(64),
+    ctwa_clid: refStr(1024),
+  })
+  .loose();
+export type Referral = z.infer<typeof referralSchema>;
+
 // ---------- v2 ----------
 
 export const v2SenderSchema = z.object({
@@ -38,6 +60,7 @@ export const v2InboundMessageSchema = z.object({
     payload: z.record(z.string(), z.unknown()),
     sender: v2SenderSchema.optional(),
     destination: z.string().optional(),
+    referral: z.unknown().optional(),
   }),
 });
 export type V2InboundMessage = z.infer<typeof v2InboundMessageSchema>;
@@ -62,6 +85,18 @@ export const v2InteractivePayloadSchema = z.object({
   reply: z.string().optional(),
   postbackText: z.string().optional(),
 });
+
+/** Inbound reaction content. Field names vary between payload versions, so several are accepted. */
+export const v2ReactionPayloadSchema = z
+  .object({
+    emoji: z.string().max(32).optional(),
+    msgId: idSchema.optional(),
+    messageId: idSchema.optional(),
+    message_id: idSchema.optional(),
+    id: idSchema.optional(),
+    reactedMessageId: idSchema.optional(),
+  })
+  .loose();
 
 export const v2MessageEventSchema = z.object({
   app: z.string().optional(),
@@ -115,6 +150,8 @@ export const v3MessageSchema = z.object({
     })
     .optional(),
   button: z.object({ text: z.string(), payload: z.string().optional() }).optional(),
+  reaction: z.object({ message_id: idSchema, emoji: z.string().max(32).optional() }).loose().optional(),
+  referral: z.unknown().optional(),
 });
 export type V3Message = z.infer<typeof v3MessageSchema>;
 

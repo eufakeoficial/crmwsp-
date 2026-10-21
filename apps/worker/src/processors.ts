@@ -1,8 +1,11 @@
 import {
+  adAttributions,
+  enqueueWebhookEvent,
   attachments,
   contacts,
   conversations,
   inboundEvents,
+  isTenantAiPaused,
   isUuid,
   llmConnections,
   messages,
@@ -21,6 +24,12 @@ import {
   type InboundJobData,
 } from "./queue.js";
 import { previousStatusesFor } from "./status.js";
+import { applyBroadcastStatus, recordMarketingOptOut } from "./broadcasts/consent.js";
+import { cancelFollowUpsForConversation } from "./followups/pg-store.js";
+import { contactAutomationsPaused, routeInbound } from "./inbox/routing.js";
+import { STORE_MEDIA_JOB, STORE_MEDIA_JOB_OPTIONS, storeMediaJobId, type StoreMediaJobData } from "./media/job.js";
+import { enqueueOwnerCommand, ownerModeHook } from "./owner-mode/ingest-hook.js";
+import { enqueueOrderExtraction } from "./order-extraction/queue.js";
 
 /** Minimal publisher (ioredis satisfies it). */
 export interface EventPublisher {
@@ -40,6 +49,12 @@ export interface ProcessorDeps {
   logger?: Logger;
   /** `ai` queue; when absent, ingest never schedules AI turns. */
   aiQueue?: Pick<Queue, "add">;
+  /** `media` queue; when absent, inbound media is not copied to object storage. */
+  mediaQueue?: Pick<Queue, "add">;
+  /** `owner-mode` queue (F9); messages from verified owner phones never enter the customer pipeline. */
+  ownerQueue?: Pick<Queue, "add">;
+  /** `order-extraction` queue (F4); when absent, media messages are not scanned for orders. */
+  orderExtractionQueue?: Pick<Queue, "add">;
 }
 
 export type InboxEventType = "message.received" | "message.created" | "message.status" | "conversation.updated";
@@ -54,11 +69,19 @@ export interface IngestMessageResult {
   conversationId: string;
   messageId: string;
   duplicate: boolean;
+  /** Set when the event was a customer reaction applied to this outbound message. */
+  reactedMessageId?: string;
+  /** Set when the message came from a verified owner phone (F9): no conversation was touched. */
+  ownerCommandId?: string;
 }
 
 interface IngestTxResult extends IngestMessageResult {
   /** True when an AI turn must be scheduled after commit. */
   scheduleAiTurn: boolean;
+  /** Attachment whose bytes must be copied to object storage after commit. */
+  attachmentId?: string | null;
+  /** Mime type of that attachment (F4 order detection decides on it). */
+  mediaMimeType?: string | null;
 }
 
 export interface IngestStatusResult {
@@ -129,6 +152,27 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     if (!connectionId) throw new UnrecoverableError("inbound event has no channel connection");
     const now = new Date();
 
+    // A customer reaction is not a message: it decorates the message it targets (and clears with an
+    // empty emoji). Idempotent by construction; never creates contacts, conversations or AI turns.
+    if (m.type === "reaction") {
+      const emoji = m.reaction?.emoji.trim() ?? "";
+      const [target] = m.reaction
+        ? await tx
+            .update(messages)
+            .set(emoji ? { reaction: emoji, reactionBy: "contact" } : { reaction: null, reactionBy: null })
+            .where(and(eq(messages.externalId, m.reaction.targetExternalId), eq(messages.direction, "outbound")))
+            .returning({ id: messages.id, conversationId: messages.conversationId })
+        : [];
+      await markProcessed(tx, eventId);
+      return {
+        conversationId: target?.conversationId ?? "",
+        messageId: target?.id ?? "",
+        duplicate: true,
+        scheduleAiTurn: false,
+        ...(target ? { reactedMessageId: target.id } : {}),
+      };
+    }
+
     // Replay of an already ingested message (e.g. BullMQ removed the completed job and the BSP
     // retried): return before touching contacts/conversations, so a replay after the
     // conversation was resolved does not open a new, empty conversation.
@@ -142,6 +186,12 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       return { conversationId: already.conversationId, messageId: already.id, duplicate: true, scheduleAiTurn: false };
     }
 
+    const owner = await ownerModeHook(tx, { tenantId, channelConnectionId: connectionId, fromE164: m.from, externalId: m.externalId, body: messageBody(m) });
+    if (owner) {
+      await markProcessed(tx, eventId);
+      return { conversationId: "", messageId: "", duplicate: owner.duplicate, scheduleAiTurn: false, ownerCommandId: owner.commandId };
+    }
+
     const [contact] = await tx
       .insert(contacts)
       .values({ tenantId, phoneE164: m.from, ...(m.contactName ? { name: m.contactName } : {}) })
@@ -152,8 +202,17 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
           updatedAt: now,
         },
       })
-      .returning({ id: contacts.id });
+      .returning({ id: contacts.id, inserted: sql<boolean>`(xmax = 0)` });
     if (!contact) throw new Error("contact upsert returned no row");
+    if (contact.inserted) {
+      await enqueueWebhookEvent(tx, tenantId, "contact.created", {
+        contactId: contact.id,
+        phoneE164: m.from,
+        name: m.contactName ?? null,
+      });
+    }
+    // "BAJA" / "STOP": revoke marketing consent (broadcast audiences exclude the contact).
+    await recordMarketingOptOut(tx, tenantId, contact.id, messageBody(m), m.externalId);
 
     // Serialise conversation creation per (tenant, contact, connection): concurrent messages
     // from the same contact would otherwise race on conversations_one_unresolved_unique.
@@ -170,6 +229,7 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       .from(conversations)
       .where(where)
       .limit(1);
+    const conversationCreated = !conversation;
     if (!conversation) {
       [conversation] = await tx
         .insert(conversations)
@@ -209,14 +269,47 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       return { conversationId: existing.conversationId, messageId: existing.id, duplicate: true, scheduleAiTurn: false };
     }
 
+    await enqueueWebhookEvent(tx, tenantId, "message.received", {
+      messageId: inserted.id,
+      conversationId: inserted.conversationId,
+      contactId: contact.id,
+      type: m.type,
+      body: messageBody(m),
+      sentAt: m.timestamp.toISOString(),
+    });
+
+    let attachmentId: string | null = null;
     if (m.media) {
-      // TODO: download media (provider.downloadMedia) to object storage and fill storage_key/size.
-      await tx.insert(attachments).values({
-        tenantId,
-        messageId: inserted.id,
-        externalMediaId: m.media.externalMediaId ?? m.media.url ?? null,
-        mimeType: m.media.mimeType ?? null,
-      });
+      // The bytes are copied to object storage by the `store-media` job, enqueued after commit.
+      const [att] = await tx
+        .insert(attachments)
+        .values({
+          tenantId,
+          messageId: inserted.id,
+          externalMediaId: m.media.externalMediaId ?? m.media.url ?? null,
+          mimeType: m.media.mimeType ?? null,
+        })
+        .returning({ id: attachments.id });
+      attachmentId = att?.id ?? null;
+    }
+
+    // Click-to-WhatsApp: first-touch attribution per contact. A later referral never overwrites it.
+    if (m.referral) {
+      await tx
+        .insert(adAttributions)
+        .values({
+          tenantId,
+          contactId: contact.id,
+          conversationId: conversation.id,
+          sourceId: m.referral.sourceId ?? null,
+          sourceType: m.referral.sourceType ?? null,
+          sourceUrl: m.referral.sourceUrl ?? null,
+          headline: m.referral.headline ?? null,
+          ctwaClid: m.referral.ctwaClid ?? null,
+          firstMessageExternalId: m.externalId,
+          firstSeenAt: m.timestamp,
+        })
+        .onConflictDoNothing({ target: [adAttributions.tenantId, adAttributions.contactId] });
     }
 
     const ts = m.timestamp.toISOString();
@@ -229,22 +322,43 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       })
       .where(eq(conversations.id, conversation.id));
 
+    // The contact replied: pending follow-ups of this conversation are no longer needed.
+    await cancelFollowUpsForConversation(tx, conversation.id);
+
+    // Inbox v2: open/reopen for a human and (auto-)assign when no automation owns the chat.
+    await routeInbound(tx, {
+      tenantId,
+      conversationId: conversation.id,
+      contactId: contact.id,
+      channelConnectionId: connectionId,
+      created: conversationCreated,
+      now,
+    });
+
     // An AI turn is scheduled only when the conversation has AI enabled and the tenant has an
     // active LLM connection whose last connection test passed.
     let scheduleAiTurn = false;
-    if (deps.aiQueue && conversation.aiMode !== "off") {
+    if (deps.aiQueue && conversation.aiMode !== "off" && !(await contactAutomationsPaused(tx, contact.id, now))) {
       const [llm] = await tx
         .select({ id: llmConnections.id })
         .from(llmConnections)
         .where(and(eq(llmConnections.isActive, true), eq(llmConnections.lastTestOk, true)))
         .limit(1);
-      scheduleAiTurn = Boolean(llm);
+      scheduleAiTurn = Boolean(llm) && !(await isTenantAiPaused(tx));
     }
 
     await markProcessed(tx, eventId);
-    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn };
+    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn, attachmentId, mediaMimeType: m.media?.mimeType ?? null };
   });
-  const { scheduleAiTurn, ...result } = out;
+  const { scheduleAiTurn, attachmentId, mediaMimeType, ...result } = out;
+  if (result.reactedMessageId) {
+    await publish(deps, tenantId, { type: "message.status", conversationId: result.conversationId, messageId: result.reactedMessageId });
+    return result;
+  }
+  if (result.ownerCommandId) {
+    if (!result.duplicate) await enqueueOwnerCommand(deps.ownerQueue, tenantId, result.ownerCommandId, deps.logger ?? silent);
+    return result;
+  }
 
   if (!result.duplicate) {
     await publish(deps, tenantId, {
@@ -252,7 +366,29 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       conversationId: result.conversationId,
       messageId: result.messageId,
     });
-    if (scheduleAiTurn && deps.aiQueue) {
+    if (attachmentId && deps.mediaQueue) {
+      const data: StoreMediaJobData = { tenantId, attachmentId };
+      try {
+        await deps.mediaQueue.add(STORE_MEDIA_JOB, data, { ...STORE_MEDIA_JOB_OPTIONS, jobId: storeMediaJobId(attachmentId) });
+      } catch (err) {
+        // The message is committed; the attachment keeps storage_key null and is still playable via the BSP.
+        (deps.logger ?? silent).warn(`could not enqueue store-media (${err instanceof Error ? err.name : "unknown"})`);
+      }
+    }
+    // F4: an order-candidate media message (audio/photo/PDF) goes to order extraction INSTEAD of the
+    // AI turn; the extraction replies with the order or schedules the AI turn itself (one reply).
+    const extracting =
+      scheduleAiTurn &&
+      deps.aiQueue !== undefined &&
+      attachmentId !== null &&
+      attachmentId !== undefined &&
+      (await enqueueOrderExtraction(
+        deps.orderExtractionQueue,
+        { tenantId, conversationId: result.conversationId, messageId: result.messageId },
+        mediaMimeType,
+        deps.logger ?? silent,
+      ));
+    if (scheduleAiTurn && deps.aiQueue && !extracting) {
       const data: AiTurnJobData = { tenantId, conversationId: result.conversationId, triggerMessageId: result.messageId };
       try {
         await deps.aiQueue.add(AI_TURN_JOB, data, { ...AI_JOB_OPTIONS, jobId: aiTurnJobId(result.messageId) });
@@ -285,6 +421,7 @@ export async function processIngestStatus(deps: ProcessorDeps, data: unknown): P
         })
         .where(and(eq(messages.externalId, s.externalId), inArray(messages.status, allowed)))
         .returning({ id: messages.id, conversationId: messages.conversationId });
+      if (updated) await applyBroadcastStatus(tx, updated.id, s.status);
     }
     if (!updated) {
       const [exists] = await tx

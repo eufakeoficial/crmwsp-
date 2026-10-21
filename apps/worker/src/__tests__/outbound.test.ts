@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { createCipherBox, type CipherBox } from "@crmwsp/crypto";
-import { channelConnections, contacts, conversations, messages, type DbHandle } from "@crmwsp/db";
-import { GupshupProvider } from "@crmwsp/whatsapp";
+import { channelConnections, contacts, conversations, messages, messageTemplates, type DbHandle } from "@crmwsp/db";
+import { GupshupProvider, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { Queue, QueueEvents } from "bullmq";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -140,6 +140,65 @@ describe.skipIf(!hasEnv)("send-message processor (Postgres + Redis, mocked Gupsh
     const id = await queuedMessage();
     const deps = { db: app.db, provider: new GupshupProvider({ fetch: vi.fn() as unknown as typeof fetch }), publisher, cipher };
     await expect(processSendMessage(deps, { tenantId: randomUUID(), messageId: id })).rejects.toThrow(/message not found/);
+  });
+
+  describe("manual template from the inbox (messages.template_id)", () => {
+    async function templateMessage(params: string[]): Promise<string> {
+      const [tpl] = await migrator.db
+        .insert(messageTemplates)
+        .values({
+          tenantId: A.tenantId,
+          channelConnectionId: A.connectionId,
+          name: `manual_${randomUUID().slice(0, 8)}`,
+          language: "es",
+          category: "utility",
+          status: "approved",
+          body: "Hola {{1}}, tu pedido {{2}} salió.",
+          variables: [],
+          externalId: "gs-tpl-manual",
+        })
+        .returning({ id: messageTemplates.id });
+      const [m] = await migrator.db
+        .insert(messages)
+        .values({
+          tenantId: A.tenantId,
+          conversationId,
+          direction: "outbound",
+          type: "template",
+          body: "Hola Ana, tu pedido P-1 salió.",
+          status: "queued",
+          author: "user",
+          templateId: tpl!.id,
+          templateParams: params,
+        })
+        .returning({ id: messages.id });
+      return m!.id;
+    }
+    function fakeProvider() {
+      const sendTemplate = vi.fn(async () => ({ externalId: `tpl-${randomUUID()}` }));
+      const sendText = vi.fn();
+      const provider = { sendTemplate, sendText, sendMedia: vi.fn(), downloadMedia: vi.fn() } as unknown as WhatsAppProvider;
+      return { provider, sendTemplate, sendText };
+    }
+
+    it("sends the template stored on the message with its params", async () => {
+      const f = fakeProvider();
+      const id = await templateMessage(["Ana", "P-1"]);
+      const out = await processSendMessage({ db: app.db, provider: f.provider, publisher, cipher }, { tenantId: A.tenantId, messageId: id });
+      expect(out.outcome).toBe("sent");
+      expect(f.sendTemplate).toHaveBeenCalledWith(expect.objectContaining({ apiKey: API_KEY }), "+5491155550000", "gs-tpl-manual", ["Ana", "P-1"]);
+      expect(f.sendText).not.toHaveBeenCalled();
+      expect((await load(id)).status).toBe("sent");
+    });
+
+    it("fails permanently when stored params do not match the placeholders", async () => {
+      const f = fakeProvider();
+      const id = await templateMessage(["Ana"]);
+      const out = await processSendMessage({ db: app.db, provider: f.provider, publisher, cipher }, { tenantId: A.tenantId, messageId: id });
+      expect(out).toEqual({ outcome: "failed" });
+      expect(f.sendTemplate).not.toHaveBeenCalled();
+      expect((await load(id)).status).toBe("failed");
+    });
   });
 
   describe("through the BullMQ worker", () => {

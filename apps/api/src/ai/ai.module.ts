@@ -3,16 +3,28 @@ import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { AuthModule } from "../auth/auth.module.js";
 import { ChannelsModule } from "../channels/channels.module.js";
-import { AI_QUEUE, aiQueueName } from "./ai.constants.js";
+import { ElevenLabsTTSProvider, type TTSProvider } from "@crmwsp/ai";
+import { AI_QUEUE, TTS_PROVIDER, aiQueueName } from "./ai.constants.js";
+import { VoiceController } from "./voice.controller.js";
 import { AiActionsController } from "./ai-actions.controller.js";
+import { AiRunsController } from "./ai-runs.controller.js";
 import { AiController } from "./ai.controller.js";
+import { BotTemplatesController } from "./bot-templates.controller.js";
 import { LlmProviderFactory } from "./llm-provider.factory.js";
+import { ImproveTextController } from "./improve-text.controller.js";
+import { ImproveTextService } from "./improve-text.service.js";
+import { SimulatorController } from "./simulator.controller.js";
+import { SimulatorService } from "./simulator.service.js";
+import { BillingModule } from "../billing/billing.module.js";
 
 @Module({
-  imports: [AuthModule, ChannelsModule],
-  controllers: [AiController, AiActionsController],
+  imports: [AuthModule, ChannelsModule, BillingModule],
+  controllers: [AiController, AiActionsController, AiRunsController, BotTemplatesController, VoiceController, SimulatorController, ImproveTextController],
   providers: [
     LlmProviderFactory,
+    SimulatorService,
+    ImproveTextService,
+    { provide: TTS_PROVIDER, useFactory: (): TTSProvider => new ElevenLabsTTSProvider() },
     {
       provide: AI_QUEUE,
       useFactory: (): Queue => {

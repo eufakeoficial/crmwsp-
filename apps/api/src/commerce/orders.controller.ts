@@ -3,7 +3,6 @@ import {
   ConflictError,
   InsufficientStockError,
   NotFoundError,
-  ValidationError,
   createOrderRequestSchema,
   listOrdersQuerySchema,
   markPaidRequestSchema,
@@ -11,7 +10,7 @@ import {
   type OrderList,
 } from "@crmwsp/contracts";
 import { contacts, eq, isUuid, orders, sql, type Transaction } from "@crmwsp/db";
-import { transitionOrder, type OrderAction } from "@crmwsp/domain";
+import type { OrderAction } from "@crmwsp/domain";
 import { CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import type { HttpRequest } from "../common/http.js";
@@ -26,13 +25,15 @@ import {
   insertOrderDraft,
   linesFromVariants,
   loadOrder,
+  markPaidManuallyTx,
   selectOrders,
+  transitionOrderTx,
 } from "./orders.service.js";
 
 const INSUFFICIENT = /^insufficient_stock:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 /** Maps the P0001 errors raised by reserve_stock / commit_stock to API errors. */
-function mapStockError(err: unknown): never {
+export function mapStockError(err: unknown): never {
   if (pgCode(err) === "P0001") {
     const msg = pgMessage(err) ?? "";
     const m = INSUFFICIENT.exec(msg);
@@ -112,23 +113,18 @@ export class OrdersController {
     });
   }
 
-  /** Manual payment. Owner/admin only, mandatory reason, audited. Webhook payments arrive in phase 4. */
+  /** Manual payment. Owner/admin only, mandatory reason, audited (verifiedBy = the user, never "webhook"). */
   @Post(":id/mark-paid")
   @Roles("owner", "admin")
   @HttpCode(200)
-  markPaid(@CurrentTenantDb() db: TenantDb, @Param("id") id: string, @Body() body: unknown, @Req() req: HttpRequest): Promise<Order> {
+  async markPaid(@CurrentTenantDb() db: TenantDb, @Param("id") id: string, @Body() body: unknown, @Req() req: HttpRequest): Promise<Order> {
     const { reason } = parseOrThrow(markPaidRequestSchema, body);
-    return this.transition(
-      db,
-      id,
-      "mark_paid",
-      req,
-      async (tx) => {
-        await tx.execute(sql`select public.commit_stock(${id}::uuid)`);
-      },
-      // orders has no verified_by column yet (phase 4): the audit row carries it. Never "webhook" here.
-      { reason: `pago manual: ${reason}`, diff: { method: "manual", verifiedBy: "manual", reason } },
-    );
+    if (!isUuid(id)) throw new NotFoundError();
+    try {
+      return await db.run((tx) => markPaidManuallyTx(tx, { tenantId: db.tenantId, userId: db.userId, ip: req.ip }, id, { reason }));
+    } catch (err) {
+      return mapStockError(err);
+    }
   }
 
   @Post(":id/fulfill")
@@ -158,42 +154,10 @@ export class OrdersController {
     action: OrderAction,
     req: HttpRequest,
     sideEffect?: (tx: Transaction) => Promise<void>,
-    audit?: { reason: string; diff: Record<string, unknown> },
   ): Promise<Order> {
     if (!isUuid(id)) throw new NotFoundError();
     try {
-      return await db.run(async (tx) => {
-        const [o] = await tx.select().from(orders).where(eq(orders.id, id)).for("update");
-        if (!o) throw new NotFoundError();
-        const t = transitionOrder(o.status, action, o.fulfillment);
-        if (!t.ok) {
-          if (t.reason === "not_applicable") throw new ValidationError(`'${action}' does not apply to ${o.fulfillment} orders`);
-          throw new ConflictError(`Cannot ${action.replace("_", "-")} an order that is ${o.status}`);
-        }
-        if (sideEffect) await sideEffect(tx);
-        const now = new Date();
-        await tx
-          .update(orders)
-          .set({
-            status: t.to,
-            ...(t.to === "paid" ? { paidAt: now } : {}),
-            ...(t.to === "cancelled" ? { cancelledAt: now } : {}),
-            lockVersion: sql`${orders.lockVersion} + 1`,
-            updatedAt: now,
-          })
-          .where(eq(orders.id, id));
-        await writeAudit(tx, {
-          tenantId: db.tenantId,
-          userId: db.userId,
-          entity: "order",
-          entityId: id,
-          action: `order.${action}`,
-          diff: { status: { from: o.status, to: t.to }, ...(audit?.diff ?? {}) },
-          ip: req.ip,
-          reason: audit?.reason,
-        });
-        return loadOrder(tx, id);
-      });
+      return await db.run((tx) => transitionOrderTx(tx, { tenantId: db.tenantId, userId: db.userId, ip: req.ip }, id, action, sideEffect));
     } catch (err) {
       return mapStockError(err);
     }

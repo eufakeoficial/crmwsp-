@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reactionEmojiSchema } from "./ai.js";
 import { isoDateTimeSchema, uuidSchema } from "./common.js";
 import { ErrorCode } from "./errors.js";
 
@@ -87,6 +88,14 @@ export const attachmentSchema = z.object({
 });
 export type Attachment = z.infer<typeof attachmentSchema>;
 
+/** Short-lived signed GET URL of an attachment stored in object storage. */
+export const attachmentUrlResponseSchema = z.object({
+  url: z.string().url(),
+  expiresAt: isoDateTimeSchema,
+  mimeType: z.string().nullable(),
+});
+export type AttachmentUrlResponse = z.infer<typeof attachmentUrlResponseSchema>;
+
 export const messageSchema = z.object({
   id: uuidSchema,
   conversationId: uuidSchema,
@@ -99,11 +108,18 @@ export const messageSchema = z.object({
   clientMessageId: uuidSchema.nullable(),
   /** Sanitised delivery error ({ code?, message? }) when status = failed. */
   error: z.record(z.string(), z.unknown()).nullable(),
+  /** Emoji reaction on this message and who made it (contact | ai | user). */
+  reaction: z.string().nullable(),
+  reactionBy: messageAuthorSchema.nullable(),
   sentAt: isoDateTimeSchema.nullable(),
   createdAt: isoDateTimeSchema,
   attachments: z.array(attachmentSchema),
 });
 export type Message = z.infer<typeof messageSchema>;
+
+/** Agent reaction on a contact message; `null` removes the agent's reaction. */
+export const setReactionRequestSchema = z.object({ emoji: reactionEmojiSchema.nullable() });
+export type SetReactionRequest = z.infer<typeof setReactionRequestSchema>;
 
 export const listMessagesQuerySchema = z.object({
   /** Opaque cursor (nextCursor of the previous page): returns older messages. */
@@ -124,6 +140,15 @@ export const sendMessageRequestSchema = z.object({
   clientMessageId: uuidSchema,
 });
 export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
+
+/** Manual template send (required outside the 24 h window). Params fill `{{1}}..{{n}}` in order. */
+export const sendTemplateMessageRequestSchema = z.object({
+  templateId: uuidSchema,
+  params: z.array(z.string().trim().min(1).max(1024)).max(20),
+  /** Idempotency key: template sends are billed, a retry must not send twice. */
+  clientMessageId: uuidSchema,
+});
+export type SendTemplateMessageRequest = z.infer<typeof sendTemplateMessageRequestSchema>;
 
 // --- Conversations ------------------------------------------------------------
 
@@ -198,9 +223,11 @@ export type UpdateConversationRequest = z.infer<typeof updateConversationRequest
 
 /** Thread-scoped inbox events (best effort; clients refetch on receipt). */
 export const threadEventSchema = z.object({
-  type: z.enum(["message.received", "message.created", "message.status", "conversation.updated"]),
+  type: z.enum(["message.received", "message.created", "message.status", "conversation.updated", "note.created"]),
   conversationId: uuidSchema,
   messageId: uuidSchema.optional(),
+  /** Internal note id (note.created, T23). */
+  noteId: uuidSchema.optional(),
 });
 export type ThreadEvent = z.infer<typeof threadEventSchema>;
 
@@ -224,6 +251,7 @@ export const INBOX_EVENT_TYPES = [
   "message.created",
   "message.status",
   "conversation.updated",
+  "note.created",
   "ai.reply_drafted",
   "ai.action_pending",
   "ai.handoff",

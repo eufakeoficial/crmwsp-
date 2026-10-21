@@ -1,10 +1,5 @@
-import { EmptyState, PageHeader } from "@/components/app/EmptyState";
+import { PipelineBoard } from "@/components/pipeline/PipelineBoard";
 
-export default function Page() {
-  return (
-    <>
-      <PageHeader title="Pipeline" />
-      <EmptyState title="Próximamente" soon>Aquí moverás tus oportunidades por etapas.</EmptyState>
-    </>
-  );
+export default function PipelinePage() {
+  return <PipelineBoard />;
 }

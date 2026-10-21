@@ -1,7 +1,9 @@
 import {
   type ConversationStatus,
   type CreateGupshupChannelRequest,
+  type ReactionEmoji,
   type UpdateConversationRequest,
+  attachmentUrlResponseSchema,
   channelListResponseSchema,
   channelSchema,
   contactListResponseSchema,
@@ -64,10 +66,29 @@ export const conversationsApi = {
       body: { text, clientMessageId },
       schema: messageSchema,
     }),
+  /** Agent reaction to a contact message; `null` removes it. */
+  react: (id: string, messageId: string, emoji: ReactionEmoji | null) =>
+    request(`/conversations/${id}/messages/${messageId}/reaction`, {
+      method: "POST",
+      body: { emoji },
+      schema: messageSchema,
+    }),
+  /** 202 with the queued template message (works outside the 24 h window). */
+  sendTemplate: (id: string, templateId: string, params: string[], clientMessageId: string = newClientMessageId()) =>
+    request(`/conversations/${id}/template-messages`, {
+      method: "POST",
+      body: { templateId, params, clientMessageId },
+      schema: messageSchema,
+    }),
 };
 
 export const contactsApi = {
   list: (params: { q?: string | undefined; limit?: number | undefined } = {}) =>
     request("/contacts", { query: params, schema: contactListResponseSchema }),
   get: (id: string) => request(`/contacts/${id}`, { schema: contactSchema }),
+};
+
+export const attachmentsApi = {
+  /** Short-lived signed URL (about 5 minutes); fetch it lazily, do not cache it long. */
+  url: (id: string) => request(`/attachments/${id}/url`, { schema: attachmentUrlResponseSchema }),
 };

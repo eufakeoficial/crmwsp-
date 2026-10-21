@@ -1,8 +1,12 @@
 import { Injectable, Logger, type OnApplicationShutdown } from "@nestjs/common";
-import { inboxEventSchema, type InboxEvent } from "@crmwsp/contracts";
+import { inboxEventSchema, notificationEventSchema, type InboxEvent, type NotificationEvent } from "@crmwsp/contracts";
+import { z } from "zod";
 import { Redis } from "ioredis";
 
-export type RealtimeListener = (event: InboxEvent) => void;
+/** Everything forwarded over SSE: inbox/AI events plus team notifications. */
+export type RealtimeEvent = InboxEvent | NotificationEvent;
+export const realtimeEventSchema = z.union([inboxEventSchema, notificationEventSchema]);
+export type RealtimeListener = (event: RealtimeEvent) => void;
 
 export const tenantChannel = (tenantId: string): string => `tenant:${tenantId}:events`;
 const CHANNEL_RE = /^tenant:([0-9a-f-]{36}):events$/i;
@@ -42,7 +46,7 @@ export class RealtimeHub implements OnApplicationShutdown {
     } catch {
       return;
     }
-    const event = inboxEventSchema.safeParse(parsed);
+    const event = realtimeEventSchema.safeParse(parsed);
     if (!event.success) return;
     for (const l of [...set]) {
       try {
@@ -87,7 +91,7 @@ export class RealtimeHub implements OnApplicationShutdown {
   }
 
   /** Best effort: data is already committed; clients can refetch. */
-  async publish(tenantId: string, event: InboxEvent): Promise<void> {
+  async publish(tenantId: string, event: RealtimeEvent): Promise<void> {
     try {
       if (!this.publisher) {
         this.publisher = new Redis(this.redisUrl, { maxRetriesPerRequest: 1 });

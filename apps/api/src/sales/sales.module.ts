@@ -6,10 +6,11 @@ import { OpportunitiesController, PipelinesController } from "./opportunities.co
 import { DEFAULT_PUBLIC_QUOTE_RATE_LIMIT, PUBLIC_QUOTE_RATE_LIMIT, PublicQuotesController } from "./public-quotes.controller.js";
 import { QuotesController } from "./quotes.controller.js";
 import { TasksController } from "./tasks.controller.js";
+import { OrderExtractionsController } from "../inbox/order-extractions.controller.js";
 
 @Module({
   imports: [AuthModule, EventsModule, InboxModule],
-  controllers: [PipelinesController, OpportunitiesController, TasksController, QuotesController, PublicQuotesController],
+  controllers: [PipelinesController, OpportunitiesController, TasksController, QuotesController, PublicQuotesController, OrderExtractionsController],
   providers: [{ provide: PUBLIC_QUOTE_RATE_LIMIT, useValue: DEFAULT_PUBLIC_QUOTE_RATE_LIMIT }],
 })
 export class SalesModule {}

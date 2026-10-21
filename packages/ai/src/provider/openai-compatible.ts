@@ -12,7 +12,8 @@ import type {
   TranscribeRequest,
   TranscribeResult,
 } from "./types.js";
-import { assertSafeBaseUrl, assertSafeBaseUrlSyntax } from "./url-safety.js";
+import { createSafeFetch } from "./safe-fetch.js";
+import { assertSafeBaseUrl, assertSafeBaseUrlSyntax, isDevOrTestEnv } from "./url-safety.js";
 import type { LookupFn } from "./url-safety.js";
 
 /*
@@ -112,7 +113,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
     // Fail fast on obviously bad URLs; DNS is re-checked before every request.
     this.baseUrl = assertSafeBaseUrlSyntax(opts.baseUrl, safety).toString().replace(/\/+$/, "");
     this.#apiKey = opts.apiKey;
-    this.fetchImpl = opts.fetch ?? globalThis.fetch;
+    // Default transport pins the vetted address on the socket (CN-009: no DNS-rebinding window).
+    const insecureDev = opts.allowInsecureLocal === true && opts.production !== true && isDevOrTestEnv();
+    this.fetchImpl = opts.fetch ?? createSafeFetch({ ...(opts.lookup ? { lookup: opts.lookup } : {}), allowPrivate: insecureDev });
     this.timeoutMs = opts.timeoutMs ?? 30_000;
     this.maxResponseBytes = opts.maxResponseBytes ?? 2 * 1024 * 1024;
     this.jsonSchemaSupported = opts.supportsJsonSchema;
@@ -152,7 +155,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   private async chatOnce<T>(req: ChatRequest<T>, responseFormat: unknown, messages: ChatMessage[]): Promise<ChatResult<T>> {
-    const body: Record<string, unknown> = { model: req.model, messages };
+    const body: Record<string, unknown> = { model: req.model, messages: messages.map(toWireMessage) };
     if (responseFormat !== undefined) body.response_format = responseFormat;
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.maxTokens !== undefined) body.max_tokens = req.maxTokens;
@@ -349,4 +352,19 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
     return out;
   }
+}
+
+/** OpenAI wire format: messages with images become content parts (text + image_url data URLs). */
+export function toWireMessage(m: ChatMessage): Record<string, unknown> {
+  if (!m.images || m.images.length === 0) return { role: m.role, content: m.content };
+  return {
+    role: m.role,
+    content: [
+      { type: "text", text: m.content },
+      ...m.images.map((img) => ({
+        type: "image_url",
+        image_url: { url: `data:${img.mimeType};base64,${Buffer.from(img.data).toString("base64")}` },
+      })),
+    ],
+  };
 }

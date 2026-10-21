@@ -22,6 +22,10 @@ export interface LlmCapabilities {
   structuredOutput?: boolean;
   embeddings?: boolean;
   transcription?: boolean;
+  /** Chat model accepts image inputs (receipt reading). */
+  vision?: boolean;
+  /** Model used for image inputs; defaults to the cheap chat model. */
+  visionModel?: string;
 }
 
 /**

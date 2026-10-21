@@ -53,7 +53,7 @@ export function ChannelsView() {
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader title="Canales" subtitle="Los números de WhatsApp de tu empresa." />
+        <PageHeader title="Canales" subtitle="Conecta y administra los números de WhatsApp con los que atiendes a tus clientes." />
         {canManage ? (
           <Button variant="whatsapp" onClick={() => setConnecting(true)}>
             <Plug aria-hidden className="size-5" />Conectar WhatsApp (Gupshup)
@@ -73,7 +73,7 @@ export function ChannelsView() {
         <p className="text-muted" aria-busy="true">Cargando canales…</p>
       ) : channels && channels.length === 0 ? (
         <EmptyState title="Aún no hay canales">
-          {canManage ? "Conecta tu primer número de WhatsApp con el botón de arriba." : "Pide a un administrador que conecte un número de WhatsApp."}
+          {canManage ? "Primer paso: conecta tu número de WhatsApp con el botón de arriba para empezar a recibir mensajes." : "Pide a un administrador que conecte un número de WhatsApp."}
         </EmptyState>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -5,23 +5,30 @@
 -- (tenant_id, id) btree indexes become unique (always true, id is the PK).
 -- Hand-ordered: unique indexes first, then FKs. ON DELETE SET NULL lists only
 -- the child column (PG 15+) so tenant_id (NOT NULL) is left untouched.
-DROP INDEX "conversations_tenant_id_id_idx";--> statement-breakpoint
-CREATE UNIQUE INDEX "conversations_tenant_id_id_idx" ON "conversations" USING btree ("tenant_id","id");--> statement-breakpoint
-DROP INDEX "messages_tenant_id_id_idx";--> statement-breakpoint
-CREATE UNIQUE INDEX "messages_tenant_id_id_idx" ON "messages" USING btree ("tenant_id","id");--> statement-breakpoint
-DROP INDEX "knowledge_sources_tenant_id_id_idx";--> statement-breakpoint
-CREATE UNIQUE INDEX "knowledge_sources_tenant_id_id_idx" ON "knowledge_sources" USING btree ("tenant_id","id");--> statement-breakpoint
-DROP INDEX "ai_actions_tenant_id_id_idx";--> statement-breakpoint
-CREATE UNIQUE INDEX "ai_actions_tenant_id_id_idx" ON "ai_actions" USING btree ("tenant_id","id");--> statement-breakpoint
-ALTER TABLE "knowledge_chunks" DROP CONSTRAINT "knowledge_chunks_source_id_knowledge_sources_id_fk";--> statement-breakpoint
-ALTER TABLE "knowledge_chunks" ADD CONSTRAINT "knowledge_chunks_tenant_source_fk" FOREIGN KEY ("tenant_id","source_id") REFERENCES "public"."knowledge_sources"("tenant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "action_approvals" DROP CONSTRAINT "action_approvals_action_id_ai_actions_id_fk";--> statement-breakpoint
-ALTER TABLE "action_approvals" ADD CONSTRAINT "action_approvals_tenant_action_fk" FOREIGN KEY ("tenant_id","action_id") REFERENCES "public"."ai_actions"("tenant_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ai_actions" DROP CONSTRAINT "ai_actions_conversation_id_conversations_id_fk";--> statement-breakpoint
-ALTER TABLE "ai_actions" ADD CONSTRAINT "ai_actions_tenant_conversation_fk" FOREIGN KEY ("tenant_id","conversation_id") REFERENCES "public"."conversations"("tenant_id","id") ON DELETE SET NULL ("conversation_id") ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "ai_actions" DROP CONSTRAINT "ai_actions_message_id_messages_id_fk";--> statement-breakpoint
-ALTER TABLE "ai_actions" ADD CONSTRAINT "ai_actions_tenant_message_fk" FOREIGN KEY ("tenant_id","message_id") REFERENCES "public"."messages"("tenant_id","id") ON DELETE SET NULL ("message_id") ON UPDATE no action;--> statement-breakpoint
-
+DROP INDEX "conversations_tenant_id_id_idx";
+--> statement-breakpoint
+CREATE UNIQUE INDEX "conversations_tenant_id_id_idx" ON "conversations" USING btree ("tenant_id","id");
+--> statement-breakpoint
+DROP INDEX "messages_tenant_id_id_idx";
+--> statement-breakpoint
+CREATE UNIQUE INDEX "messages_tenant_id_id_idx" ON "messages" USING btree ("tenant_id","id");
+--> statement-breakpoint
+DROP INDEX "knowledge_sources_tenant_id_id_idx";
+--> statement-breakpoint
+CREATE UNIQUE INDEX "knowledge_sources_tenant_id_id_idx" ON "knowledge_sources" USING btree ("tenant_id","id");
+--> statement-breakpoint
+DROP INDEX "ai_actions_tenant_id_id_idx";
+--> statement-breakpoint
+CREATE UNIQUE INDEX "ai_actions_tenant_id_id_idx" ON "ai_actions" USING btree ("tenant_id","id");
+--> statement-breakpoint
+ALTER TABLE "knowledge_chunks" DROP CONSTRAINT "knowledge_chunks_source_id_knowledge_sources_id_fk";
+--> statement-breakpoint
+ALTER TABLE "action_approvals" DROP CONSTRAINT "action_approvals_action_id_ai_actions_id_fk";
+--> statement-breakpoint
+ALTER TABLE "ai_actions" DROP CONSTRAINT "ai_actions_conversation_id_conversations_id_fk";
+--> statement-breakpoint
+ALTER TABLE "ai_actions" DROP CONSTRAINT "ai_actions_message_id_messages_id_fk";
+--> statement-breakpoint
 -- tenant_monthly_spend: month boundaries in the tenant's timezone
 -- (tenants.timezone of app.tenant_id, read under the caller's RLS); UTC when
 -- there is no tenant context. Same signature, SECURITY INVOKER, fixed search_path.
@@ -48,3 +55,11 @@ AS $fn$
   GROUP BY u."currency", u."kind"
   ORDER BY u."currency", u."kind";
 $fn$;
+--> statement-breakpoint
+ALTER TABLE "knowledge_chunks" ADD CONSTRAINT "knowledge_chunks_tenant_source_fk" FOREIGN KEY ("tenant_id","source_id") REFERENCES "public"."knowledge_sources"("tenant_id","id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "action_approvals" ADD CONSTRAINT "action_approvals_tenant_action_fk" FOREIGN KEY ("tenant_id","action_id") REFERENCES "public"."ai_actions"("tenant_id","id") ON DELETE cascade ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "ai_actions" ADD CONSTRAINT "ai_actions_tenant_conversation_fk" FOREIGN KEY ("tenant_id","conversation_id") REFERENCES "public"."conversations"("tenant_id","id") ON DELETE SET NULL ("conversation_id") ON UPDATE no action;
+--> statement-breakpoint
+ALTER TABLE "ai_actions" ADD CONSTRAINT "ai_actions_tenant_message_fk" FOREIGN KEY ("tenant_id","message_id") REFERENCES "public"."messages"("tenant_id","id") ON DELETE SET NULL ("message_id") ON UPDATE no action;

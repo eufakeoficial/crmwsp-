@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AI_CLAIM_KINDS, aiTurnOutputSchema } from "@crmwsp/contracts";
+import { AI_CLAIM_KINDS, REACTION_EMOJIS, aiTurnOutputSchema, normalizeReactionEmoji } from "@crmwsp/contracts";
 import type { AiTurnOutput } from "@crmwsp/contracts";
 import type { ResponseFormat } from "./provider/types.js";
 
@@ -51,6 +51,7 @@ export const aiTurnJsonSchema: JsonSchema = obj({
       ],
     },
   },
+  reaction: nullable(obj({ emoji: { type: "string", enum: [...REACTION_EMOJIS] } })),
   confidence: num,
   needsHuman: { type: "boolean" },
   reason: str,
@@ -61,6 +62,14 @@ export function normalizeAiTurnOutput(raw: unknown): unknown {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
   const out: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
   if (out.reply === null) delete out.reply;
+  // Reactions are best effort: null, malformed or off-list emojis are dropped, never fail the turn.
+  if ("reaction" in out) {
+    const r = out.reaction;
+    const emoji =
+      typeof r === "object" && r !== null && !Array.isArray(r) ? normalizeReactionEmoji((r as { emoji?: unknown }).emoji) : null;
+    if (emoji) out.reaction = { emoji };
+    else delete out.reaction;
+  }
   if (Array.isArray(out.actions)) {
     out.actions = out.actions.map((a: unknown) => {
       if (typeof a !== "object" || a === null || Array.isArray(a)) return a;

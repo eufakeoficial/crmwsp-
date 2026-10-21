@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAV_MAIN, isActive } from "./nav-items";
+import { NAV_MAIN, NAV_MORE, NAV_SECONDARY, isActive, isMoreActive } from "./nav-items";
 
 describe("isActive", () => {
   it("matches /app only exactly", () => {
@@ -12,5 +12,19 @@ describe("isActive", () => {
   });
   it("has unique keys", () => {
     expect(new Set(NAV_MAIN.map((i) => i.key)).size).toBe(NAV_MAIN.length);
+  });
+  it("keeps the daily items visible and the rest under Más", () => {
+    expect(NAV_MAIN.map((i) => i.label)).toEqual(["Inicio", "Inbox", "Contactos", "Pipeline", "Presupuestos", "Pedidos", "IA"]);
+    expect(NAV_MORE.map((i) => i.label)).toEqual(["Comprobantes", "Rentabilidad", "Campañas", "Productos", "Canales", "Equipo"]);
+  });
+  it("has unique keys and hrefs across every group", () => {
+    const all = [...NAV_MAIN, ...NAV_MORE, ...NAV_SECONDARY];
+    expect(new Set(all.map((i) => i.key)).size).toBe(all.length);
+    expect(new Set(all.map((i) => i.href)).size).toBe(all.length);
+  });
+  it("detects when the active route is inside Más", () => {
+    expect(isMoreActive("/app/products/42")).toBe(true);
+    expect(isMoreActive("/app/payments/reviews")).toBe(true);
+    expect(isMoreActive("/app/inbox")).toBe(false);
   });
 });

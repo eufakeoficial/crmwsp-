@@ -274,3 +274,67 @@ export type CreateOrderRequest = z.infer<typeof createOrderRequestSchema>;
 /** Manual payment: owner/admin only, reason mandatory (audited as "pago manual"). */
 export const markPaidRequestSchema = z.object({ reason: z.string().trim().min(3).max(500) });
 export type MarkPaidRequest = z.infer<typeof markPaidRequestSchema>;
+
+// --- Online payments (Stripe) --------------------------------------------------------
+
+export const paymentStatusSchema = z.enum(["pending", "succeeded", "failed", "expired"]);
+export type PaymentStatus = z.infer<typeof paymentStatusSchema>;
+
+/** Hosted payment link for an order (Stripe Checkout Session). Amount is the server's, never the client's. */
+export const paymentLinkSchema = z.object({
+  paymentId: uuidSchema,
+  orderId: uuidSchema,
+  provider: z.enum(["stripe", "mercadopago"]),
+  providerRef: z.string(),
+  url: z.string().url(),
+  amountMinor: z.number().int(),
+  currency: currencySchema,
+  status: paymentStatusSchema,
+  expiresAt: isoDateTimeSchema.nullable(),
+});
+export type PaymentLinkResponse = z.infer<typeof paymentLinkSchema>;
+
+export const createPaymentLinkRequestSchema = z
+  .object({
+    successUrl: z.string().url().startsWith("https://").max(2000).optional(),
+    /** Defaults to Stripe (backwards compatible). */
+    provider: z.enum(["stripe", "mercadopago"]).optional(),
+  })
+  .strict();
+export type CreatePaymentLinkRequest = z.infer<typeof createPaymentLinkRequestSchema>;
+
+/** BYOK Stripe credentials. Stored encrypted; never returned (only a hint). */
+export const upsertStripeConnectionRequestSchema = z
+  .object({
+    secretKey: z.string().trim().regex(/^(sk|rk)_(test|live)_[A-Za-z0-9]{8,250}$/, "Invalid Stripe secret key"),
+    webhookSecret: z.string().trim().regex(/^whsec_[A-Za-z0-9+/=]{8,250}$/, "Invalid Stripe webhook secret"),
+  })
+  .strict();
+export type UpsertStripeConnectionRequest = z.infer<typeof upsertStripeConnectionRequestSchema>;
+
+export const stripeConnectionSchema = z.object({
+  provider: z.literal("stripe"),
+  status: z.enum(["active", "disabled"]),
+  secretKeyHint: z.string().nullable(),
+  webhookUrl: z.string(),
+  updatedAt: isoDateTimeSchema,
+});
+export type StripeConnection = z.infer<typeof stripeConnectionSchema>;
+
+/** BYOK Mercado Pago credentials (access token + webhook signature secret). Stored encrypted. */
+export const upsertMercadoPagoConnectionRequestSchema = z
+  .object({
+    accessToken: z.string().trim().regex(/^(APP_USR|TEST)-[A-Za-z0-9-]{10,250}$/, "Invalid Mercado Pago access token"),
+    webhookSecret: z.string().trim().regex(/^[A-Za-z0-9]{16,250}$/, "Invalid Mercado Pago webhook secret"),
+  })
+  .strict();
+export type UpsertMercadoPagoConnectionRequest = z.infer<typeof upsertMercadoPagoConnectionRequestSchema>;
+
+export const mercadoPagoConnectionSchema = z.object({
+  provider: z.literal("mercadopago"),
+  status: z.enum(["active", "disabled"]),
+  secretKeyHint: z.string().nullable(),
+  webhookUrl: z.string(),
+  updatedAt: isoDateTimeSchema,
+});
+export type MercadoPagoConnection = z.infer<typeof mercadoPagoConnectionSchema>;

@@ -13,6 +13,7 @@ import { GupshupProvider, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { PgInboundEventStore, type InboundEventStore } from "./inbound-event-store.js";
+import { MemoryCounterStore } from "../common/rate-limit-store.js";
 import { DEFAULT_RATE_LIMIT, WebhookRateLimiter, type RateLimiterOptions } from "./rate-limiter.js";
 import { WebhookGuardMiddleware } from "./webhook-guard.middleware.js";
 import {
@@ -100,7 +101,11 @@ function buildProviders(options: WebhooksModuleOptions): Provider[] {
       },
     },
     { provide: WHATSAPP_PROVIDER, useValue: options.provider ?? new GupshupProvider() },
-    { provide: WEBHOOK_RATE_LIMITER, useValue: new WebhookRateLimiter(options.rateLimit ?? DEFAULT_RATE_LIMIT) },
+    {
+      provide: WEBHOOK_RATE_LIMITER,
+      // A custom limit (tests) gets its own counters instead of the shared process store.
+      useValue: options.rateLimit ? new WebhookRateLimiter(options.rateLimit, new MemoryCounterStore()) : new WebhookRateLimiter(DEFAULT_RATE_LIMIT),
+    },
     WebhooksService,
     WebhookGuardMiddleware,
   ];
