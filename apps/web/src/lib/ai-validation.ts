@@ -12,7 +12,11 @@ export type BaseUrlCheck = { ok: true; url: string } | { ok: false; reason: stri
  * Custom provider base URL: https only, no localhost unless running in dev
  * (the server enforces the real anti-SSRF rules, ADR 0008).
  */
-export function validateBaseUrl(raw: string, isDev: boolean = process.env.NODE_ENV !== "production"): BaseUrlCheck {
+// Fail closed (CN-011): only an explicit development/test NODE_ENV enables the localhost allowance.
+export function validateBaseUrl(
+  raw: string,
+  isDev: boolean = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test",
+): BaseUrlCheck {
   const value = raw.trim();
   let url: URL;
   try {
