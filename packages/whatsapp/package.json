@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -11,6 +13,9 @@
   },
   "dependencies": {
     "@crmwsp/contracts": "workspace:*",
-    "zod": "^4.6.7"
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5"
   }
 }
