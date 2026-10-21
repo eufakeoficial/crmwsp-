@@ -133,6 +133,8 @@ export class ContactBookController {
 
   /** Filtered page (same keyset order as `GET /contact-book`) plus the total matching count. */
   @Post("search")
+  // Read-only search (POST only to carry the filter body): viewers may use it.
+  @Roles("owner", "admin", "agent", "viewer")
   @HttpCode(200)
   async search(@CurrentTenantDb() db: TenantDb, @Body() body: unknown): Promise<ContactBookSearchResult> {
     const input = parseOrThrow(searchContactBookRequestSchema, body);

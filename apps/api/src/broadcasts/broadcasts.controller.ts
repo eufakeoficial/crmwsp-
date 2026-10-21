@@ -150,6 +150,8 @@ export class BroadcastsController {
   }
 
   @Post("preview")
+  // Read-only audience count (POST only to carry the filter body): viewers may use it.
+  @Roles("owner", "admin", "agent", "viewer")
   @HttpCode(200)
   async preview(@CurrentTenantDb() db: TenantDb, @Body() body: unknown): Promise<AudiencePreview> {
     const { audience } = parseOrThrow(previewAudienceRequestSchema, body);
