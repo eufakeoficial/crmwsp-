@@ -11,7 +11,7 @@ CRM WhatsApp-first multi-tenant con IA para negocios de servicios con presupuest
 - PostgreSQL + Drizzle + RLS. Toda tabla de negocio lleva `tenant_id`. Todo acceso a datos pasa por `withTenant(tenantId, fn)`; nunca consultas sin tenant.
 - WhatsApp solo vía BSP (Gupshup principal, 360dialog después) detrás de `WhatsAppProvider`. Nada de Meta Cloud API directo ni librerías no oficiales.
 - IA detrás de `LLMProvider`: cualquier proveedor compatible con la API de OpenAI, con key propia del cliente (BYOK) o créditos del SaaS (ADR 0008). OpenAI por defecto. Modelo barato por defecto; Structured Outputs para acciones; toda afirmación de precio/stock/plazo lleva cita a `knowledge_chunks` o se deriva a humano.
-- Pagos: `paid` solo con `verified_by = webhook | reconciliation`. Nunca por imagen de comprobante.
+- Pagos: `paid` solo con `verified_by = webhook | reconciliation`. Nunca por imagen de comprobante. Única excepción, el marcado manual auditado por owner/admin (ADR 0012).
 - Webhooks: primero `inbound_events` con `dedupe_key`, luego worker. Siempre idempotente.
 - Secretos (API keys de BSP, claves OpenAI BYOK) cifrados; jamás en logs, respuestas ni commits.
 
