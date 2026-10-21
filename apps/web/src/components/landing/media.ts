@@ -29,7 +29,7 @@ export const MEDIA = {
     label: "Foto: captura del inbox con una conversación real",
     width: 1600,
     height: 1000,
-    src: "", // e.g. "/landing/hero-inbox.webp"
+    src: "/landing/hero-inbox.png", // e.g. "/landing/hero-inbox.webp"
   },
   /** Features showcase: AI answering from the catalog with a cited source. */
   showcaseAi: {
@@ -38,7 +38,7 @@ export const MEDIA = {
     label: "Foto: respuesta de la IA con la cita al catálogo visible",
     width: 1200,
     height: 900,
-    src: "", // e.g. "/landing/showcase-ai.webp"
+    src: "/landing/showcase-ai.png", // e.g. "/landing/showcase-ai.webp"
   },
   /** Features showcase: sales playbook editor. */
   showcasePlaybook: {
@@ -47,7 +47,7 @@ export const MEDIA = {
     label: "Foto: pantalla del playbook de ventas",
     width: 1200,
     height: 900,
-    src: "", // e.g. "/landing/showcase-playbook.webp"
+    src: "/landing/showcase-playbook.png", // e.g. "/landing/showcase-playbook.webp"
   },
   /** Features showcase: quote and order built from a chat. */
   showcaseQuotes: {
@@ -56,7 +56,7 @@ export const MEDIA = {
     label: "Foto: presupuesto o pedido con el estado del pago",
     width: 1200,
     height: 900,
-    src: "", // e.g. "/landing/showcase-quotes.webp"
+    src: "/landing/showcase-quotes.png", // e.g. "/landing/showcase-quotes.webp"
   },
   /** Demo video section. */
   demoVideo: {
@@ -66,7 +66,7 @@ export const MEDIA = {
     width: 1920,
     height: 1080,
     src: "", // e.g. "/landing/demo.mp4"
-    poster: "", // e.g. "/landing/demo-poster.webp"
+    poster: "/landing/demo-poster.png", // e.g. "/landing/demo-poster.webp"
   },
 } as const satisfies Record<string, MediaSpec>;
 
