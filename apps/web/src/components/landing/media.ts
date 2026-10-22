@@ -2,7 +2,7 @@
  * Single source of truth for every image/video slot on the public landing page.
  *
  * To fill a slot: drop the file in `apps/web/public/landing/` (see the README there)
- * and set `src` to its public path, e.g. `src: "/landing/hero-inbox.webp"`.
+ * and set `src` to its public path, e.g. `src: "/landing/crm-laptop.png"`.
  * While `src` is empty the page shows a dashed placeholder describing what goes there.
  * CSP allows `'self'` and `https:` for images and `'self'`/`https:` for media.
  */
@@ -25,48 +25,48 @@ export const MEDIA = {
   /** Hero: main product shot next to the headline. */
   hero: {
     kind: "image",
-    alt: "Bandeja compartida de WhatsApp de CRMWSP con una conversación y la respuesta sugerida por la IA",
+    alt: "Bandeja de conversaciones de CRMWSP en una laptop: lista de chats, conversación con un cliente y su cotización enviada",
     label: "Foto: captura del inbox con una conversación real",
-    width: 1600,
-    height: 1000,
-    src: "/landing/hero-inbox.png", // e.g. "/landing/hero-inbox.webp"
+    width: 1672,
+    height: 941,
+    src: "/landing/crm-laptop.png",
   },
   /** Features showcase: AI answering from the catalog with a cited source. */
   showcaseAi: {
     kind: "image",
-    alt: "Respuesta de la IA con la fuente del catálogo citada",
+    alt: "Chat donde la IA responde el precio de un kit solar y cita la fuente: Catálogo 2026",
     label: "Foto: respuesta de la IA con la cita al catálogo visible",
-    width: 1200,
-    height: 900,
-    src: "/landing/showcase-ai.png", // e.g. "/landing/showcase-ai.webp"
+    width: 1448,
+    height: 1086,
+    src: "/landing/ai-chat-solar.png",
   },
   /** Features showcase: sales playbook editor. */
   showcasePlaybook: {
     kind: "image",
-    alt: "Pantalla del playbook de ventas con las reglas y el tono del negocio",
+    alt: "Playbook de ventas con cinco etapas y respuestas sugeridas a objeciones comunes",
     label: "Foto: pantalla del playbook de ventas",
-    width: 1200,
-    height: 900,
-    src: "/landing/showcase-playbook.png", // e.g. "/landing/showcase-playbook.webp"
+    width: 1448,
+    height: 1086,
+    src: "/landing/sales-playbook.png",
   },
   /** Features showcase: quote and order built from a chat. */
   showcaseQuotes: {
     kind: "image",
-    alt: "Presupuesto creado desde una conversación y su estado de pago",
+    alt: "Presupuesto aceptado con el pago verificado y su línea de tiempo: enviado, aceptado y pagado",
     label: "Foto: presupuesto o pedido con el estado del pago",
-    width: 1200,
-    height: 900,
-    src: "/landing/showcase-quotes.png", // e.g. "/landing/showcase-quotes.webp"
+    width: 1448,
+    height: 1086,
+    src: "/landing/quote-accepted.png",
   },
   /** Demo video section. */
   demoVideo: {
     kind: "video",
-    alt: "Demostración de CRMWSP: de un mensaje de WhatsApp a un presupuesto cobrado",
+    alt: "Demostración de CRMWSP: WhatsApp, IA, presupuesto y pago conectados en un solo flujo",
     label: "Video: demo de 60 a 90 s (MP4 H.264, sin audio obligatorio)",
-    width: 1920,
-    height: 1080,
+    width: 1672,
+    height: 940,
     src: "", // e.g. "/landing/demo.mp4"
-    poster: "/landing/demo-poster.png", // e.g. "/landing/demo-poster.webp"
+    poster: "/landing/automation-neon.png",
   },
 } as const satisfies Record<string, MediaSpec>;
 
