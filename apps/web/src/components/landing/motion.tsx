@@ -5,7 +5,7 @@ import {
   type HTMLMotionProps, type MotionValue, type Variants,
 } from "motion/react";
 import Link from "next/link";
-import { createContext, useContext, useEffect, useRef, type PointerEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 
 /** Short, ease-out. Only opacity/transform/filter are animated (GPU, no layout shift). */
 const EASE = [0.2, 0.7, 0.2, 1] as const;
@@ -407,14 +407,22 @@ interface DemoPlayerProps { webm: string; mp4: string; poster: string; label: st
 export function DemoPlayer({ webm, mp4, poster, label, width, height }: DemoPlayerProps) {
   const ref = useRef<HTMLVideoElement>(null);
   const reduce = useReducedMotion();
+  const [blocked, setBlocked] = useState(false);
   useEffect(() => {
     const el = ref.current;
-    if (!el || reduce || typeof IntersectionObserver === "undefined") return;
+    if (!el || reduce) return;
+    // React does not reliably reflect `muted` as a DOM property; browsers only autoplay muted media.
+    el.muted = true;
+    const start = () => void el.play().catch(() => setBlocked(true));
+    if (typeof IntersectionObserver === "undefined") {
+      start();
+      return;
+    }
     const io = new IntersectionObserver(([entry]) => {
       if (!entry) return;
-      if (entry.isIntersecting) void el.play().catch(() => undefined);
+      if (entry.isIntersecting) start();
       else el.pause();
-    }, { threshold: 0.35 });
+    }, { threshold: 0.2 });
     io.observe(el);
     return () => io.disconnect();
   }, [reduce]);
@@ -427,10 +435,10 @@ export function DemoPlayer({ webm, mp4, poster, label, width, height }: DemoPlay
       muted
       loop
       playsInline
-      preload="none"
+      preload="metadata"
       poster={poster}
       aria-label={label}
-      {...(reduce ? { controls: true } : {})}
+      {...(reduce || blocked ? { controls: true } : {})}
     >
       <source src={webm} type="video/webm" />
       <source src={mp4} type="video/mp4" />
