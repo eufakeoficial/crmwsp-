@@ -1,6 +1,6 @@
 import { ArrowUpRight, Check } from "lucide-react";
 import { buttonClasses } from "@/components/ui";
-import { DEMO_VIDEO, DEMO_VIDEO_PLAYBOOK } from "./content";
+import { DEMO_VIDEO, type DEMO_VIDEO_PLAYBOOK } from "./content";
 import { ArrowLink, ArrowNudge, DemoPlayer, Reveal, Stagger, StaggerItem } from "./motion";
 import { H2, SECTION } from "./styles";
 
