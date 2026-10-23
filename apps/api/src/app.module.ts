@@ -30,9 +30,10 @@ import { TeamModule } from "./team/team.module.js";
 import { OwnerModeModule } from "./owner-mode/owner-mode.module.js";
 import { SettingsModule } from "./settings/settings.module.js";
 import { PlatformModule } from "./platform/platform.module.js";
+import { PublicAssistantModule } from "./public-assistant/public-assistant.module.js";
 
 @Module({
-  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, AnalyticsModule, FollowUpsModule, NotificationsModule, PaymentReviewsModule, IntegrationsModule, BillingModule, AdsModule, DevelopersModule, BroadcastsModule, ContactsModule, SettingsModule, OwnerModeModule, TeamModule, PlatformModule],
+  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, AnalyticsModule, FollowUpsModule, NotificationsModule, PaymentReviewsModule, IntegrationsModule, BillingModule, AdsModule, DevelopersModule, BroadcastsModule, ContactsModule, SettingsModule, OwnerModeModule, TeamModule, PlatformModule, PublicAssistantModule],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AppErrorFilter }],
 })

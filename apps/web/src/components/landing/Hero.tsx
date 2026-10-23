@@ -2,7 +2,8 @@ import { Check } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLink, ArrowNudge, CheckRow, CountUp, HeroGlow, HeroTitle, Reveal, Stagger, StaggerItem } from "./motion";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, MessageCircle } from "lucide-react";
+import { AssistantCta } from "./Assistant";
 import { DISPLAY, PILL_OUTLINE } from "./styles";
 
 // Below the fold: its own chunk keeps it out of the hydration-critical bundle (still server-rendered).
@@ -46,6 +47,10 @@ export function Hero() {
             Crear cuenta gratis
             <ArrowNudge><ArrowUpRight className="size-5" /></ArrowNudge>
           </ArrowLink>
+          <AssistantCta className="inline-flex min-h-12 items-center gap-2 rounded-full px-2 font-semibold text-white underline underline-offset-4 hover:text-lime">
+            <MessageCircle aria-hidden className="size-5" />
+            Pregúntale al asistente
+          </AssistantCta>
           <p className="m-0 max-w-[40ch] text-sm text-white/80">
             Un solo inbox, una IA que cita tu catálogo y cobros confirmados. ¿Ya tienes cuenta?{" "}
             <Link href="/login" className="font-semibold text-white underline underline-offset-4">Ingresar</Link>

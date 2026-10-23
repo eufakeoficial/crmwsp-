@@ -35,3 +35,5 @@ export * from "./ai-improve.js";
 export * from "./order-extractions.js";
 export * from "./platform.js";
 export * from "./currency-settings.js";
+export * from "./site-content.js";
+export * from "./site-assistant.js";

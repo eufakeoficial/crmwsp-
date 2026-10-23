@@ -1,3 +1,4 @@
+import { AssistantCta } from "./Assistant";
 import {
   ArrowRight, ArrowUpRight, Bot, BookOpenCheck, Check, HandHelping, Inbox, MessageSquareQuote, ReceiptText, ShieldCheck, UsersRound, WalletCards,
 } from "lucide-react";
@@ -418,7 +419,7 @@ export function FinalCta() {
         <div>
           <h2 id="cta-title" className={`${H2} max-w-[16ch]`}>Que ningún mensaje se quede sin respuesta.</h2>
           <p className="mt-4 mb-0 max-w-[44ch]">Conecta tu WhatsApp, carga tu catálogo y empieza a atender con tu equipo y la IA.</p>
-          <p className="mt-3 mb-0 text-sm">¿Ya tienes cuenta? <Link href="/login" className="font-bold text-ink underline underline-offset-4">Ingresar</Link></p>
+          <p className="mt-3 mb-0 text-sm">¿Ya tienes cuenta? <Link href="/login" className="font-bold text-ink underline underline-offset-4">Ingresar</Link> · <AssistantCta className="font-bold text-ink underline underline-offset-4">¿Dudas? Pregúntale al asistente</AssistantCta></p>
         </div>
         <ArrowLink magnetic href="/signup" aria-label="Crear cuenta gratis" className="grid size-16 shrink-0 place-items-center rounded-2xl border-2 border-ink text-ink no-underline transition-colors hover:bg-ink hover:text-lime sm:size-20">
           <ArrowNudge><ArrowUpRight className="size-8 sm:size-10" /></ArrowNudge>
