@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { BillingPlanResponse, PlanLimitKeyDto } from "@crmwsp/contracts";
 import { SettingsFrame } from "@/components/ai/AccessGate";
@@ -52,7 +53,13 @@ function Body() {
         <p className="m-0 text-sm text-ink-3">Plan actual</p>
         <p className="m-0 text-[28px] font-extrabold">{data.plan.name}</p>
         <p className="m-0 text-ink-3">US${data.plan.priceMonthlyUsd} /mes · período {data.period}</p>
-        <p className="m-0 mt-2 text-sm text-ink-3">El cobro de la suscripción aún no está automatizado: para cambiar de plan, contacta con soporte.</p>
+        <p className="m-0 mt-2 text-sm text-ink-3">
+          Paga o renueva tu suscripción (30 días por pago, en cripto) desde{" "}
+          <Link href="/app/settings/billing" className="font-semibold underline">
+            Ajustes › Suscripción
+          </Link>
+          .
+        </p>
       </Card>
       <Card>
         <ul className="m-0 flex list-none flex-col gap-4 p-0">

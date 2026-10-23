@@ -80,7 +80,15 @@ cobro del tenant a sus propios clientes sigue en los proveedores locales existen
   enum TS de canales).
 - `subscription_payments.method` admite `nowpayments`; el alta manual del backoffice sigue sin
   permitirlo.
-- Pendiente: reembolso de un período que ya tenía otro período apilado detrás deja al siguiente sin
-  desplazar (el `paid_until` sigue siendo el máximo); se corrige a mano desde el backoffice.
-- Pendiente: bloquear el envío manual de mensajes salientes en estado `restricted` (hoy se bloquean
-  IA, difusiones y crecimiento).
+- Reembolso con períodos apilados (0064): al reembolsar un cobro pagado, los cobros pagados
+  posteriores se re-apilan bajo el mismo advisory lock y en la misma transacción, como si el
+  período reembolsado no hubiera existido (cada uno empieza en max(día de su pago, fin del período
+  anterior restante) y dura 30 días), y sus filas derivadas de `subscription_payments` se mueven con
+  ellos. Los períodos manuales del backoffice nunca se mueven.
+- En estado `restricted` también se bloquea el envío manual de mensajes y plantillas desde la
+  bandeja (402 `PLAN_LIMIT_EXCEEDED`, `reason = subscription_restricted`), y el modo dueño no llama
+  a la IA.
+- Pendiente: mostrar un QR de la dirección de depósito; no hay librería de QR en el workspace y no
+  se añade dependencia sin justificarla, así que hoy se muestra la dirección como texto copiable.
+- Pendiente: si existe un período manual posterior a un cobro reembolsado, no se desplaza; se
+  corrige a mano desde el backoffice.

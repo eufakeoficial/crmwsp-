@@ -26,6 +26,19 @@ const tx = { execute: vi.fn(async () => [{ d: paidUntil }]) } as unknown as Tran
 const T = "00000000-0000-4000-8000-000000000001";
 
 describe("PlanLimitsService", () => {
+  it("assertSubscriptionActive blocks only a subscription restricted past grace", async () => {
+    paidUntil = null; // unbilled
+    await expect(svc.assertSubscriptionActive(T, tx)).resolves.toBeUndefined();
+    paidUntil = new Date().toISOString().slice(0, 10); // active
+    await expect(svc.assertSubscriptionActive(T, tx)).resolves.toBeUndefined();
+    paidUntil = "2000-01-01"; // restricted
+    const err = await svc.assertSubscriptionActive(T, tx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanLimitExceededError);
+    expect((err as PlanLimitExceededError).httpStatus).toBe(402);
+    expect((err as PlanLimitExceededError).details).toMatchObject({ reason: "subscription_restricted" });
+    paidUntil = null;
+  });
+
   it("assert passes under the limit (default plan start)", async () => {
     await expect(svc.assert(T, "ai_messages", 1, tx)).resolves.toBeUndefined();
     await expect(svc.assert(T, "seats", 3, tx)).resolves.toBeUndefined();

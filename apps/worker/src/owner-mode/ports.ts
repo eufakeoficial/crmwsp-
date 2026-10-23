@@ -1,6 +1,6 @@
 import type { OwnerCommandInterpretation } from "@crmwsp/contracts";
 import { ownerCommandResponseFormat, buildOwnerInterpreterMessages, estimateCost, OpenAICompatibleProvider, type LLMProvider } from "@crmwsp/ai";
-import { checkLimit, getPlan } from "@crmwsp/billing";
+import { checkLimit, resolveEffectivePlan } from "@crmwsp/billing";
 import type { CipherBox } from "@crmwsp/crypto";
 import { channelConnections, consumeUsage, llmConnections, readPlanUsage, usageLedger, withTenant, type Database } from "@crmwsp/db";
 import type { WhatsAppProvider } from "@crmwsp/whatsapp";
@@ -8,6 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { readBudget } from "../ai/budget.js";
 import { LLM_API_KEY_PURPOSE } from "../ai/common.js";
 import { GUPSHUP_API_KEY_PURPOSE } from "../outbound.js";
+import { isSubscriptionRestricted } from "../subscription-billing/index.js";
 
 /** Sends one owner-mode text to the owner's phone through the tenant channel it wrote to. */
 export type OwnerSender = (msg: { tenantId: string; channelConnectionId: string; toE164: string; text: string }) => Promise<void>;
@@ -59,7 +60,11 @@ export function createOwnerInterpreter(deps: {
       if (budget.currencyMismatch) deps.logger?.warn("owner-mode: budget currency is not USD; budget not enforced");
       if (budget.exceeded) return { kind: "limit" as const };
       const usage = await readPlanUsage(tx);
-      if (!checkLimit(getPlan(usage.plan), "ai_messages", usage.aiMessages, 1).allowed) return { kind: "limit" as const };
+      // Admin overrides apply; a subscription restricted past grace (ADR 0013) runs no AI.
+      if (await isSubscriptionRestricted(tx)) return { kind: "limit" as const };
+      if (!checkLimit(resolveEffectivePlan(usage.plan, usage.limitsOverride), "ai_messages", usage.aiMessages, 1).allowed) {
+        return { kind: "limit" as const };
+      }
       return { kind: "ok" as const, conn: c };
     });
     if (gate.kind !== "ok") return gate;

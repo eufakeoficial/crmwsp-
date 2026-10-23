@@ -80,6 +80,19 @@ export class PlanLimitsService {
     });
   }
 
+  /**
+   * Throws `PlanLimitExceededError` (402, reason `subscription_restricted`) when the SaaS
+   * subscription lapsed past grace (ADR 0013): manual outbound messages are blocked too.
+   */
+  async assertSubscriptionActive(tenantId: string, tx?: Transaction): Promise<void> {
+    const paidUntil = await this.run(tenantId, tx, readPaidUntil);
+    if (subscriptionAccess(paidUntil, new Date()) === "restricted") {
+      throw new PlanLimitExceededError("Subscription expired: outbound messages are disabled until it is renewed", {
+        details: { key: "subscription", reason: "subscription_restricted", paidUntil },
+      });
+    }
+  }
+
   async snapshot(tx: Transaction): Promise<BillingPlanResponse> {
     const s = await readPlanUsage(tx);
     const paidUntil = await readPaidUntil(tx);
