@@ -1,42 +1,35 @@
 import {
-  ArrowRight, Bot, BookOpenCheck, ChartNoAxesColumn, Check, HandHelping, Inbox, MessageSquareQuote, ReceiptText, ShieldCheck, UsersRound, WalletCards,
+  ArrowRight, ArrowUpRight, Bot, BookOpenCheck, Check, HandHelping, Inbox, MessageSquareQuote, ReceiptText, ShieldCheck, UsersRound, WalletCards,
 } from "lucide-react";
 import Link from "next/link";
 import { Accordion, buttonClasses } from "@/components/ui";
 import { LOGOS, MEDIA, PRICING_TEASER, TESTIMONIALS, type MediaSpec } from "./media";
 import { MediaSlot } from "./MediaSlot";
+import { DISPLAY, H2, PILL_OUTLINE, SECTION } from "./styles";
 
-const H2 = "m-0 text-[clamp(28px,3.4vw,42px)] leading-[1.08] tracking-[-0.03em]";
-const SECTION = "container-page scroll-mt-24 pb-[clamp(48px,7vw,96px)]";
-const CARD = "flex flex-col gap-3 rounded-[22px] border border-line bg-white p-6 transition hover:-translate-y-0.5 hover:border-line-2";
+const CARD = "flex flex-col gap-3 rounded-[28px] border border-line bg-white p-6 transition hover:-translate-y-0.5 hover:border-line-2";
+const SQUARE_BTN = "grid size-16 shrink-0 place-items-center rounded-2xl border-2 border-lime text-lime no-underline transition hover:bg-lime hover:text-ink";
 
-function Heading({ id, eyebrow, title, lead }: { id: string; eyebrow: string; title: string; lead?: string }) {
+/** Big two-line heading with a small grey side text, as in the reference. */
+function Heading({ id, title, lead }: { id: string; title: string; lead?: string }) {
   return (
-    <header className="mb-8 max-w-[60ch]">
-      <p className="m-0 mb-2 text-sm font-bold tracking-wide text-ink-3 uppercase">{eyebrow}</p>
-      <h2 id={id} className={H2}>{title}</h2>
-      {lead ? <p className="mt-3 mb-0 text-lg text-ink-3">{lead}</p> : null}
+    <header className="mb-8 flex flex-col gap-3 desk:flex-row desk:items-end desk:justify-between desk:gap-12">
+      <h2 id={id} className={`${H2} max-w-[22ch]`}>{title}</h2>
+      {lead ? <p className="m-0 max-w-[34ch] text-ink-3">{lead}</p> : null}
     </header>
   );
 }
 
-const TRUST = [
-  { icon: BookOpenCheck, text: "IA que cita su fuente" },
-  { icon: WalletCards, text: "Pagos verificados por el proveedor" },
-  { icon: ShieldCheck, text: "WhatsApp vía proveedor oficial" },
-  { icon: UsersRound, text: "Datos aislados por empresa" },
-] as const;
+const INTEGRATIONS = ["WhatsApp · Gupshup", "MercadoPago", "NOWPayments", "Meta Ads"] as const;
 
-/** Factual guarantees only; real customer logos/testimonials live in `Proof`. */
+/** Integration wordmarks as plain text (no logos): factual, nothing to fabricate. */
 export function TrustStrip() {
   return (
-    <section aria-label="Garantías del producto" className="container-page py-6">
-      <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 desk:grid-cols-4">
-        {TRUST.map(({ icon: Icon, text }) => (
-          <li key={text} className="flex items-center gap-3 rounded-2xl border border-line bg-white px-4 py-3 text-sm font-semibold">
-            <Icon aria-hidden className="size-5 shrink-0 text-success" />
-            {text}
-          </li>
+    <section aria-label="Integraciones" className="container-page py-[clamp(32px,5vw,56px)]">
+      <p className="m-0 mb-4 text-center text-sm font-semibold tracking-wide text-ink-3 uppercase">Se integra con</p>
+      <ul className="m-0 flex list-none flex-wrap items-center justify-center gap-x-[clamp(24px,5vw,64px)] gap-y-4 p-0">
+        {INTEGRATIONS.map((name) => (
+          <li key={name} className={`${DISPLAY} text-[clamp(16px,2vw,22px)] font-bold tracking-[-0.02em] text-ink`}>{name}</li>
         ))}
       </ul>
     </section>
@@ -52,11 +45,11 @@ const PAINS = [
 
 export function ProblemSolution() {
   return (
-    <section id="problemas" aria-labelledby="problemas-title" className={`${SECTION} pt-[clamp(40px,6vw,80px)]`}>
-      <Heading id="problemas-title" eyebrow="El problema" title="Del caos del chat al pedido cerrado" lead="Vender por WhatsApp funciona hasta que el equipo crece. Entonces se pierden mensajes, precios y cobros." />
+    <section id="problemas" aria-labelledby="problemas-title" className={`${SECTION} pt-[clamp(24px,4vw,48px)]`}>
+      <Heading id="problemas-title" title="Del caos del chat al pedido cerrado." lead="Vender por WhatsApp funciona hasta que el equipo crece. Entonces se pierden mensajes, precios y cobros." />
       <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 md:grid-cols-2">
         {PAINS.map(({ pain, solution }) => (
-          <li key={pain} className="flex flex-col gap-3 rounded-[22px] border border-line bg-white p-6">
+          <li key={pain} className="flex flex-col gap-3 rounded-[28px] border border-line bg-white p-6">
             <p className="m-0 text-ink-3 line-through decoration-1">{pain}</p>
             <p className="m-0 flex items-start gap-2 font-semibold"><ShieldCheck aria-hidden className="mt-0.5 size-5 shrink-0 text-success" />{solution}</p>
           </li>
@@ -67,29 +60,40 @@ export function ProblemSolution() {
 }
 
 const FEATURES = [
-  { icon: Inbox, title: "Inbox de WhatsApp", text: "Todos los números y conversaciones en una bandeja compartida, con historial por cliente." },
-  { icon: Bot, title: "IA con tu catálogo", text: "Responde con tus productos y precios y cita la fuente de cada dato." },
-  { icon: HandHelping, title: "Deriva a una persona", text: "Si no encuentra el dato o el cliente lo pide, pasa la conversación a tu equipo." },
-  { icon: MessageSquareQuote, title: "Playbook de ventas", text: "Define tono, reglas y objeciones una vez; la IA y el equipo las siguen." },
-  { icon: ReceiptText, title: "Presupuestos y pedidos", text: "Crea y envía el presupuesto desde la conversación y sigue el pedido." },
-  { icon: WalletCards, title: "Pagos verificados", text: "Un pago se marca como pagado por confirmación del proveedor, nunca por una captura." },
-  { icon: UsersRound, title: "Equipo y roles", text: "Cada persona ve lo que le corresponde. Los datos de cada empresa están aislados." },
-  { icon: ChartNoAxesColumn, title: "Ejecuciones y medición", text: "Revisa qué hizo la IA, qué conversaciones necesitan atención y cómo avanzan tus ventas." },
+  { icon: Inbox, title: "Inbox de WhatsApp", text: "Todos los números y chats en una bandeja compartida." },
+  { icon: Bot, title: "IA con tu catálogo", text: "Responde con tus productos y precios y cita la fuente." },
+  { icon: HandHelping, title: "Deriva a una persona", text: "Si no encuentra el dato, pasa la conversación a tu equipo." },
+  { icon: MessageSquareQuote, title: "Playbook de ventas", text: "Define tono, reglas y objeciones una vez." },
+  { icon: ReceiptText, title: "Presupuestos y pedidos", text: "Crea y envía el presupuesto desde la conversación." },
+  { icon: UsersRound, title: "Equipo, roles y medición", text: "Cada persona ve lo suyo; revisa qué hizo la IA y cómo avanzan tus ventas." },
 ] as const;
 
 export function Features() {
   return (
     <section id="beneficios" aria-labelledby="beneficios-title" className={SECTION}>
-      <Heading id="beneficios-title" eyebrow="Qué incluye" title="Todo lo que tu equipo necesita para vender por WhatsApp" />
-      <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 desk:grid-cols-4">
-        {FEATURES.map(({ icon: Icon, title, text }) => (
-          <li key={title} className={CARD}>
-            <span className="grid size-12 place-items-center rounded-2xl bg-lime text-ink"><Icon aria-hidden className="size-6" /></span>
-            <h3 className="m-0 text-[18px]">{title}</h3>
-            <p className="m-0 text-ink-3">{text}</p>
+      <Heading id="beneficios-title" title="Todo para vender por WhatsApp, en un lugar." lead="Tu equipo, la IA y los cobros trabajan sobre la misma conversación." />
+      <div className="grid gap-4 desk:grid-cols-[1.5fr_1fr]">
+        <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-3">
+          <li className="flex flex-col gap-2 rounded-[28px] bg-lime p-5 text-ink">
+            <WalletCards aria-hidden className="size-8" />
+            <h3 className={`${DISPLAY} m-0 text-base font-semibold`}>Pagos verificados</h3>
+            <p className="m-0 text-sm">Pagado solo por confirmación del proveedor, nunca por una captura.</p>
           </li>
-        ))}
-      </ul>
+          {FEATURES.map(({ icon: Icon, title, text }) => (
+            <li key={title} className="flex flex-col gap-2 rounded-[28px] border border-line bg-white p-5">
+              <Icon aria-hidden className="size-6 text-ink" />
+              <h3 className={`${DISPLAY} m-0 text-base font-semibold`}>{title}</h3>
+              <p className="m-0 text-sm text-ink-3">{text}</p>
+            </li>
+          ))}
+        </ul>
+        <div className="relative flex min-h-[260px] flex-col justify-between gap-8 rounded-[28px] bg-ink p-[clamp(24px,3vw,36px)] text-white">
+          <h3 className={`${DISPLAY} m-0 max-w-[12ch] text-[clamp(26px,3vw,38px)] leading-[1.1] font-bold`}>Mira cómo funciona.</h3>
+          <Link href="#como-funciona" aria-label="Ir a Cómo funciona" className={`${SQUARE_BTN} self-end`}>
+            <ArrowUpRight aria-hidden className="size-8" />
+          </Link>
+        </div>
+      </div>
     </section>
   );
 }
@@ -133,11 +137,11 @@ export function Showcase() {
       {SHOWCASE.map(({ media, eyebrow, title, text, bullets }, i) => (
         <div key={title} className="grid items-center gap-8 desk:grid-cols-2 desk:gap-14">
           <div className={i % 2 === 1 ? "desk:order-2" : undefined}>
-            <MediaSlot {...media} className="shadow-[0_24px_60px_-30px_rgba(18,18,18,0.45)]" sizes="(min-width: 1100px) 560px, 100vw" />
+            <MediaSlot {...media} className="rounded-[28px] shadow-[0_24px_60px_-30px_rgba(18,18,18,0.45)]" sizes="(min-width: 1100px) 560px, 100vw" />
           </div>
           <div>
-            <p className="m-0 mb-2 text-sm font-bold tracking-wide text-ink-3 uppercase">{eyebrow}</p>
-            <h3 className="m-0 text-[clamp(24px,2.8vw,34px)] leading-[1.12] tracking-[-0.025em]">{title}</h3>
+            <p className="m-0 mb-3 inline-block rounded-full bg-lime px-3 py-1 text-sm font-bold">{eyebrow}</p>
+            <h3 className={`${DISPLAY} m-0 text-[clamp(22px,2.6vw,32px)] leading-[1.12] font-bold tracking-[-0.02em]`}>{title}</h3>
             <p className="mt-4 mb-0 text-lg text-ink-3">{text}</p>
             <ul className="mt-5 mb-0 flex list-none flex-col gap-2 p-0">
               {bullets.map((b) => (
@@ -154,6 +158,47 @@ export function Showcase() {
   );
 }
 
+const CIRCLES = [
+  { media: MEDIA.hero, pos: "" },
+  { media: MEDIA.showcaseAi, pos: "" },
+  { media: MEDIA.showcasePlaybook, pos: "" },
+  { media: MEDIA.showcaseQuotes, pos: "" },
+] as const;
+
+/** Four grayscale circular crops of real product screenshots around a lime four-point star. */
+export function Collaboration() {
+  return (
+    <section aria-labelledby="flujo-title" className={SECTION}>
+      <div className="grid items-center gap-10 desk:grid-cols-2 desk:gap-16">
+        <div className="relative mx-auto w-full max-w-[420px]">
+          <svg aria-hidden viewBox="0 0 24 24" className="absolute top-1/2 left-1/2 z-0 size-[78%] -translate-x-1/2 -translate-y-1/2 text-lime">
+            <path fill="currentColor" d="M12 0C12 7 17 12 24 12C17 12 12 17 12 24C12 17 7 12 0 12C7 12 12 7 12 0Z" />
+          </svg>
+          <ul className="relative z-10 m-0 grid list-none grid-cols-2 gap-3 p-0">
+            {CIRCLES.map(({ media }) => (
+              <li key={media.alt} className="overflow-hidden rounded-full border-4 border-white bg-paper-2">
+                <MediaSlot {...media} width={1} height={1} className="rounded-full border-0 grayscale" sizes="210px" />
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h2 id="flujo-title" className={`${H2} max-w-[16ch]`}>Del primer mensaje al cobro, en un solo flujo.</h2>
+          <p className="mt-5 mb-0 flex flex-wrap items-center gap-3">
+            <span className={`${DISPLAY} rounded-2xl bg-lime px-3 py-2 text-xl font-bold`}>24/7</span>
+            <span className="text-lg font-medium">IA lista para responder.</span>
+          </p>
+          <p className="mt-5 mb-0 max-w-[44ch] text-ink-3">Conecta tu número, carga tu catálogo y deja que la IA conteste con fuentes mientras tu equipo cierra las ventas.</p>
+          <Link href="/signup" className={`${PILL_OUTLINE} mt-7 w-full justify-between text-ink hover:bg-ink/5 sm:w-auto sm:min-w-[300px]`}>
+            Crear cuenta gratis
+            <ArrowUpRight aria-hidden className="size-5" />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const DIFFERENTIATORS = [
   { icon: BookOpenCheck, title: "La IA solo responde con fuentes", text: "Toda afirmación de precio, stock o plazo lleva cita a tu catálogo. Sin cita, la conversación pasa a una persona." },
   { icon: WalletCards, title: "Pagos verificados, no supuestos", text: "Un pago es pagado por confirmación del proveedor o conciliación. Una foto de comprobante nunca basta." },
@@ -163,16 +208,16 @@ const DIFFERENTIATORS = [
 export function Differentiators() {
   return (
     <section id="diferenciales" aria-labelledby="diferenciales-title" className={SECTION}>
-      <div className="rounded-[28px] bg-ink px-[clamp(20px,5vw,64px)] py-[clamp(36px,6vw,72px)] text-white">
+      <div className="rounded-[32px] bg-ink px-[clamp(20px,5vw,64px)] py-[clamp(36px,6vw,72px)] text-white">
         <header className="mb-8 max-w-[60ch]">
           <p className="m-0 mb-2 text-sm font-bold tracking-wide text-lime uppercase">Por qué confiar</p>
-          <h2 id="diferenciales-title" className={H2}>Automatiza sin arriesgar la palabra de tu negocio</h2>
+          <h2 id="diferenciales-title" className={H2}>Automatiza sin arriesgar la palabra de tu negocio<span className="text-lime">.</span></h2>
         </header>
         <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 md:grid-cols-3">
           {DIFFERENTIATORS.map(({ icon: Icon, title, text }) => (
-            <li key={title} className="flex flex-col gap-3 rounded-[22px] border border-ink-4 bg-ink-2 p-6">
+            <li key={title} className="flex flex-col gap-3 rounded-[24px] border border-ink-4 bg-ink-2 p-6">
               <span className="grid size-12 place-items-center rounded-2xl bg-lime text-ink"><Icon aria-hidden className="size-6" /></span>
-              <h3 className="m-0 text-[18px]">{title}</h3>
+              <h3 className={`${DISPLAY} m-0 text-[17px] font-semibold`}>{title}</h3>
               <p className="m-0 text-subtle">{text}</p>
             </li>
           ))}
@@ -192,12 +237,12 @@ const STEPS = [
 export function HowItWorks() {
   return (
     <section id="como-funciona" aria-labelledby="como-title" className={SECTION}>
-      <Heading id="como-title" eyebrow="Cómo funciona" title="Listo para atender en cuatro pasos" />
+      <Heading id="como-title" title="Listo para atender en cuatro pasos." />
       <ol className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 desk:grid-cols-4">
         {STEPS.map(({ title, text }, index) => (
           <li key={title} className={CARD}>
-            <span aria-hidden className="grid size-10 place-items-center rounded-full bg-ink font-extrabold text-lime">{index + 1}</span>
-            <h3 className="m-0 text-[18px]"><span className="sr-only">Paso {index + 1}: </span>{title}</h3>
+            <span aria-hidden className={`${DISPLAY} grid size-11 place-items-center rounded-full bg-ink font-bold text-lime`}>{index + 1}</span>
+            <h3 className={`${DISPLAY} m-0 text-base font-semibold`}><span className="sr-only">Paso {index + 1}: </span>{title}</h3>
             <p className="m-0 text-ink-3">{text}</p>
           </li>
         ))}
@@ -209,8 +254,49 @@ export function HowItWorks() {
 export function DemoVideo() {
   return (
     <section id="demo" aria-labelledby="demo-title" className={SECTION}>
-      <Heading id="demo-title" eyebrow="Demo" title="Míralo en acción" lead="De un mensaje de WhatsApp a un presupuesto cobrado, todo conectado en un solo flujo." />
-      <MediaSlot {...MEDIA.demoVideo} className="mx-auto max-w-[1000px] border-ink-4 shadow-[0_0_80px_-24px_rgba(210,243,76,0.5)]" sizes="(min-width: 1100px) 1000px, 100vw" />
+      <Heading id="demo-title" title="Míralo en acción." lead="De un mensaje de WhatsApp a un presupuesto cobrado, todo conectado en un solo flujo." />
+      <MediaSlot {...MEDIA.demoVideo} className="mx-auto max-w-[1000px] rounded-[32px] border-ink-4 shadow-[0_0_80px_-24px_rgba(18,51,216,0.5)]" sizes="(min-width: 1100px) 1000px, 100vw" />
+    </section>
+  );
+}
+
+const NEEDS = ["Responder más rápido", "Cotizar desde el chat", "Cobrar con pago verificado", "Ordenar al equipo", "Controlar lo que dice la IA"] as const;
+const QUOTE_STEPS = [
+  { label: "Enviado", active: false },
+  { label: "Aceptado", active: true },
+  { label: "Pagado", active: false },
+] as const;
+
+/** Outlined chips next to a lime-ringed grayscale circle with a black "Presupuesto aceptado" card. */
+export function LookingTo() {
+  return (
+    <section aria-labelledby="necesitas-title" className={SECTION}>
+      <div className="grid items-center gap-10 desk:grid-cols-2 desk:gap-16">
+        <div>
+          <h2 id="necesitas-title" className={`${H2} max-w-[14ch]`}>¿Qué quieres resolver?</h2>
+          <p className="mt-4 mb-0 max-w-[40ch] text-ink-3">Conecta tu WhatsApp y ordena la conversación, el presupuesto y el cobro en un mismo lugar.</p>
+          <ul className="m-0 mt-6 flex list-none flex-wrap gap-2 p-0">
+            {NEEDS.map((n) => (
+              <li key={n} className="rounded-full border border-ink px-5 py-2.5 text-[17px] font-medium">{n}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="relative mx-auto w-full max-w-[420px] pb-10">
+          <div className="rounded-full bg-lime p-3">
+            <div className="overflow-hidden rounded-full border-4 border-white">
+              <MediaSlot {...MEDIA.showcaseQuotes} width={1} height={1} className="rounded-full border-0 grayscale" sizes="420px" />
+            </div>
+          </div>
+          <div className="absolute right-0 bottom-0 w-[min(220px,70%)] rounded-2xl bg-ink p-4 text-white shadow-xl">
+            <p className="m-0 mb-3 text-xs font-bold tracking-[0.2em] uppercase">Presupuesto aceptado</p>
+            <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm font-semibold">
+              {QUOTE_STEPS.map(({ label, active }) => (
+                <li key={label} className={`rounded-md px-2 py-1 ${active ? "bg-lime text-ink" : "bg-white/10"}`}>{label}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -222,7 +308,7 @@ export function Proof() {
   if (logos.length === 0 && testimonials.length === 0) return null;
   return (
     <section aria-labelledby="clientes-title" className={SECTION}>
-      <Heading id="clientes-title" eyebrow="Clientes" title="Negocios que ya venden con CRMWSP" />
+      <Heading id="clientes-title" title="Negocios que ya venden con CRMWSP." />
       {logos.length > 0 ? (
         <ul className="m-0 mb-6 grid list-none grid-cols-2 gap-3 p-0 sm:grid-cols-3 desk:grid-cols-5">
           {logos.map((logo) => (
@@ -233,10 +319,10 @@ export function Proof() {
       {testimonials.length > 0 ? (
         <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 md:grid-cols-3">
           {testimonials.map((t) => (
-            <li key={t.name + t.quote} className="flex flex-col gap-4 rounded-[22px] border border-line bg-white p-6">
+            <li key={t.name + t.quote} className="flex flex-col gap-4 rounded-[28px] border border-line bg-white p-6">
               <blockquote className="m-0 text-ink-3">{t.quote}</blockquote>
               <div className="mt-auto flex items-center gap-3">
-                {t.avatar.src ? <div className="w-14 shrink-0"><MediaSlot {...t.avatar} className="rounded-full" sizes="56px" /></div> : null}
+                {t.avatar.src ? <div className="w-14 shrink-0"><MediaSlot {...t.avatar} className="rounded-full grayscale" sizes="56px" /></div> : null}
                 <div>
                   <p className="m-0 font-semibold">{t.name}</p>
                   <p className="m-0 text-sm text-muted">{t.role}</p>
@@ -255,9 +341,9 @@ export function PricingTeaser() {
   const published = !PRICING_TEASER.from.includes("[") && !PRICING_TEASER.note.includes("[");
   return (
     <section id="precios" aria-labelledby="precios-title" className={SECTION}>
-      <div className="flex flex-col items-start gap-4 rounded-[28px] bg-lime-soft p-[clamp(24px,5vw,56px)]">
-        <p className="m-0 text-sm font-bold tracking-wide text-ink-3 uppercase">Precios</p>
-        <h2 id="precios-title" className={H2}>{published ? PRICING_TEASER.from : "Empieza gratis y elige tu plan cuando lo necesites"}</h2>
+      <div className="flex flex-col items-start gap-4 rounded-[32px] border border-line bg-white p-[clamp(24px,5vw,56px)]">
+        <p className="m-0 rounded-full bg-lime px-3 py-1 text-sm font-bold">Precios</p>
+        <h2 id="precios-title" className={`${H2} max-w-[24ch]`}>{published ? PRICING_TEASER.from : "Empieza gratis y elige tu plan cuando lo necesites."}</h2>
         <p className="m-0 max-w-[60ch] text-lg text-ink-3">
           {published ? PRICING_TEASER.note : "Crea tu cuenta, conecta tu WhatsApp y revisa los planes dentro de la app. Puedes cancelar en cualquier momento."}
         </p>
@@ -282,8 +368,8 @@ const FAQ = [
 export function Faq() {
   return (
     <section id="preguntas" aria-labelledby="preguntas-title" className={SECTION}>
-      <Heading id="preguntas-title" eyebrow="Dudas" title="Preguntas frecuentes" />
-      <div className="rounded-[22px] bg-white px-6 py-2"><Accordion items={FAQ} /></div>
+      <Heading id="preguntas-title" title="Preguntas frecuentes." />
+      <div className="rounded-[28px] bg-white px-6 py-2"><Accordion items={FAQ} /></div>
     </section>
   );
 }
@@ -291,20 +377,15 @@ export function Faq() {
 export function FinalCta() {
   return (
     <section aria-labelledby="cta-title" className={SECTION}>
-      <div className="relative overflow-hidden rounded-[28px] bg-ink px-[clamp(20px,5vw,64px)] py-[clamp(36px,6vw,72px)] text-white">
-        <div aria-hidden className="pointer-events-none absolute -right-24 -bottom-40 size-[460px] rounded-full bg-lime/15 blur-[110px]" />
-        <div className="relative">
-          <BookOpenCheck aria-hidden className="mb-4 size-8 text-lime" />
-          <h2 id="cta-title" className={`${H2} max-w-[20ch]`}>Que ningún mensaje se quede sin respuesta</h2>
-          <p className="mt-4 mb-0 max-w-[52ch] text-lg text-subtle">Conecta tu WhatsApp, carga tu catálogo y empieza a atender con tu equipo y la IA.</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/signup" className={buttonClasses("accent", "", "lg")}>
-              Crear cuenta gratis
-              <ArrowRight aria-hidden className="size-5" />
-            </Link>
-            <Link href="/login" className={buttonClasses("outline", "border-white bg-transparent text-white hover:bg-ink-2", "lg")}>Ingresar</Link>
-          </div>
+      <div className="flex flex-col gap-6 rounded-[32px] bg-lime p-[clamp(24px,5vw,56px)] text-ink sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 id="cta-title" className={`${H2} max-w-[16ch]`}>Que ningún mensaje se quede sin respuesta.</h2>
+          <p className="mt-4 mb-0 max-w-[44ch]">Conecta tu WhatsApp, carga tu catálogo y empieza a atender con tu equipo y la IA.</p>
+          <p className="mt-3 mb-0 text-sm">¿Ya tienes cuenta? <Link href="/login" className="font-bold text-ink underline underline-offset-4">Ingresar</Link></p>
         </div>
+        <Link href="/signup" aria-label="Crear cuenta gratis" className="grid size-20 shrink-0 place-items-center rounded-2xl border-2 border-ink text-ink no-underline transition hover:bg-ink hover:text-lime">
+          <ArrowUpRight aria-hidden className="size-10" />
+        </Link>
       </div>
     </section>
   );

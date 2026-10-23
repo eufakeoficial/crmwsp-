@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { Hero } from "@/components/landing/Hero";
 import { LandingStyles } from "@/components/landing/LandingStyles";
-import { DemoVideo, Differentiators, Faq, Features, FinalCta, HowItWorks, PricingTeaser, ProblemSolution, Proof, Showcase, TrustStrip } from "@/components/landing/Sections";
+import { DemoVideo, Collaboration, Differentiators, Faq, Features, FinalCta, HowItWorks, LookingTo, PricingTeaser, ProblemSolution, Proof, Showcase, TrustStrip } from "@/components/landing/Sections";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 
@@ -17,12 +17,14 @@ export default async function HomePage() {
       <main>
         <Hero />
         <TrustStrip />
-        <ProblemSolution />
         <Features />
+        <ProblemSolution />
         <Showcase />
+        <Collaboration />
         <Differentiators />
         <HowItWorks />
         <DemoVideo />
+        <LookingTo />
         <Proof />
         <PricingTeaser />
         <Faq />
