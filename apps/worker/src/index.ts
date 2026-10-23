@@ -20,6 +20,12 @@ import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotification
 import { OWNER_MODE_QUEUE_NAME, createOwnerInterpreter, createOwnerModeWorker, createOwnerSender } from "./owner-mode/index.js";
 import { WEBHOOK_QUEUE_NAME, createWebhookSender, createWebhookWorker, scheduleWebhookTick } from "./webhooks/index.js";
 import { ORDER_EXTRACTION_QUEUE_NAME, createOrderExtractionWorker } from "./order-extraction/index.js";
+import { NowPaymentsProvider, nowPaymentsOptionsFromEnv } from "@crmwsp/payments";
+import {
+  SUBSCRIPTION_BILLING_QUEUE_NAME,
+  createSubscriptionBillingWorker,
+  scheduleSubscriptionReconcileTick,
+} from "./subscription-billing/index.js";
 
 export * from "./queue.js";
 export * from "./processors.js";
@@ -36,6 +42,7 @@ export * from "./webhooks/index.js";
 export * from "./broadcasts/index.js";
 export * from "./owner-mode/index.js";
 export * from "./order-extraction/index.js";
+export * from "./subscription-billing/index.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -88,6 +95,25 @@ function main(): void {
   worker.on("failed", (job, err) =>
     logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
   );
+
+  // SaaS subscription settlement (NOWPayments, ADR 0013): needs no master keys. Without
+  // NOWPAYMENTS_API_KEY, IPN settlement still runs and the reconciliation tick is a no-op.
+  const nowPaymentsOptions = nowPaymentsOptionsFromEnv(process.env);
+  const subscriptionQueue = new Queue(SUBSCRIPTION_BILLING_QUEUE_NAME, { connection: createRedis(redisUrl) });
+  const subscriptionWorker = createSubscriptionBillingWorker({
+    connection: createRedis(redisUrl),
+    db: db.db,
+    provider: nowPaymentsOptions ? new NowPaymentsProvider(nowPaymentsOptions) : null,
+    logger,
+  });
+  subscriptionWorker.on("failed", (job, err) =>
+    logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
+  );
+  if (nowPaymentsOptions) {
+    void scheduleSubscriptionReconcileTick(subscriptionQueue).catch((err: unknown) =>
+      logger.warn(`subscription reconcile scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
+  }
 
   // Outbound sends need the master keys to decrypt BSP credentials. Without them the
   // inbound worker still runs; send-message jobs wait in the queue.
@@ -262,7 +288,7 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), templateSyncWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
+    void Promise.allSettled([worker.close(), subscriptionWorker.close(), subscriptionQueue.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), templateSyncWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
       .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), metaAdsQueue?.close(), templateSyncQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close(), orderExtractionQueue.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));

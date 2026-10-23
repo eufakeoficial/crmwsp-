@@ -71,6 +71,10 @@ export type PlatformAuditEvent = z.infer<typeof platformAuditEventSchema>;
 export const subscriptionPaymentMethodSchema = z.enum(["transfer", "cash", "card_manual", "mercadopago", "stripe"]);
 export type SubscriptionPaymentMethod = z.infer<typeof subscriptionPaymentMethodSchema>;
 
+/** Methods of listed payments: the manual ones plus `nowpayments` (settled crypto charges, ADR 0013). */
+export const subscriptionPaymentListedMethodSchema = z.enum(["transfer", "cash", "card_manual", "mercadopago", "stripe", "nowpayments"]);
+export type SubscriptionPaymentListedMethod = z.infer<typeof subscriptionPaymentListedMethodSchema>;
+
 export const subscriptionPaymentSchema = z.object({
   id: uuidSchema,
   tenantId: uuidSchema,
@@ -79,7 +83,7 @@ export const subscriptionPaymentSchema = z.object({
   currency: z.string(),
   periodStart: isoDateSchema,
   periodEnd: isoDateSchema,
-  method: subscriptionPaymentMethodSchema,
+  method: subscriptionPaymentListedMethodSchema,
   reference: z.string().nullable(),
   notes: z.string().nullable(),
   recordedByEmail: z.string().nullable(),
@@ -284,3 +288,34 @@ export const platformAuditPageSchema = z.object({
   total: z.number().int(),
 });
 export type PlatformAuditPage = z.infer<typeof platformAuditPageSchema>;
+
+/** `GET /platform/subscription-charges`: NOWPayments invoices of every tenant (ADR 0013). */
+export const platformSubscriptionChargeQuerySchema = z.object({
+  tenantId: uuidSchema.optional(),
+  status: z.enum(["pending", "paid", "failed", "expired", "refunded"]).optional(),
+});
+export type PlatformSubscriptionChargeQuery = z.infer<typeof platformSubscriptionChargeQuerySchema>;
+
+export const platformSubscriptionChargeSchema = z.object({
+  id: uuidSchema,
+  tenantId: uuidSchema,
+  tenantName: z.string(),
+  plan: platformPlanIdSchema,
+  priceAmount: z.string(),
+  priceCurrency: z.string(),
+  payCurrency: z.string(),
+  payAmount: z.string().nullable(),
+  actuallyPaid: z.string().nullable(),
+  providerPaymentId: z.string().nullable(),
+  status: z.enum(["pending", "paid", "failed", "expired", "refunded"]),
+  providerStatus: z.string().nullable(),
+  verifiedBy: z.enum(["webhook", "reconciliation"]).nullable(),
+  paidAt: isoDateTimeSchema.nullable(),
+  periodStart: isoDateSchema.nullable(),
+  periodEnd: isoDateSchema.nullable(),
+  createdAt: isoDateTimeSchema,
+});
+export type PlatformSubscriptionCharge = z.infer<typeof platformSubscriptionChargeSchema>;
+
+export const platformSubscriptionChargeListSchema = z.object({ items: z.array(platformSubscriptionChargeSchema) });
+export type PlatformSubscriptionChargeList = z.infer<typeof platformSubscriptionChargeListSchema>;

@@ -8,6 +8,8 @@ import {
   type PlatformChannel,
   type PlatformChannelListQuery,
   type PlatformPlans,
+  type PlatformSubscriptionChargeList,
+  type PlatformSubscriptionChargeQuery,
   type PlatformUsage,
   type PlatformUsageQuery,
   type PlatformUser,
@@ -177,6 +179,10 @@ export class PlatformService {
 
   listChannels(actor: PlatformActor, q: PlatformChannelListQuery): Promise<PlatformChannel[]> {
     return guarded(() => this.repo.listChannels(actor.userId, q.status ?? null));
+  }
+
+  async listSubscriptionCharges(actor: PlatformActor, q: PlatformSubscriptionChargeQuery): Promise<PlatformSubscriptionChargeList> {
+    return { items: await guarded(() => this.repo.listSubscriptionCharges(actor.userId, q)) };
   }
 
   async plans(actor: PlatformActor): Promise<PlatformPlans> {

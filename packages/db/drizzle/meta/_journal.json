@@ -399,6 +399,20 @@
       "when": 1792570030000,
       "tag": "0061_channel_partner_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792580000000,
+      "tag": "0062_nowpayments_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792580010000,
+      "tag": "0063_rls_subscription_charges",
+      "breakpoints": true
     }
   ]
 }

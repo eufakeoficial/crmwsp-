@@ -3,6 +3,8 @@ import {
   type PlatformAuditPage,
   type PlatformChannelList,
   type PlatformPlans,
+  type PlatformSubscriptionChargeList,
+  platformSubscriptionChargeQuerySchema,
   type PlatformUsage,
   type PlatformUser,
   type PlatformUserList,
@@ -108,6 +110,12 @@ export class PlatformController {
   @Get("channels")
   async channels(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Query() query: unknown): Promise<PlatformChannelList> {
     return { items: await this.platform.listChannels(actorOf(user, req), parseOrThrow(platformChannelListQuerySchema, query)) };
+  }
+
+  /** NOWPayments subscription charges (crypto, ADR 0013), all states. */
+  @Get("subscription-charges")
+  subscriptionCharges(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Query() query: unknown): Promise<PlatformSubscriptionChargeList> {
+    return this.platform.listSubscriptionCharges(actorOf(user, req), parseOrThrow(platformSubscriptionChargeQuerySchema, query));
   }
 
   @Get("plans")

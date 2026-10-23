@@ -16,11 +16,13 @@ vi.mock("@crmwsp/db", () => ({
   readPlanUsage: vi.fn(async () => snapshot),
   consumeUsage: vi.fn(async () => null),
   withTenant: vi.fn(),
+  sql: () => ({}),
 }));
 
 const { PlanLimitsService } = await import("./plan-limits.service.js");
 const svc = new PlanLimitsService({} as DbHandle);
-const tx = {} as Transaction;
+let paidUntil: string | null = null;
+const tx = { execute: vi.fn(async () => [{ d: paidUntil }]) } as unknown as Transaction;
 const T = "00000000-0000-4000-8000-000000000001";
 
 describe("PlanLimitsService", () => {
@@ -62,10 +64,23 @@ describe("PlanLimitsService", () => {
     expect((err as PlanLimitExceededError).details).toMatchObject({ limit: 10_000 });
   });
 
+  it("a subscription lapsed past the grace period restricts every limit (nothing deleted)", async () => {
+    paidUntil = "2020-01-01";
+    try {
+      const err = await svc.assert(T, "ai_messages", 1, tx).catch((e: unknown) => e);
+      expect((err as PlanLimitExceededError).details).toMatchObject({ key: "ai_messages", reason: "not_included" });
+      const r = await svc.snapshot(tx);
+      expect(r.subscription).toMatchObject({ access: "restricted", paidUntil: "2020-01-01" });
+    } finally {
+      paidUntil = null;
+    }
+  });
+
   it("snapshot exposes plan, period and usage without a billing provider", async () => {
     const r = await svc.snapshot(tx);
     expect(r.plan).toMatchObject({ id: "start", priceMonthlyUsd: 49 });
     expect(r.billingProvider).toBe("none");
+    expect(r.subscription).toMatchObject({ access: "unbilled", paidUntil: null });
     expect(r.usage.find((u) => u.key === "ai_messages")).toMatchObject({ monthly: true, limit: 2_000, used: 1_999 });
   });
 });

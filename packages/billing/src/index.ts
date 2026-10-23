@@ -2,7 +2,7 @@
  * Plans and usage limits (pure domain, no I/O). Plan definitions mirror the landing pricing
  * section (apps/web/src/components/landing/PricingSection.tsx): keep both in sync.
  *
- * Subscription charging is OUT OF SCOPE: no payment provider bills the plan yet. The plan of a
+ * Subscription charging lives in ./subscription.ts (NOWPayments, ADR 0013). The plan of a
  * tenant is set by the platform (system/migrator role, never the app role) in `tenant_plans`
  * (migration 0023) and only enforced here.
  */
@@ -130,3 +130,5 @@ export function usagePeriod(at: Date, timeZone = "UTC"): string {
   const m = parts.find((p) => p.type === "month")?.value ?? "01";
   return `${y}-${m}`;
 }
+
+export * from "./subscription.js";
