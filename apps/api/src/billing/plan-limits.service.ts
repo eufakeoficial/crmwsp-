@@ -1,8 +1,30 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { checkLimit, isMonthlyLimit, resolveEffectivePlan, summarizeUsage, type LimitKey, type MonthlyLimitKey } from "@crmwsp/billing";
+import {
+  SUBSCRIPTION_GRACE_DAYS,
+  applySubscriptionAccess,
+  checkLimit,
+  isMonthlyLimit,
+  resolveEffectivePlan,
+  subscriptionAccess,
+  summarizeUsage,
+  type LimitKey,
+  type MonthlyLimitKey,
+  type PlanDefinition,
+} from "@crmwsp/billing";
 import { PlanLimitExceededError, type BillingPlanResponse } from "@crmwsp/contracts";
-import { consumeUsage, readPlanUsage, withTenant, type DbHandle, type PlanUsageSnapshot, type Transaction } from "@crmwsp/db";
+import { consumeUsage, readPlanUsage, sql, withTenant, type DbHandle, type PlanUsageSnapshot, type Transaction } from "@crmwsp/db";
 import { DB_HANDLE } from "../common/http.js";
+
+/** Last paid day of the current tenant (`tenant_subscription_paid_until`, 0061); null = never paid. */
+export async function readPaidUntil(tx: Transaction): Promise<string | null> {
+  const [row] = await tx.execute<{ d: string | null }>(sql`select public.tenant_subscription_paid_until()::text as d`);
+  return row?.d ?? null;
+}
+
+/** Plan + admin overrides, then restricted to nothing when the subscription lapsed past grace. */
+function effectivePlan(s: PlanUsageSnapshot, paidUntil: string | null): PlanDefinition {
+  return applySubscriptionAccess(resolveEffectivePlan(s.plan, s.limitsOverride), subscriptionAccess(paidUntil, new Date()));
+}
 
 function usedByKey(s: PlanUsageSnapshot): Record<LimitKey, number> {
   return {
@@ -29,8 +51,8 @@ export class PlanLimitsService {
 
   /** Throws `PlanLimitExceededError` (402) if `amount` more units would exceed the plan. Consumes nothing. */
   async assert(tenantId: string, key: LimitKey, amount = 1, tx?: Transaction): Promise<void> {
-    const snapshot = await this.run(tenantId, tx, readPlanUsage);
-    const plan = resolveEffectivePlan(snapshot.plan, snapshot.limitsOverride);
+    const { snapshot, paidUntil } = await this.run(tenantId, tx, async (t) => ({ snapshot: await readPlanUsage(t), paidUntil: await readPaidUntil(t) }));
+    const plan = effectivePlan(snapshot, paidUntil);
     const result = checkLimit(plan, key, usedByKey(snapshot)[key], amount);
     if (!result.allowed) {
       throw new PlanLimitExceededError(`Plan ${plan.name}: ${key} ${result.reason}`, {
@@ -46,7 +68,7 @@ export class PlanLimitsService {
   async consume(tenantId: string, key: MonthlyLimitKey, amount: number, tx?: Transaction): Promise<number> {
     return this.run(tenantId, tx, async (t) => {
       const usage = await readPlanUsage(t);
-      const plan = resolveEffectivePlan(usage.plan, usage.limitsOverride);
+      const plan = effectivePlan(usage, await readPaidUntil(t));
       const limit = plan.limits[key];
       const total = await consumeUsage(t, tenantId, key, amount, limit);
       if (total === null) {
@@ -60,13 +82,15 @@ export class PlanLimitsService {
 
   async snapshot(tx: Transaction): Promise<BillingPlanResponse> {
     const s = await readPlanUsage(tx);
-    const plan = resolveEffectivePlan(s.plan, s.limitsOverride);
+    const paidUntil = await readPaidUntil(tx);
+    const plan = effectivePlan(s, paidUntil);
     const items = summarizeUsage(plan, usedByKey(s));
     return {
       plan: { id: plan.id, name: plan.name, priceMonthlyUsd: plan.priceMonthlyUsd, priceAnnualUsd: plan.priceAnnualUsd },
       period: s.period,
       usage: items.map((i) => ({ ...i, monthly: isMonthlyLimit(i.key) })),
-      billingProvider: "none",
+      billingProvider: process.env["NOWPAYMENTS_API_KEY"] ? "nowpayments" : "none",
+      subscription: { access: subscriptionAccess(paidUntil, new Date()), paidUntil, graceDays: SUBSCRIPTION_GRACE_DAYS },
     };
   }
 }

@@ -32,3 +32,15 @@ export type {
   MercadoPagoProviderOptions,
   MercadoPagoSignatureInput,
 } from "./mercadopago/provider.js";
+export {
+  NOWPAYMENTS_DEFAULT_BASE_URL,
+  NOWPAYMENTS_DEFAULT_PAY_CURRENCY,
+  NOWPAYMENTS_SIGNATURE_HEADER,
+  NowPaymentsProvider,
+  nowPaymentsOptionsFromEnv,
+  parseNowPaymentsPayment,
+  signNowPaymentsPayload,
+  sortKeysDeep,
+  verifyNowPaymentsSignature,
+} from "./nowpayments/provider.js";
+export type { CreateNowPaymentInput, CreatedNowPayment, NowPaymentsPayment, NowPaymentsProviderOptions } from "./nowpayments/provider.js";

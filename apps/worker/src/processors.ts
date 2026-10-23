@@ -30,6 +30,7 @@ import { contactAutomationsPaused, routeInbound } from "./inbox/routing.js";
 import { STORE_MEDIA_JOB, STORE_MEDIA_JOB_OPTIONS, storeMediaJobId, type StoreMediaJobData } from "./media/job.js";
 import { enqueueOwnerCommand, ownerModeHook } from "./owner-mode/ingest-hook.js";
 import { enqueueOrderExtraction } from "./order-extraction/queue.js";
+import { isSubscriptionRestricted } from "./subscription-billing/index.js";
 
 /** Minimal publisher (ioredis satisfies it). */
 export interface EventPublisher {
@@ -344,7 +345,8 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
         .from(llmConnections)
         .where(and(eq(llmConnections.isActive, true), eq(llmConnections.lastTestOk, true)))
         .limit(1);
-      scheduleAiTurn = Boolean(llm) && !(await isTenantAiPaused(tx));
+      // A subscription lapsed past its grace period (ADR 0013) keeps ingesting but runs no AI.
+      scheduleAiTurn = Boolean(llm) && !(await isTenantAiPaused(tx)) && !(await isSubscriptionRestricted(tx, now));
     }
 
     await markProcessed(tx, eventId);

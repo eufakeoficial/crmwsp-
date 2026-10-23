@@ -219,6 +219,9 @@ importers:
       '@crmwsp/mailer':
         specifier: workspace:*
         version: link:../../packages/mailer
+      '@crmwsp/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       '@crmwsp/whatsapp':
         specifier: workspace:*
         version: link:../../packages/whatsapp

@@ -385,6 +385,20 @@
       "when": 1792570010000,
       "tag": "0059_rls_sales_playbooks",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792580000000,
+      "tag": "0062_nowpayments_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792580010000,
+      "tag": "0063_rls_subscription_charges",
+      "breakpoints": true
     }
   ]
 }
