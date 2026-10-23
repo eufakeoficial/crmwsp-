@@ -427,6 +427,13 @@
       "when": 1792580030000,
       "tag": "0065_subscription_plan_per_period",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792590000000,
+      "tag": "0066_bookings",
+      "breakpoints": true
     }
   ]
 }

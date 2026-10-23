@@ -37,3 +37,4 @@ export * from "./platform.js";
 export * from "./currency-settings.js";
 export * from "./site-content.js";
 export * from "./site-assistant.js";
+export * from "./bookings.js";
