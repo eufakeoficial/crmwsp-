@@ -1,5 +1,5 @@
 import { REACTION_EMOJIS, type Message, type ReactionEmoji } from "@crmwsp/contracts";
-import { AlertCircle, Bot, Check, CheckCheck, Clock, Paperclip, SmilePlus } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, Check, CheckCheck, Clock, Paperclip, SmilePlus } from "lucide-react";
 import { Badge } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatDateTime, formatTime } from "@/lib/format";
@@ -43,6 +43,28 @@ function StatusIcon({ message }: { message: Message }) {
       {icon}
       <span className="sr-only">{label}</span>
     </span>
+  );
+}
+
+/** "Fuente: <title>" chips under an AI reply; the cited excerpt shows in the tooltip. */
+function CitationChips({ message }: { message: Message }) {
+  const citations = message.citations ?? [];
+  if (message.author !== "ai" || citations.length === 0) return null;
+  return (
+    <ul aria-label="Fuentes citadas" className="m-0 flex max-w-[85%] list-none flex-wrap justify-end gap-1 p-0" data-testid="message-citations">
+      {citations.map((c) => (
+        <li key={c.chunkId}>
+          <span
+            tabIndex={0}
+            title={c.excerpt ? `${c.title}: ${c.excerpt}` : c.title}
+            className="inline-flex max-w-full items-center gap-1 rounded-full border border-line bg-white px-2 py-0.5 text-[11px] text-muted"
+          >
+            <BookOpen aria-hidden className="size-3 flex-none" />
+            <span className="truncate">Fuente: {c.title}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -144,6 +166,7 @@ export function MessageBubble({
         </div>
         <ReactionBadge message={message} />
       </div>
+      <CitationChips message={message} />
       {out && message.status === "failed" ? (
         <p role="status" className="m-0 max-w-[85%] px-1 text-xs font-semibold text-danger">
           No se pudo enviar: {deliveryErrorText(message.error)}

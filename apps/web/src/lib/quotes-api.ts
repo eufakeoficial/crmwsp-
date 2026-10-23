@@ -6,6 +6,7 @@ import {
   paymentLinkSchema,
   productSearchListSchema,
   quoteAcceptLinkSchema,
+  quoteActivityResponseSchema,
   quoteListSchema,
   quoteSchema,
 } from "@crmwsp/contracts";
@@ -14,6 +15,8 @@ import { request } from "./api";
 export const quotesApi = {
   list: (status?: QuoteStatus) => request("/quotes", { query: { status }, schema: quoteListSchema }),
   get: (id: string) => request(`/quotes/${id}`, { schema: quoteSchema }),
+  /** Read-only history derived from real timestamps (quote, orders, receipts, payments). */
+  activity: (id: string) => request(`/quotes/${id}/activity`, { schema: quoteActivityResponseSchema }),
   create: (input: CreateQuoteRequest) => request("/quotes", { method: "POST", body: input, schema: quoteSchema }),
   patch: (id: string, input: PatchQuoteRequest) => request(`/quotes/${id}`, { method: "PATCH", body: input, schema: quoteSchema }),
   /** draft -> approved, or pending_approval above the threshold / with discounts. */

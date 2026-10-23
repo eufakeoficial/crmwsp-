@@ -18,3 +18,4 @@ export * from "./owner-mode/index.js";
 export * from "./order-extraction/index.js";
 export * from "./platform/index.js";
 export * from "./sales-playbook/index.js";
+export * from "./quote-activity/index.js";

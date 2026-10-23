@@ -1,5 +1,6 @@
 import { MESSAGE_PREVIEW_MAX, type Conversation, type InboxConversation, type Message } from "@crmwsp/contracts";
-import { asc, attachments, inArray, sql, type Transaction } from "@crmwsp/db";
+import { buildMessageCitations } from "@crmwsp/domain";
+import { aiActions, and, asc, attachments, eq, inArray, knowledgeChunks, knowledgeSources, sql, type Transaction } from "@crmwsp/db";
 
 export type SQL = ReturnType<typeof sql>;
 
@@ -151,7 +152,38 @@ export interface MessageRowLike {
   createdAt: Date;
 }
 
-/** Maps message rows to DTOs, loading their attachments in one query. */
+/**
+ * Citations of AI-sent replies, keyed by outbound message id. The link is the `send_reply`
+ * action whose `result.messageId` is the reply; chunk title/excerpt come from the cited chunk
+ * while it still exists. Everything runs in the caller's tenant transaction (RLS).
+ */
+async function citationsByMessage(tx: Transaction, rows: MessageRowLike[]): Promise<Map<string, Message["citations"]>> {
+  const out = new Map<string, Message["citations"]>();
+  const ids = rows.filter((r) => r.author === "ai" && r.direction === "outbound").map((r) => r.id);
+  if (ids.length === 0) return out;
+  const messageIdOf = sql<string>`${aiActions.result}->>'messageId'`;
+  const actions = await tx
+    .select({ messageId: messageIdOf, citations: aiActions.citations })
+    .from(aiActions)
+    .where(and(eq(aiActions.type, "send_reply"), inArray(messageIdOf, ids)));
+  const chunkIds = [...new Set(actions.flatMap((a) => a.citations.map((c) => c.chunkId)))];
+  const info = new Map<string, { title: string; content: string }>();
+  if (chunkIds.length > 0) {
+    const found = await tx
+      .select({ id: knowledgeChunks.id, content: knowledgeChunks.content, title: knowledgeSources.title })
+      .from(knowledgeChunks)
+      .innerJoin(knowledgeSources, eq(knowledgeSources.id, knowledgeChunks.sourceId))
+      .where(inArray(knowledgeChunks.id, chunkIds));
+    for (const c of found) info.set(c.id, { title: c.title, content: c.content });
+  }
+  for (const a of actions) {
+    const citations = buildMessageCitations(a.citations, info);
+    if (citations.length > 0) out.set(a.messageId, citations);
+  }
+  return out;
+}
+
+/** Maps message rows to DTOs, loading their attachments (and AI citations) in few queries. */
 export async function withAttachments(tx: Transaction, rows: MessageRowLike[]): Promise<Message[]> {
   const ids = rows.map((r) => r.id);
   const atts =
@@ -162,6 +194,7 @@ export async function withAttachments(tx: Transaction, rows: MessageRowLike[]): 
           .from(attachments)
           .where(inArray(attachments.messageId, ids))
           .orderBy(asc(attachments.createdAt), asc(attachments.id));
+  const cited = await citationsByMessage(tx, rows);
   return rows.map((r) => ({
     id: r.id,
     conversationId: r.conversationId,
@@ -186,5 +219,6 @@ export async function withAttachments(tx: Transaction, rows: MessageRowLike[]): 
         storageKey: a.storageKey,
         transcript: a.transcript,
       })),
+    ...(cited.has(r.id) ? { citations: cited.get(r.id) } : {}),
   }));
 }
