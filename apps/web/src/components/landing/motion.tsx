@@ -1,21 +1,23 @@
 "use client";
 
 import {
-  domAnimation, LazyMotion, m, MotionConfig, useInView, useReducedMotion, useScroll, useTransform,
-  type HTMLMotionProps, type Variants,
+  LazyMotion, m, MotionConfig, useInView, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform,
+  type HTMLMotionProps, type MotionValue, type Variants,
 } from "motion/react";
 import Link from "next/link";
-import { useEffect, useRef, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, type PointerEvent, type ReactNode } from "react";
 
-/** Short, ease-out. Only opacity/transform are animated (GPU, no layout shift). */
+/** Short, ease-out. Only opacity/transform/filter are animated (GPU, no layout shift). */
 const EASE = [0.2, 0.7, 0.2, 1] as const;
 const VIEWPORT = { once: true, amount: 0.15 } as const;
 const SPRING = { type: "spring", stiffness: 140, damping: 18, mass: 0.9 } as const;
 
+const loadFeatures = () => import("./motion-features").then((mod) => mod.default);
+
 /** Content stays visible without JS (see LandingStyles noscript rule); reduced motion drops movement. */
 export function LandingMotion({ children }: { children: ReactNode }) {
   return (
-    <LazyMotion features={domAnimation} strict>
+    <LazyMotion features={loadFeatures} strict>
       <MotionConfig reducedMotion="user">{children}</MotionConfig>
     </LazyMotion>
   );
@@ -24,26 +26,102 @@ export function LandingMotion({ children }: { children: ReactNode }) {
 type Tag = "dl" | "div" | "li" | "p" | "header" | "ul" | "ol" | "section" | "span";
 const tagOf = (as: Tag) => m[as] as unknown as typeof m.div;
 
+/** Pointer-follow 3D tilt (mouse only, off under reduced motion). Returns style + handlers for a motion element. */
+function useTilt(max: number) {
+  const reduce = useReducedMotion();
+  const rx = useMotionValue(0);
+  const ry = useMotionValue(0);
+  const cfg = { stiffness: 160, damping: 20, mass: 0.6 };
+  const rotateX = useSpring(rx, cfg);
+  const rotateY = useSpring(ry, cfg);
+  return {
+    style: { rotateX, rotateY, transformPerspective: 900 },
+    onPointerMove(e: PointerEvent<HTMLElement>) {
+      if (reduce || e.pointerType !== "mouse") return;
+      const r = e.currentTarget.getBoundingClientRect();
+      ry.set(((e.clientX - r.left) / r.width - 0.5) * 2 * max);
+      rx.set(-((e.clientY - r.top) / r.height - 0.5) * 2 * max);
+    },
+    onPointerLeave() {
+      rx.set(0);
+      ry.set(0);
+    },
+  };
+}
+
+/** Pointer-attraction for primary CTAs (mouse only, off under reduced motion). */
+function useMagnet(strength: number) {
+  const reduce = useReducedMotion();
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const cfg = { stiffness: 220, damping: 18, mass: 0.4 };
+  const sx = useSpring(x, cfg);
+  const sy = useSpring(y, cfg);
+  return {
+    style: { x: sx, y: sy },
+    onPointerMove(e: PointerEvent<HTMLElement>) {
+      if (reduce || e.pointerType !== "mouse") return;
+      const r = e.currentTarget.getBoundingClientRect();
+      x.set((e.clientX - (r.left + r.width / 2)) * strength);
+      y.set((e.clientY - (r.top + r.height / 2)) * strength);
+    },
+    onPointerLeave() {
+      x.set(0);
+      y.set(0);
+    },
+  };
+}
+
+type From = "up" | "left" | "right" | "scale";
+
 interface RevealProps extends Omit<HTMLMotionProps<"div">, "ref"> {
   as?: Tag;
   delay?: number;
   /** Spring instead of tween: for panels/cards "rising over" the blue. */
   spring?: boolean;
   y?: number;
+  /** Entry direction. `scale` grows from 94%. */
+  from?: From;
+  /** Blur-to-sharp on entry (filter only). */
+  blur?: boolean;
+  /** Subtle 3D tilt following the pointer (mouse only). */
+  tilt?: boolean;
 }
 
-/** Fade + rise when scrolled into view (once). */
-export function Reveal({ as = "div", delay = 0, spring = false, y = 20, ...rest }: RevealProps) {
+const SIDE = 36;
+
+function offsetFor(from: From, y: number) {
+  if (from === "left") return { x: -SIDE, y: 0 };
+  if (from === "right") return { x: SIDE, y: 0 };
+  if (from === "scale") return { scale: 0.94, y: Math.min(y, 16) };
+  return { y };
+}
+
+/** Fade + move in when scrolled into view (once). Opacity/transform/filter only. */
+export function Reveal({ as = "div", delay = 0, spring = false, y = 20, from = "up", blur = false, tilt = false, style, ...rest }: RevealProps) {
   const Tag = tagOf(as);
+  const t = useTilt(5);
   return (
     <Tag
       data-lp=""
-      initial={{ opacity: 0, y }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, ...offsetFor(from, y), ...(blur ? { filter: "blur(8px)" } : {}) }}
+      whileInView={{ opacity: 1, x: 0, y: 0, scale: 1, ...(blur ? { filter: "blur(0px)" } : {}) }}
       viewport={VIEWPORT}
-      transition={spring ? { ...SPRING, delay } : { duration: 0.6, ease: EASE, delay }}
+      transition={spring ? { ...SPRING, delay } : { duration: 0.7, ease: EASE, delay }}
+      {...(tilt ? { style: { ...t.style, ...style } } : style ? { style } : {})}
+      {...(tilt ? { onPointerMove: t.onPointerMove, onPointerLeave: t.onPointerLeave } : {})}
       {...rest}
     />
+  );
+}
+
+/** Wrapper that tilts its content towards the pointer. */
+export function Tilt({ children, className, max = 6 }: { children: ReactNode; className?: string | undefined; max?: number }) {
+  const t = useTilt(max);
+  return (
+    <m.div className={className} style={t.style} onPointerMove={t.onPointerMove} onPointerLeave={t.onPointerLeave}>
+      {children}
+    </m.div>
   );
 }
 
@@ -119,24 +197,28 @@ export function CountUp({ to, suffix = "", className }: { to: number; suffix?: s
   return <span ref={ref} className={className} style={{ fontVariantNumeric: "tabular-nums" }}>{to}{suffix}</span>;
 }
 
-/** Headline: words rise in sequence; the trailing lime period pops last. */
+/**
+ * Headline: words sharpen from blur and rise in sequence; the trailing lime period pops last.
+ * The hidden state keeps 55% opacity so the server-rendered text is already a paint/LCP
+ * candidate before hydration (opacity:0 text would delay LCP until JS runs).
+ */
 export function HeroTitle({ id, className, text }: { id: string; className?: string; text: string }) {
   const words = text.split(" ");
   const word = (i: number): Variants => ({
-    hidden: { opacity: 0, y: "0.4em" },
-    show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: EASE, delay: 0.08 * i } },
+    hidden: { opacity: 0.55, y: "0.35em", filter: "blur(10px)" },
+    show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.8, ease: EASE, delay: 0.09 * i } },
   });
   return (
     <m.h1 id={id} className={className} initial="hidden" animate="show">
       {words.map((w, i) => (
         <m.span key={`${w}-${i}`} data-lp="" variants={word(i)} className="inline-block">
-          {w}{i < words.length - 1 ? " " : ""}
+          {w}{i < words.length - 1 ? " " : ""}
         </m.span>
       ))}
       <m.span
         data-lp=""
         className="inline-block text-lime"
-        variants={{ hidden: { opacity: 0, scale: 0 }, show: { opacity: 1, scale: 1, transition: { type: "spring", stiffness: 420, damping: 12, delay: 0.08 * words.length + 0.1 } } }}
+        variants={{ hidden: { opacity: 0, scale: 0 }, show: { opacity: 1, scale: 1, transition: { type: "spring", stiffness: 420, damping: 12, delay: 0.09 * words.length + 0.15 } } }}
       >
         .
       </m.span>
@@ -150,9 +232,9 @@ export function CheckRow({ highlight, index, children }: { highlight: boolean; i
     <m.li
       data-lp=""
       className={`relative rounded-md px-2 py-1.5 ${highlight ? "font-bold text-ink" : "text-white/90"}`}
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.5, ease: EASE, delay: 0.45 + index * 0.08 }}
+      initial={{ opacity: 0, x: -10, filter: "blur(4px)" }}
+      animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+      transition={{ duration: 0.6, ease: EASE, delay: 0.5 + index * 0.09 }}
     >
       {highlight ? (
         <m.span
@@ -161,7 +243,7 @@ export function CheckRow({ highlight, index, children }: { highlight: boolean; i
           className="absolute inset-0 origin-left rounded-md bg-lime"
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
-          transition={{ duration: 0.7, ease: EASE, delay: 0.9 }}
+          transition={{ duration: 0.8, ease: EASE, delay: 0.95 }}
         />
       ) : null}
       <span className="relative flex items-center gap-2">{children}</span>
@@ -185,12 +267,21 @@ export function HeroGlow() {
   );
 }
 
-/** Link whose arrow nudges diagonally on hover/focus. */
+/** Link whose arrow nudges diagonally on hover/focus. `magnetic` adds a soft pull towards the pointer. */
 const MotionLink = m.create(Link);
-interface ArrowLinkProps { href: string; className?: string; "aria-label"?: string; children: ReactNode }
-export function ArrowLink({ children, href, className, "aria-label": ariaLabel }: ArrowLinkProps) {
+interface ArrowLinkProps { href: string; className?: string; "aria-label"?: string; magnetic?: boolean; children: ReactNode }
+export function ArrowLink({ children, href, className, magnetic = false, "aria-label": ariaLabel }: ArrowLinkProps) {
+  const mag = useMagnet(0.28);
   return (
-    <MotionLink href={href} {...(className ? { className } : {})} {...(ariaLabel ? { "aria-label": ariaLabel } : {})} whileHover="hover" whileFocus="hover" whileTap={{ scale: 0.97 }}>
+    <MotionLink
+      href={href}
+      {...(className ? { className } : {})}
+      {...(ariaLabel ? { "aria-label": ariaLabel } : {})}
+      {...(magnetic ? { style: mag.style, onPointerMove: mag.onPointerMove, onPointerLeave: mag.onPointerLeave } : {})}
+      whileHover="hover"
+      whileFocus="hover"
+      whileTap={{ scale: 0.97 }}
+    >
       {children}
     </MotionLink>
   );
@@ -233,4 +324,79 @@ export function QuoteSteps({ steps }: { steps: readonly { label: string; active:
       ))}
     </m.ul>
   );
+}
+
+const StepsContext = createContext<MotionValue<number> | null>(null);
+
+/** Wraps the "cómo funciona" list: a lime bar fills as the section scrolls through, lighting each step. */
+export function StepsProgress({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start 85%", "end 60%"] });
+  const progress = useSpring(scrollYProgress, { stiffness: 120, damping: 28, mass: 0.5 });
+  return (
+    <StepsContext.Provider value={progress}>
+      <div ref={ref}>
+        <div aria-hidden className="mb-5 h-1 overflow-hidden rounded-full bg-line">
+          <m.div className="h-full origin-left rounded-full bg-lime" style={{ scaleX: progress }} />
+        </div>
+        {children}
+      </div>
+    </StepsContext.Provider>
+  );
+}
+
+/** Numbered badge that fills lime once the scroll progress reaches its step. */
+export function StepNumber({ index, total, className }: { index: number; total: number; className?: string }) {
+  const progress = useContext(StepsContext);
+  const fallback = useMotionValue(0);
+  const at = (index + 0.5) / total;
+  const fill = useTransform(progress ?? fallback, [Math.max(at - 0.12, 0), at], [0, 1]);
+  return (
+    <span aria-hidden className={`relative grid size-11 place-items-center rounded-full bg-ink font-bold text-lime ${className ?? ""}`}>
+      {index + 1}
+      <m.span className="absolute inset-0 grid place-items-center rounded-full bg-lime text-ink" style={{ opacity: fill }}>{index + 1}</m.span>
+    </span>
+  );
+}
+
+/** Infinite horizontal marquee of text items. Static, centered and de-duplicated under reduced motion. */
+export function Marquee({ items, itemClassName }: { items: readonly string[]; itemClassName?: string }) {
+  const reduce = useReducedMotion();
+  const gap = "gap-x-[clamp(32px,6vw,72px)] pr-[clamp(32px,6vw,72px)]";
+  const row = (hidden: boolean, key: number) => (
+    <ul key={key} {...(hidden ? { "aria-hidden": true } : {})} className={`m-0 flex shrink-0 list-none items-center p-0 ${gap}`}>
+      {items.map((name) => <li key={name} className={`whitespace-nowrap ${itemClassName ?? ""}`}>{name}</li>)}
+    </ul>
+  );
+  if (reduce) {
+    return (
+      <ul className="m-0 flex list-none flex-wrap items-center justify-center gap-x-[clamp(24px,5vw,64px)] gap-y-4 p-0">
+        {items.map((name) => <li key={name} className={itemClassName}>{name}</li>)}
+      </ul>
+    );
+  }
+  return (
+    <div className="overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_8%,#000_92%,transparent)]">
+      <m.div className="flex w-max" animate={{ x: ["0%", "-50%"] }} transition={{ duration: 28, ease: "linear", repeat: Infinity }}>
+        {[0, 1, 2, 3].map((i) => row(i > 0, i))}
+      </m.div>
+    </div>
+  );
+}
+
+/** Number that eases to its new value (spring). aria-hidden: pair it with a static sr-only text. */
+export function AnimatedNumber({ value, className }: { value: number; className?: string }) {
+  const reduce = useReducedMotion();
+  const target = useMotionValue(value);
+  const spring = useSpring(target, { stiffness: 110, damping: 22, mass: 0.8 });
+  const text = useTransform(spring, (v) => String(Math.round(v)));
+  useEffect(() => {
+    if (reduce) {
+      target.jump(value);
+      spring.jump(value);
+    } else {
+      target.set(value);
+    }
+  }, [value, reduce, target, spring]);
+  return <m.span aria-hidden className={className} style={{ fontVariantNumeric: "tabular-nums" }}>{text}</m.span>;
 }

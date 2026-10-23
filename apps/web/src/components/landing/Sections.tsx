@@ -2,11 +2,15 @@ import {
   ArrowRight, ArrowUpRight, Bot, BookOpenCheck, Check, HandHelping, Inbox, MessageSquareQuote, ReceiptText, ShieldCheck, UsersRound, WalletCards,
 } from "lucide-react";
 import Link from "next/link";
-import { Accordion, buttonClasses } from "@/components/ui";
+import dynamic from "next/dynamic";
+import { buttonClasses } from "@/components/ui";
 import { LOGOS, MEDIA, PRICING_TEASER, TESTIMONIALS, type MediaSpec } from "./media";
 import { MediaSlot } from "./MediaSlot";
-import { ArrowLink, ArrowNudge, Float, QuoteSteps, Reveal, Spin, Stagger, StaggerItem } from "./motion";
+import { ArrowLink, ArrowNudge, Float, Marquee, QuoteSteps, Reveal, Spin, Stagger, StaggerItem, StepNumber, StepsProgress, Tilt } from "./motion";
 import { DISPLAY, H2, PILL_OUTLINE, SECTION } from "./styles";
+
+// Interactive accordion in its own chunk (server-rendered, hydrated lazily).
+const Accordion = dynamic(() => import("@/components/ui/Accordion").then((mod) => mod.Accordion));
 
 const CARD = "flex flex-col gap-3 rounded-[28px] border border-line bg-white p-6 transition-colors hover:border-line-2";
 const SQUARE_BTN = "grid size-16 shrink-0 place-items-center rounded-2xl border-2 border-lime text-lime no-underline transition hover:bg-lime hover:text-ink";
@@ -14,7 +18,7 @@ const SQUARE_BTN = "grid size-16 shrink-0 place-items-center rounded-2xl border-
 /** Big two-line heading with a small grey side text, as in the reference. */
 function Heading({ id, title, lead }: { id: string; title: string; lead?: string }) {
   return (
-    <Reveal as="header" className="mb-8 flex flex-col gap-3 desk:flex-row desk:items-end desk:justify-between desk:gap-12">
+    <Reveal as="header" from="left" blur className="mb-8 flex flex-col gap-3 desk:flex-row desk:items-end desk:justify-between desk:gap-12">
       <h2 id={id} className={`${H2} max-w-[22ch]`}>{title}</h2>
       {lead ? <p className="m-0 max-w-[34ch] text-ink-3">{lead}</p> : null}
     </Reveal>
@@ -28,11 +32,7 @@ export function TrustStrip() {
   return (
     <section aria-label="Integraciones" className="container-page py-[clamp(32px,5vw,56px)]">
       <p className="m-0 mb-4 text-center text-sm font-semibold tracking-wide text-ink-3 uppercase">Se integra con</p>
-      <Stagger className="m-0 flex list-none flex-wrap items-center justify-center gap-x-[clamp(24px,5vw,64px)] gap-y-4 p-0">
-        {INTEGRATIONS.map((name) => (
-          <StaggerItem key={name} className={`${DISPLAY} text-[clamp(16px,2vw,22px)] font-bold tracking-[-0.02em] text-ink`}>{name}</StaggerItem>
-        ))}
-      </Stagger>
+      <Marquee items={INTEGRATIONS} itemClassName={`${DISPLAY} text-[clamp(16px,2vw,22px)] font-bold tracking-[-0.02em] text-ink`} />
     </section>
   );
 }
@@ -134,12 +134,13 @@ const SHOWCASE: readonly ShowcaseItem[] = [
 /** Alternating image/text feature rows. */
 export function Showcase() {
   return (
-    <section aria-label="Funciones destacadas" className={`${SECTION} flex flex-col gap-[clamp(40px,6vw,88px)]`}>
+    <section aria-labelledby="destacadas-title" className={`${SECTION} flex flex-col gap-[clamp(40px,6vw,88px)]`}>
+      <h2 id="destacadas-title" className="sr-only">Funciones destacadas de Vende+ WSP</h2>
       {SHOWCASE.map(({ media, eyebrow, title, text, bullets }, i) => (
-        <Reveal key={title} className="grid items-center gap-8 desk:grid-cols-2 desk:gap-14">
-          <div className={i % 2 === 1 ? "desk:order-2" : undefined}>
+        <Reveal key={title} from={i % 2 === 1 ? "right" : "left"} className="grid items-center gap-8 desk:grid-cols-2 desk:gap-14">
+          <Tilt className={i % 2 === 1 ? "desk:order-2" : undefined}>
             <MediaSlot {...media} className="rounded-[28px] shadow-[0_24px_60px_-30px_rgba(18,18,18,0.45)]" sizes="(min-width: 1100px) 560px, 100vw" />
-          </div>
+          </Tilt>
           <div>
             <p className="m-0 mb-3 inline-block rounded-full bg-lime px-3 py-1 text-sm font-bold">{eyebrow}</p>
             <h3 className={`${DISPLAY} m-0 text-[clamp(22px,2.6vw,32px)] leading-[1.12] font-bold tracking-[-0.02em]`}>{title}</h3>
@@ -183,7 +184,7 @@ export function Collaboration() {
             {CIRCLES.map(({ media }, i) => (
               <StaggerItem pop key={media.alt}>
                 <Float delay={i * 0.6} amount={6 + (i % 2) * 3} className="overflow-hidden rounded-full border-4 border-white bg-paper-2">
-                  <MediaSlot {...media} width={1} height={1} className="rounded-full border-0 grayscale" sizes="210px" />
+                  <MediaSlot {...media} alt="" label={media.label} width={1} height={1} className="rounded-full border-0 grayscale" sizes="210px" />
                 </Float>
               </StaggerItem>
             ))}
@@ -196,7 +197,7 @@ export function Collaboration() {
             <span className="text-lg font-medium">IA lista para responder.</span>
           </p>
           <p className="mt-5 mb-0 max-w-[44ch] text-ink-3">Conecta tu número, carga tu catálogo y deja que la IA conteste con fuentes mientras tu equipo cierra las ventas.</p>
-          <ArrowLink href="/signup" className={`${PILL_OUTLINE} mt-7 w-full justify-between text-ink hover:bg-ink/5 sm:w-auto sm:min-w-[300px]`}>
+          <ArrowLink magnetic href="/signup" className={`${PILL_OUTLINE} mt-7 w-full justify-between text-ink hover:bg-ink/5 sm:w-auto sm:min-w-[300px]`}>
             Crear cuenta gratis
             <ArrowNudge><ArrowUpRight className="size-5" /></ArrowNudge>
           </ArrowLink>
@@ -245,15 +246,17 @@ export function HowItWorks() {
   return (
     <section id="como-funciona" aria-labelledby="como-title" className={SECTION}>
       <Heading id="como-title" title="Listo para atender en cuatro pasos." />
+      <StepsProgress>
       <Stagger as="ol" className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 desk:grid-cols-4">
         {STEPS.map(({ title, text }, index) => (
           <StaggerItem key={title} lift className={CARD}>
-            <span aria-hidden className={`${DISPLAY} grid size-11 place-items-center rounded-full bg-ink font-bold text-lime`}>{index + 1}</span>
+            <StepNumber index={index} total={STEPS.length} className={DISPLAY} />
             <h3 className={`${DISPLAY} m-0 text-base font-semibold`}><span className="sr-only">Paso {index + 1}: </span>{title}</h3>
             <p className="m-0 text-ink-3">{text}</p>
           </StaggerItem>
         ))}
       </Stagger>
+      </StepsProgress>
     </section>
   );
 }
@@ -262,7 +265,7 @@ export function DemoVideo() {
   return (
     <section id="demo" aria-labelledby="demo-title" className={SECTION}>
       <Heading id="demo-title" title="Míralo en acción." lead="De un mensaje de WhatsApp a un presupuesto cobrado, todo conectado en un solo flujo." />
-      <Reveal spring y={40}><MediaSlot {...MEDIA.demoVideo} className="mx-auto max-w-[1000px] rounded-[32px] border-ink-4 shadow-[0_0_80px_-24px_rgba(18,51,216,0.5)]" sizes="(min-width: 1100px) 1000px, 100vw" /></Reveal>
+      <Reveal spring from="scale" blur><MediaSlot {...MEDIA.demoVideo} className="mx-auto max-w-[1000px] rounded-[32px] border-ink-4 shadow-[0_0_80px_-24px_rgba(18,51,216,0.5)]" sizes="(min-width: 1100px) 1000px, 100vw" /></Reveal>
     </section>
   );
 }
@@ -311,7 +314,7 @@ export function Proof() {
   if (logos.length === 0 && testimonials.length === 0) return null;
   return (
     <section aria-labelledby="clientes-title" className={SECTION}>
-      <Heading id="clientes-title" title="Negocios que ya venden con CRMWSP." />
+      <Heading id="clientes-title" title="Negocios que ya venden con Vende+ WSP." />
       {logos.length > 0 ? (
         <Stagger className="m-0 mb-6 grid list-none grid-cols-2 gap-3 p-0 sm:grid-cols-3 desk:grid-cols-5">
           {logos.map((logo) => (
@@ -344,7 +347,7 @@ export function PricingTeaser() {
   const published = !PRICING_TEASER.from.includes("[") && !PRICING_TEASER.note.includes("[");
   return (
     <section id="precios" aria-labelledby="precios-title" className={SECTION}>
-      <Reveal spring y={32} className="flex flex-col items-start gap-4 rounded-[32px] border border-line bg-white p-[clamp(20px,5vw,56px)]">
+      <Reveal spring from="right" className="flex flex-col items-start gap-4 rounded-[32px] border border-line bg-white p-[clamp(20px,5vw,56px)]">
         <p className="m-0 rounded-full bg-lime px-3 py-1 text-sm font-bold">Precios</p>
         <h2 id="precios-title" className={`${H2} max-w-[24ch]`}>{published ? PRICING_TEASER.from : "Empieza gratis y elige tu plan cuando lo necesites."}</h2>
         <p className="m-0 max-w-[60ch] text-lg text-ink-3">
@@ -359,7 +362,7 @@ export function PricingTeaser() {
   );
 }
 
-const FAQ = [
+export const FAQ = [
   { question: "¿Necesito un número nuevo de WhatsApp?", answer: "Conectas tu número a través de un proveedor oficial de la API de WhatsApp Business. Te guiamos en el proceso." },
   { question: "¿La IA puede dar precios equivocados?", answer: "No: solo afirma precios, stock o plazos si puede citar tu catálogo. Si no, deriva la conversación a una persona." },
   { question: "¿Cómo se confirman los pagos?", answer: "Solo por la confirmación del proveedor de pagos o por conciliación. Una imagen de comprobante nunca marca un pago como pagado." },
@@ -380,13 +383,13 @@ export function Faq() {
 export function FinalCta() {
   return (
     <section aria-labelledby="cta-title" className={SECTION}>
-      <Reveal spring y={32} className="flex flex-col gap-6 rounded-[32px] bg-lime p-[clamp(20px,5vw,56px)] text-ink sm:flex-row sm:items-center sm:justify-between">
+      <Reveal spring from="scale" className="flex flex-col gap-6 rounded-[32px] bg-lime p-[clamp(20px,5vw,56px)] text-ink sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 id="cta-title" className={`${H2} max-w-[16ch]`}>Que ningún mensaje se quede sin respuesta.</h2>
           <p className="mt-4 mb-0 max-w-[44ch]">Conecta tu WhatsApp, carga tu catálogo y empieza a atender con tu equipo y la IA.</p>
           <p className="mt-3 mb-0 text-sm">¿Ya tienes cuenta? <Link href="/login" className="font-bold text-ink underline underline-offset-4">Ingresar</Link></p>
         </div>
-        <ArrowLink href="/signup" aria-label="Crear cuenta gratis" className="grid size-16 shrink-0 place-items-center rounded-2xl border-2 border-ink text-ink no-underline transition-colors hover:bg-ink hover:text-lime sm:size-20">
+        <ArrowLink magnetic href="/signup" aria-label="Crear cuenta gratis" className="grid size-16 shrink-0 place-items-center rounded-2xl border-2 border-ink text-ink no-underline transition-colors hover:bg-ink hover:text-lime sm:size-20">
           <ArrowNudge><ArrowUpRight className="size-8 sm:size-10" /></ArrowNudge>
         </ArrowLink>
       </Reveal>

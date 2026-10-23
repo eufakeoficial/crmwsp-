@@ -23,7 +23,7 @@ export function SiteFooter() {
             </nav>
           ))}
         </div>
-        <div className="border-t border-ink-3 pt-5 text-sm text-subtle">© {YEAR} CRMWSP</div>
+        <div className="border-t border-ink-3 pt-5 text-sm text-subtle">© {YEAR} Vende+ WSP</div>
       </div>
     </footer>
   );

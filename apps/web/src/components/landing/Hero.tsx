@@ -1,9 +1,12 @@
 import { Check } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { SavingsCalculator } from "./Calculator";
 import { ArrowLink, ArrowNudge, CheckRow, CountUp, HeroGlow, HeroTitle, Reveal, Stagger, StaggerItem } from "./motion";
 import { ArrowUpRight } from "lucide-react";
 import { DISPLAY, PILL_OUTLINE } from "./styles";
+
+// Below the fold: its own chunk keeps it out of the hydration-critical bundle (still server-rendered).
+const SavingsCalculator = dynamic(() => import("./Calculator").then((mod) => mod.SavingsCalculator));
 
 const CHECKS = [
   { text: "Respuestas con IA y fuente citada", highlight: false },
@@ -25,7 +28,7 @@ export function Hero() {
       <div className="container-page relative pt-[clamp(36px,6vw,80px)]">
         <div className="grid gap-8 desk:grid-cols-[1.6fr_1fr] desk:items-start">
           <div>
-            <Reveal as="p" y={12} className="m-0 mb-4 text-sm font-semibold tracking-wide text-white/80 uppercase">CRM de WhatsApp con IA para negocios que cotizan</Reveal>
+            <Reveal as="p" y={12} blur className="m-0 mb-4 text-sm font-semibold tracking-wide text-white/80 uppercase">CRM de WhatsApp con IA para negocios que cotizan</Reveal>
             <HeroTitle id="hero-title" text="Vende más por WhatsApp" className={`${DISPLAY} m-0 text-[clamp(2.125rem,1.2rem+4.6vw,5.75rem)] leading-[1.02] font-bold tracking-[-0.03em] text-balance [overflow-wrap:anywhere]`} />
           </div>
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm desk:mt-6">
@@ -38,8 +41,8 @@ export function Hero() {
           </ul>
         </div>
 
-        <Reveal delay={0.5} className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-4">
-          <ArrowLink href="/signup" className={`${PILL_OUTLINE} border-white/70 text-white`}>
+        <Reveal delay={0.55} blur className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-4">
+          <ArrowLink magnetic href="/signup" className={`${PILL_OUTLINE} border-white/70 text-white`}>
             Crear cuenta gratis
             <ArrowNudge><ArrowUpRight className="size-5" /></ArrowNudge>
           </ArrowLink>

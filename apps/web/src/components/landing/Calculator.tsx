@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { Reveal } from "./motion";
+import { AnimatedNumber, Reveal } from "./motion";
 import { DISPLAY } from "./styles";
 
 const PRESETS = [
@@ -70,8 +70,8 @@ export function SavingsCalculator() {
       </Reveal>
 
       <div className="mt-4 grid gap-4 desk:grid-cols-[1.6fr_1fr]">
-        <Reveal spring y={40} delay={0.05} className="rounded-[28px] bg-white p-[clamp(20px,3vw,32px)] text-ink">
-          <h3 className={`${DISPLAY} m-0 text-lg font-semibold`}>Calculadora de ahorro</h3>
+        <Reveal spring tilt from="left" delay={0.05} className="rounded-[28px] bg-white p-[clamp(20px,3vw,32px)] text-ink">
+          <h2 className={`${DISPLAY} m-0 text-lg font-semibold`}>Calculadora de ahorro</h2>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <div>
               <label htmlFor={idMsgs} className="mb-1.5 block text-sm font-semibold text-ink-3">Mensajes por día</label>
@@ -92,19 +92,20 @@ export function SavingsCalculator() {
           <p className="mt-4 mb-0 text-sm text-ink-3">Calculado sobre {DAYS} días al mes.</p>
         </Reveal>
 
-        <Reveal spring y={40} delay={0.15} className="rounded-[28px] bg-white p-[clamp(20px,3vw,32px)] text-ink">
-          <h3 className={`${DISPLAY} m-0 text-lg font-semibold`}>Estimación mensual</h3>
+        <Reveal spring tilt from="right" delay={0.15} className="rounded-[28px] bg-white p-[clamp(20px,3vw,32px)] text-ink">
+          <h2 className={`${DISPLAY} m-0 text-lg font-semibold`}>Estimación mensual</h2>
           <div aria-live="polite">
+            <span className="sr-only">Tiempo dedicado a responder hoy: {Math.round(hoursNow)} horas al mes. Horas que podrías liberar: {Math.round(saved)} horas al mes.</span>
             <p className="mt-5 mb-0 text-sm text-ink-3">Tiempo dedicado a responder hoy</p>
             <p className={`${DISPLAY} m-0 text-3xl font-bold`}>
-              {Math.round(hoursNow)}
-              <span className="text-base font-medium text-ink-3"> h/mes</span>
+              <AnimatedNumber value={hoursNow} />
+              <span aria-hidden className="text-base font-medium text-ink-3"> h/mes</span>
             </p>
             <div className="mt-4 rounded-2xl bg-ink px-4 py-3 text-white">
               <p className="m-0 text-sm text-subtle">Horas que podrías liberar</p>
               <p className={`${DISPLAY} m-0 text-3xl font-bold text-lime`}>
-                {Math.round(saved)}
-                <span className="text-base font-medium text-white"> h/mes</span>
+                <AnimatedNumber value={saved} />
+                <span aria-hidden className="text-base font-medium text-white"> h/mes</span>
               </p>
             </div>
           </div>
