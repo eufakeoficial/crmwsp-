@@ -3,9 +3,12 @@ import type {
   InboundMedia,
   InboundWebhookResult,
   OutboundMedia,
+  ProviderTemplate,
   ReactionRequest,
   SendOptions,
   SendResult,
+  SubmitTemplateResult,
+  TemplateSubmission,
   WhatsAppConnection,
 } from "./types.js";
 
@@ -25,4 +28,8 @@ export interface WhatsAppProvider {
   /** Reacts to an inbound message with an emoji (WhatsApp reaction message). */
   sendReaction(conn: WhatsAppConnection, req: ReactionRequest): Promise<SendResult>;
   downloadMedia(conn: WhatsAppConnection, media: InboundMedia): Promise<DownloadedMedia>;
+  /** Submits a template to Meta review through the BSP. Resolves with the BSP template id and initial status. */
+  submitTemplate(conn: WhatsAppConnection, tpl: TemplateSubmission): Promise<SubmitTemplateResult>;
+  /** Lists every template of the connection with its current review status. */
+  listTemplates(conn: WhatsAppConnection): Promise<ProviderTemplate[]>;
 }

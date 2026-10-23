@@ -85,6 +85,10 @@ export interface WhatsAppConnection {
   appName: string;
   /** Business phone, E.164 (with or without leading "+"). */
   sourcePhone: string;
+  /** Gupshup Partner API app id; only required by the template operations. */
+  partnerAppId?: string;
+  /** Decrypted Partner API app token (`Authorization` header); only required by the template operations. Never logged. */
+  partnerToken?: string;
 }
 
 export type OutboundMediaType = "image" | "audio" | "video" | "document";
@@ -117,4 +121,37 @@ export interface SendResult {
 export interface DownloadedMedia {
   data: Uint8Array;
   mimeType: string;
+}
+
+export type ProviderTemplateCategory = "marketing" | "utility" | "authentication";
+export type ProviderTemplateStatus = "approved" | "pending" | "rejected" | "paused" | "disabled";
+
+/** Template submitted to the BSP for Meta review. */
+export interface TemplateSubmission {
+  /** Lowercase letters, digits, underscores. */
+  name: string;
+  /** Meta language code (`es`, `es_AR`...). */
+  language: string;
+  category: ProviderTemplateCategory;
+  /** Body with `{{1}}` placeholders. */
+  body: string;
+  /** Sample body with placeholders filled in. */
+  example?: string;
+}
+
+export interface SubmitTemplateResult {
+  externalId: string;
+  status: ProviderTemplateStatus;
+}
+
+/** A template as the BSP reports it. */
+export interface ProviderTemplate {
+  externalId: string;
+  name: string;
+  language: string;
+  category: ProviderTemplateCategory;
+  status: ProviderTemplateStatus;
+  body: string;
+  /** Short rejection reason when `status` is "rejected". */
+  reason?: string;
 }

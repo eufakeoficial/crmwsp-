@@ -13,6 +13,7 @@ import { FOLLOW_UP_QUEUE_NAME, createFollowUpWorker, scheduleFollowUpTick } from
 import { CAPI_QUEUE_NAME, createCapiWorker, scheduleCapiTick, type FetchLike } from "./meta-capi/index.js";
 import { META_ADS_QUEUE_NAME, createMetaAdsWorker, scheduleMetaAdsTick, type MetaGetFetch } from "./meta-ads/index.js";
 import { BROADCAST_QUEUE_NAME, createBroadcastWorker, scheduleBroadcastTick } from "./broadcasts/index.js";
+import { TEMPLATE_SYNC_QUEUE_NAME, createTemplateSyncWorker, scheduleTemplateSyncTick } from "./templates/index.js";
 import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
 import { createMailerFromEnv, renderEmail } from "@crmwsp/mailer";
 import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotificationTick } from "./notifications/index.js";
@@ -28,6 +29,7 @@ export * from "./ai/index.js";
 export * from "./followups/index.js";
 export * from "./meta-capi/index.js";
 export * from "./meta-ads/index.js";
+export * from "./templates/index.js";
 export * from "./notifications/index.js";
 export * from "./media/index.js";
 export * from "./webhooks/index.js";
@@ -102,6 +104,8 @@ function main(): void {
   let capiQueue: Queue | undefined;
   let metaAdsWorker: ReturnType<typeof createMetaAdsWorker> | undefined;
   let metaAdsQueue: Queue | undefined;
+  let templateSyncWorker: ReturnType<typeof createTemplateSyncWorker> | undefined;
+  let templateSyncQueue: Queue | undefined;
   let webhooksWorker: ReturnType<typeof createWebhookWorker> | undefined;
   let webhookQueue: Queue | undefined;
   let broadcastWorker: ReturnType<typeof createBroadcastWorker> | undefined;
@@ -215,6 +219,12 @@ function main(): void {
     void scheduleMetaAdsTick(metaAdsQueue).catch((err: unknown) =>
       logger.warn(`meta ads scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
     );
+    // WhatsApp template review status sync (every 15 min); channel API keys need the master keys.
+    templateSyncQueue = new Queue(TEMPLATE_SYNC_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    templateSyncWorker = createTemplateSyncWorker({ connection: createRedis(redisUrl), db: db.db, cipher, provider: new GupshupProvider(), logger });
+    void scheduleTemplateSyncTick(templateSyncQueue).catch((err: unknown) =>
+      logger.warn(`template sync scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
     // Outbound tenant webhooks (signed with the decrypted endpoint secret). http:// only outside production.
     webhookQueue = new Queue(WEBHOOK_QUEUE_NAME, { connection: createRedis(redisUrl) });
     webhooksWorker = createWebhookWorker({
@@ -252,8 +262,8 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
-      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), metaAdsQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close(), orderExtractionQueue.close()]))
+    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), templateSyncWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
+      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), metaAdsQueue?.close(), templateSyncQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close(), orderExtractionQueue.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));
   };

@@ -64,7 +64,15 @@ describe.skipIf(!hasDb)("messaging tables + users RLS with the app role", () => 
       const token = `tok-${label}-${randomUUID()}`;
       const [c] = await tx
         .insert(channelConnections)
-        .values({ tenantId: t.id, provider: "gupshup", phoneE164: "+34600000001", webhookToken: token, status: "active" })
+        .values({
+          tenantId: t.id,
+          provider: "gupshup",
+          phoneE164: "+34600000001",
+          webhookToken: token,
+          status: "active",
+          gupshupAppId: `app-${label}-${suffix}`,
+          partnerTokenEncrypted: Buffer.from(`partner-token-${label}`),
+        })
         .returning({ id: channelConnections.id });
       const [ct] = await tx
         .insert(contacts)
@@ -140,6 +148,21 @@ describe.skipIf(!hasDb)("messaging tables + users RLS with the app role", () => 
     { name: "attachments", table: attachments, key: "attachment" },
     { name: "audit_events", table: auditEvents, key: "audit" },
   ] as const;
+
+  it("channel_connections: partner app id/token of B are invisible to A", async () => {
+    const rows = await withTenant(app.db, A.tenant, (tx) =>
+      tx
+        .select({ id: channelConnections.id, appId: channelConnections.gupshupAppId, token: channelConnections.partnerTokenEncrypted })
+        .from(channelConnections),
+    );
+    expect(rows.map((r) => r.id)).toEqual([A.conn]);
+    expect(rows[0]?.appId).toBe(`app-a-${suffix}`);
+    expect(rows[0]?.token?.toString()).toBe("partner-token-a");
+    const cross = await withTenant(app.db, A.tenant, (tx) =>
+      tx.select({ appId: channelConnections.gupshupAppId }).from(channelConnections).where(eq(channelConnections.id, B.conn)),
+    );
+    expect(cross).toHaveLength(0);
+  });
 
   for (const { name, table, key } of tables) {
     it(`${name}: tenant A only sees its rows and cannot modify B's`, async () => {

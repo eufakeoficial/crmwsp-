@@ -5,19 +5,27 @@ import type {
   InboundMedia,
   InboundWebhookResult,
   OutboundMedia,
+  ProviderTemplate,
+  ProviderTemplateCategory,
+  ProviderTemplateStatus,
   ReactionRequest,
   SendOptions,
   SendResult,
+  SubmitTemplateResult,
+  TemplateSubmission,
   WhatsAppConnection,
 } from "../types.js";
 import { parseGupshupWebhook } from "./parse.js";
-import { sendResponseSchema } from "./schemas.js";
+import { sendResponseSchema, templateListResponseSchema, templateSubmitResponseSchema } from "./schemas.js";
 
 /*
  * Gupshup WhatsApp API adapter.
  * - Session messages: POST {baseUrl}/wa/api/v1/msg  (https://docs.gupshup.io/docs/session-messages)
  * - Templates:        POST {baseUrl}/wa/api/v1/template/msg (https://docs.gupshup.io/docs/template-messages)
- * Both are application/x-www-form-urlencoded with header `apikey`, and answer
+ * - Template review:  POST|GET {partnerBaseUrl}/partner/app/{appId}/templates (Partner API, ADR 0004;
+ *   https://docs.gupshup.io/reference/post_partner-app-appid-templates). Form-encoded, authenticated
+ *   with `Authorization: <partner app token>` (NOT `apikey`); redirects are refused.
+ * Both sends are application/x-www-form-urlencoded with header `apikey`, and answer
  * `{ "status": "submitted", "messageId": "<gupshup id>" }`. Delivery is async; status
  * comes back through "message-event" callbacks keyed by that id.
  *
@@ -30,6 +38,8 @@ import { sendResponseSchema } from "./schemas.js";
 export interface GupshupProviderOptions {
   fetch?: typeof globalThis.fetch;
   baseUrl?: string;
+  /** Partner API host (templates). Default https://partner.gupshup.io. */
+  partnerBaseUrl?: string;
   /** Hosts (exact or dot-suffix) from which media may be downloaded. */
   mediaHosts?: string[];
   timeoutMs?: number;
@@ -51,10 +61,43 @@ export class GupshupProviderError extends ExternalProviderError {
 
 const DEFAULT_MEDIA_HOSTS = ["gupshup.io"];
 
+/** Unknown statuses map to "pending": a template is only sendable once explicitly approved. */
+function mapTemplateStatus(raw: string | undefined): ProviderTemplateStatus {
+  switch ((raw ?? "").toUpperCase()) {
+    case "APPROVED":
+      return "approved";
+    case "REJECTED":
+    case "FAILED":
+      return "rejected";
+    case "PAUSED":
+    case "FLAGGED":
+      return "paused";
+    case "DISABLED":
+    case "DELETED":
+      return "disabled";
+    default:
+      return "pending";
+  }
+}
+
+function mapTemplateCategory(raw: string | undefined): ProviderTemplateCategory {
+  switch ((raw ?? "").toUpperCase()) {
+    case "UTILITY":
+    case "TRANSACTIONAL":
+      return "utility";
+    case "AUTHENTICATION":
+    case "OTP":
+      return "authentication";
+    default:
+      return "marketing";
+  }
+}
+
 export class GupshupProvider implements WhatsAppProvider {
   readonly name = "gupshup";
   private readonly fetchImpl: typeof globalThis.fetch;
   private readonly baseUrl: string;
+  private readonly partnerBaseUrl: string;
   private readonly mediaHosts: string[];
   private readonly timeoutMs: number;
   private readonly maxMediaBytes: number;
@@ -62,6 +105,7 @@ export class GupshupProvider implements WhatsAppProvider {
   constructor(options: GupshupProviderOptions = {}) {
     this.fetchImpl = options.fetch ?? globalThis.fetch;
     this.baseUrl = (options.baseUrl ?? "https://api.gupshup.io").replace(/\/+$/, "");
+    this.partnerBaseUrl = (options.partnerBaseUrl ?? "https://partner.gupshup.io").replace(/\/+$/, "");
     this.mediaHosts = options.mediaHosts ?? DEFAULT_MEDIA_HOSTS;
     this.timeoutMs = options.timeoutMs ?? 15_000;
     this.maxMediaBytes = options.maxMediaBytes ?? 25 * 1024 * 1024;
@@ -112,6 +156,75 @@ export class GupshupProvider implements WhatsAppProvider {
       ...this.common(conn, req.to),
       message: JSON.stringify({ type: "reaction", msgId: req.messageExternalId, emoji: req.emoji }),
     });
+  }
+
+  /** Applies for a template (Meta review). Gupshup answers `{status:"success", template:{id,status}}`. */
+  async submitTemplate(conn: WhatsAppConnection, tpl: TemplateSubmission): Promise<SubmitTemplateResult> {
+    const form: Record<string, string> = {
+      elementName: tpl.name,
+      languageCode: tpl.language,
+      category: tpl.category.toUpperCase(),
+      templateType: "TEXT",
+      vertical: "CRM",
+      content: tpl.body,
+      example: tpl.example ?? tpl.body,
+    };
+    const { url, token } = this.partnerTemplates(conn);
+    const res = await this.request(url, {
+      method: "POST",
+      headers: {
+        authorization: token,
+        "content-type": "application/x-www-form-urlencoded",
+        accept: "application/json",
+      },
+      body: new URLSearchParams(form).toString(),
+      redirect: "error",
+    });
+    const json = await this.readJson(res);
+    const parsed = templateSubmitResponseSchema.safeParse(json);
+    if (!parsed.success || parsed.data.status !== "success" || !parsed.data.template) {
+      throw new GupshupProviderError("Gupshup rejected the template", false, res.status);
+    }
+    return { externalId: parsed.data.template.id, status: mapTemplateStatus(parsed.data.template.status) };
+  }
+
+  async listTemplates(conn: WhatsAppConnection): Promise<ProviderTemplate[]> {
+    const { url, token } = this.partnerTemplates(conn);
+    const res = await this.request(url, {
+      method: "GET",
+      headers: { authorization: token, accept: "application/json" },
+      redirect: "error",
+    });
+    const json = await this.readJson(res);
+    const parsed = templateListResponseSchema.safeParse(json);
+    if (!parsed.success || parsed.data.status !== "success") {
+      throw new GupshupProviderError("Unexpected template list response from Gupshup", false, res.status);
+    }
+    return parsed.data.templates.map((t) => ({
+      externalId: t.id,
+      name: t.elementName,
+      language: t.languageCode,
+      category: mapTemplateCategory(t.category),
+      status: mapTemplateStatus(t.status),
+      body: t.data ?? "",
+      ...(t.reason ? { reason: t.reason.slice(0, 200) } : {}),
+    }));
+  }
+
+  /** Partner API templates URL + app token. Throws (non-retryable) when the channel has no partner credentials. */
+  private partnerTemplates(conn: WhatsAppConnection): { url: string; token: string } {
+    if (!conn.partnerAppId || !conn.partnerToken) {
+      throw new GupshupProviderError("Channel has no Gupshup partner credentials", false);
+    }
+    return { url: `${this.partnerBaseUrl}/partner/app/${encodeURIComponent(conn.partnerAppId)}/templates`, token: conn.partnerToken };
+  }
+
+  private async readJson(res: Response): Promise<unknown> {
+    try {
+      return await res.json();
+    } catch {
+      throw new GupshupProviderError("Invalid JSON response from Gupshup", true, res.status);
+    }
   }
 
   async downloadMedia(conn: WhatsAppConnection, media: InboundMedia): Promise<DownloadedMedia> {
