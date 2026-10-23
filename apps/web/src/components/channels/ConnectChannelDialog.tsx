@@ -20,15 +20,28 @@ export function ConnectChannelDialog({ onClose, onCreated, onNoKeys }: { onClose
   const [phone, setPhone] = useState("");
   const [appName, setAppName] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [partnerAppId, setPartnerAppId] = useState("");
+  const [partnerToken, setPartnerToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [created, setCreated] = useState<Channel | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const parsed = createGupshupChannelRequestSchema.safeParse({ phoneE164: phone.trim(), appName, apiKey });
+    const hasApp = partnerAppId.trim() !== "";
+    const hasToken = partnerToken.trim() !== "";
+    if (hasApp !== hasToken) {
+      setError("Para habilitar plantillas completa el ID de app y el token de Partner, o deja ambos vacíos.");
+      return;
+    }
+    const parsed = createGupshupChannelRequestSchema.safeParse({
+      phoneE164: phone.trim(),
+      appName,
+      apiKey,
+      ...(hasApp ? { gupshupAppId: partnerAppId, partnerToken } : {}),
+    });
     if (!parsed.success) {
-      setError("Revisa los datos: el teléfono va en formato internacional (+5491155551234) y la API key debe tener al menos 8 caracteres.");
+      setError("Revisa los datos: el teléfono va en formato internacional (+5491155551234) y la API key (y el token de Partner, si lo llenas) deben tener al menos 8 caracteres.");
       return;
     }
     setBusy(true);
@@ -36,6 +49,7 @@ export function ConnectChannelDialog({ onClose, onCreated, onNoKeys }: { onClose
     try {
       const channel = await channelsApi.createGupshup(parsed.data);
       setApiKey("");
+      setPartnerToken("");
       setCreated(channel);
       onCreated(channel);
     } catch (err) {
@@ -85,6 +99,15 @@ export function ConnectChannelDialog({ onClose, onCreated, onNoKeys }: { onClose
           <Label htmlFor="ch-key">API key de Gupshup</Label>
           <Input id="ch-key" type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
           <span className="text-xs text-muted">Se guarda cifrada y no se vuelve a mostrar.</span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ch-partner-app">ID de app de Gupshup (opcional)</Label>
+          <Input id="ch-partner-app" autoComplete="off" value={partnerAppId} onChange={(e) => setPartnerAppId(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="ch-partner-token">Token de Partner (opcional)</Label>
+          <Input id="ch-partner-token" type="password" autoComplete="off" value={partnerToken} onChange={(e) => setPartnerToken(e.target.value)} />
+          <span className="text-xs text-muted">Necesarios para crear y sincronizar plantillas de WhatsApp. Se guarda cifrado y no se vuelve a mostrar. Puedes agregarlos después.</span>
         </div>
         <Alert>{error}</Alert>
         <div className="flex justify-end gap-2">

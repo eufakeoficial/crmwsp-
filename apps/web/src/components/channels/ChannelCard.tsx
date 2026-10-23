@@ -1,7 +1,7 @@
 "use client";
 
 import type { Channel } from "@crmwsp/contracts";
-import { KeyRound, Power, RefreshCw } from "lucide-react";
+import { FileText, KeyRound, Power, RefreshCw } from "lucide-react";
 import { Button, Card, StatusChip, type Tone } from "@/components/ui";
 import { WebhookUrlBox } from "./WebhookUrlBox";
 
@@ -17,12 +17,14 @@ export function ChannelCard({
   busy,
   onRotate,
   onToggle,
+  onPartner,
 }: {
   channel: Channel;
   canManage: boolean;
   busy: boolean;
   onRotate: () => void;
   onToggle: () => void;
+  onPartner: () => void;
 }) {
   const st = STATUS[channel.status];
   const disabled = channel.status === "disabled";
@@ -43,6 +45,13 @@ export function ChannelCard({
           API key: <code>{channel.apiKeyHint}</code>
         </p>
       ) : null}
+      {channel.provider === "gupshup" ? (
+        <p className="m-0 flex items-center gap-2 text-sm" data-testid="templates-status">
+          <FileText aria-hidden className="size-4 text-muted" />
+          Plantillas:
+          <StatusChip label={channel.partnerConfigured ? "configurado" : "sin configurar"} tone={channel.partnerConfigured ? "success" : "warning"} />
+        </p>
+      ) : null}
       {canManage && channel.webhookUrl ? (
         <div className="flex flex-col gap-1">
           <span className="text-xs font-extrabold text-muted">URL de webhook (Gupshup → Callback URL)</span>
@@ -54,6 +63,11 @@ export function ChannelCard({
           <Button size="sm" variant="outline" disabled={busy} onClick={onRotate}>
             <RefreshCw aria-hidden className="size-4" />Rotar token
           </Button>
+          {channel.provider === "gupshup" ? (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onPartner}>
+              <FileText aria-hidden className="size-4" />{channel.partnerConfigured ? "Cambiar credenciales de plantillas" : "Configurar plantillas"}
+            </Button>
+          ) : null}
           <Button size="sm" variant={disabled ? "accent" : "outline"} disabled={busy} onClick={onToggle}>
             <Power aria-hidden className="size-4" />{disabled ? "Activar" : "Desactivar"}
           </Button>

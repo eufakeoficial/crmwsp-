@@ -12,6 +12,7 @@ import { channelsApi } from "@/lib/inbox-api";
 import { channelErrorMessage, isEncryptionNotConfigured } from "@/lib/messages";
 import { ChannelCard } from "./ChannelCard";
 import { ConnectChannelDialog } from "./ConnectChannelDialog";
+import { PartnerCredentialsDialog } from "./PartnerCredentialsDialog";
 
 export function ChannelsView() {
   const { tenant } = useSession();
@@ -20,6 +21,7 @@ export function ChannelsView() {
   const [error, setError] = useState<unknown>(null);
   const [connecting, setConnecting] = useState(false);
   const [confirmRotate, setConfirmRotate] = useState<Channel | null>(null);
+  const [partnerFor, setPartnerFor] = useState<Channel | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const { message, show } = useToast();
 
@@ -84,6 +86,7 @@ export function ChannelsView() {
               canManage={canManage}
               busy={busyId === c.id}
               onRotate={() => setConfirmRotate(c)}
+              onPartner={() => setPartnerFor(c)}
               onToggle={() => void act(c.id, () => channelsApi.setStatus(c.id, c.status === "disabled" ? "active" : "disabled"), c.status === "disabled" ? "Canal activado" : "Canal desactivado")}
             />
           ))}
@@ -99,6 +102,22 @@ export function ChannelsView() {
           onCreated={(c) => {
             setChannels((list) => [...(list ?? []), c]);
             setError(null);
+          }}
+        />
+      ) : null}
+      {partnerFor ? (
+        <PartnerCredentialsDialog
+          channel={partnerFor}
+          onClose={() => setPartnerFor(null)}
+          onNoKeys={(err) => {
+            setPartnerFor(null);
+            setError(err);
+          }}
+          onSaved={(c) => {
+            replace(c);
+            setPartnerFor(null);
+            setError(null);
+            show("Credenciales de plantillas guardadas");
           }}
         />
       ) : null}

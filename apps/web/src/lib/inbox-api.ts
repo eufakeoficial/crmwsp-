@@ -1,6 +1,7 @@
 import {
   type ConversationStatus,
   type CreateGupshupChannelRequest,
+  type SetPartnerCredentialsRequest,
   type ReactionEmoji,
   type UpdateConversationRequest,
   attachmentUrlResponseSchema,
@@ -33,6 +34,8 @@ export const channelsApi = {
   list: () => request("/channels", { schema: channelListResponseSchema }),
   createGupshup: (input: CreateGupshupChannelRequest) =>
     request("/channels/gupshup", { method: "POST", body: input, schema: channelSchema }),
+  setPartnerCredentials: (id: string, input: SetPartnerCredentialsRequest) =>
+    request(`/channels/${id}/partner-credentials`, { method: "PUT", body: input, schema: channelSchema }),
   rotateWebhookToken: (id: string) =>
     request(`/channels/${id}/rotate-webhook-token`, { method: "POST", schema: channelSchema }),
   setStatus: (id: string, status: "active" | "disabled") =>
