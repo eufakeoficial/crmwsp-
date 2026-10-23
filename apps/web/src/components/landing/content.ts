@@ -31,3 +31,19 @@ export const DEMO_VIDEO = {
   uploadDate: "2026-10-23",
   duration: "PT25S",
 } as const;
+
+export const DEMO_VIDEO_PLAYBOOK = {
+  eyebrow: "Playbook de IA",
+  title: "Enséñale a tu IA a vender como tú",
+  lead: "Define cómo responde a objeciones, cómo cierra y cuándo hace seguimiento. La IA lo aplica en cada chat.",
+  bullets: [
+    "Respuestas aprobadas para cada objeción",
+    "Cierre suave o directo, a tu estilo",
+    "Seguimiento automático si el cliente no responde",
+  ],
+  cta: "Crear cuenta gratis",
+  videoLabel: "Demo: el dueño configura el Playbook de IA con una objeción de precio, y luego la IA responde a un cliente que dice que está caro, envía el link de pago y recibe el pago.",
+  webm: "/videos/demo-playbook.webm",
+  mp4: "/videos/demo-playbook.mp4",
+  poster: "/videos/demo-playbook.jpg",
+} as const;

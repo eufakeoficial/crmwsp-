@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { SiteAssistant } from "@/components/landing/Assistant";
 import { DemoVideo } from "@/components/landing/DemoVideo";
+import { DEMO_VIDEO_PLAYBOOK } from "@/components/landing/content";
 import { Hero } from "@/components/landing/Hero";
 import { Integrations } from "@/components/landing/Integrations";
 import { LandingJsonLd } from "@/components/landing/JsonLd";
@@ -31,6 +32,7 @@ export default async function HomePage() {
         <WhatIs />
         <Integrations />
         <DemoVideo />
+        <DemoVideo d={DEMO_VIDEO_PLAYBOOK} id="demo-playbook" flip />
         <Features />
         <ProblemSolution />
         <Showcase />
