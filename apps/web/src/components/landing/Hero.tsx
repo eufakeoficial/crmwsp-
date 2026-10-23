@@ -29,7 +29,7 @@ export function Hero() {
         <div className="grid gap-8 desk:grid-cols-[1.6fr_1fr] desk:items-start">
           <div>
             <Reveal as="p" y={12} blur className="m-0 mb-4 text-sm font-semibold tracking-wide text-white/80 uppercase">CRM de WhatsApp con IA para negocios que cotizan</Reveal>
-            <HeroTitle id="hero-title" text="Vende más por WhatsApp" className={`${DISPLAY} m-0 text-[clamp(2.125rem,1.2rem+4.6vw,5.75rem)] leading-[1.02] font-bold tracking-[-0.03em] text-balance [overflow-wrap:anywhere]`} />
+            <HeroTitle id="hero-title" text="Del primer mensaje al cobro, todo en WhatsApp" className={`${DISPLAY} m-0 text-[clamp(2.125rem,1.2rem+4.6vw,5.75rem)] leading-[1.02] font-bold tracking-[-0.03em] text-balance [overflow-wrap:anywhere]`} />
           </div>
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm desk:mt-6">
             {CHECKS.map(({ text, highlight }, i) => (
