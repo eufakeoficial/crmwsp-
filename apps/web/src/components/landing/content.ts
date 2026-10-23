@@ -11,3 +11,23 @@ export const INTEGRATIONS_SECTION = {
     { name: "NOWPayments", caption: "Cobros en cripto", alt: "Logotipo de NOWPayments", src: "/brand/integrations/nowpayments.png", width: 600, height: 219 },
   ],
 } as const;
+
+export const DEMO_VIDEO = {
+  eyebrow: "Así vende tu negocio",
+  title: "Una venta completa, sin que nadie conteste",
+  lead: "La IA responde con tu catálogo, envía la cotización y el link de pago, y el pago se confirma solo.",
+  bullets: [
+    "Responde a las 23:47 con precio y stock",
+    "Cotiza y manda el link de pago (Yape o tarjeta)",
+    "Marca pagado cuando el proveedor lo confirma",
+  ],
+  cta: "Crear cuenta gratis",
+  videoLabel: "Demo: la IA atiende un chat de WhatsApp de Killa Store, cotiza un polo, envía el link de pago y confirma el pago recibido a las 23:49.",
+  name: "Demo: una venta completa por WhatsApp con IA",
+  description: "La IA de Vende+ WSP responde con el catálogo, envía la cotización y el link de pago, y el pago se confirma solo.",
+  webm: "/videos/demo-moda.webm",
+  mp4: "/videos/demo-moda.mp4",
+  poster: "/videos/demo-moda.jpg",
+  uploadDate: "2026-10-23",
+  duration: "PT24S",
+} as const;

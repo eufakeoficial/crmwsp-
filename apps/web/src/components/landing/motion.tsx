@@ -400,3 +400,40 @@ export function AnimatedNumber({ value, className }: { value: number; className?
   }, [value, reduce, target, spring]);
   return <m.span aria-hidden className={className} style={{ fontVariantNumeric: "tabular-nums" }}>{text}</m.span>;
 }
+
+interface DemoPlayerProps { webm: string; mp4: string; poster: string; label: string; width: number; height: number }
+
+/** Silent looping demo: plays only while in view; under reduced motion it never autoplays and shows controls. */
+export function DemoPlayer({ webm, mp4, poster, label, width, height }: DemoPlayerProps) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const reduce = useReducedMotion();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || reduce || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => {
+      if (!entry) return;
+      if (entry.isIntersecting) void el.play().catch(() => undefined);
+      else el.pause();
+    }, { threshold: 0.35 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [reduce]);
+  return (
+    <video
+      ref={ref}
+      className="block h-auto w-full"
+      width={width}
+      height={height}
+      muted
+      loop
+      playsInline
+      preload="none"
+      poster={poster}
+      aria-label={label}
+      {...(reduce ? { controls: true } : {})}
+    >
+      <source src={webm} type="video/webm" />
+      <source src={mp4} type="video/mp4" />
+    </video>
+  );
+}
