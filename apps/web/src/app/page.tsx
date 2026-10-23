@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { SiteAssistant } from "@/components/landing/Assistant";
 import { Hero } from "@/components/landing/Hero";
+import { Integrations } from "@/components/landing/Integrations";
 import { LandingJsonLd } from "@/components/landing/JsonLd";
 import { LandingStyles } from "@/components/landing/LandingStyles";
 import { LandingMotion } from "@/components/landing/motion";
-import { DemoVideo, Collaboration, Comparison, Differentiators, Faq, Features, FinalCta, HowItWorks, LookingTo, PricingTeaser, ProblemSolution, Proof, Showcase, TrustStrip, WhatIs } from "@/components/landing/Sections";
+import { DemoVideo, Collaboration, Comparison, Differentiators, Faq, Features, FinalCta, HowItWorks, LookingTo, PricingTeaser, ProblemSolution, Proof, Showcase, WhatIs } from "@/components/landing/Sections";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 
@@ -27,7 +28,7 @@ export default async function HomePage() {
       <main className="overflow-x-clip">
         <Hero />
         <WhatIs />
-        <TrustStrip />
+        <Integrations />
         <Features />
         <ProblemSolution />
         <Showcase />
