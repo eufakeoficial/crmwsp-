@@ -16,12 +16,16 @@
   --color-subtle: #cfcfc9;
   --color-line: #e4e4df;
   --color-line-2: #d6d6d0;
+  --color-navy: #050a3a;
+  --color-royal: #0a1696;
+  --color-azure: #1233d8;
+  --color-royal-soft: #e8ecfd;
   --color-lime: #d2f34c;
   --color-lime-soft: #eef9c4;
   --color-success: #14663a;
   --color-success-soft: #e3f5ea;
   --color-success-ink: #2e4a39;
-  --color-focus: #2457c5;
+  --color-focus: #1233d8;
   --color-whatsapp: #25d366;
   --color-whatsapp-ink: #06301a;
   --color-gold: #e1b53a;
@@ -59,6 +63,7 @@
   h3,
   h4 {
     font-weight: 700;
+    font-family: var(--font-display), var(--font-sans);
   }
 
   a {
@@ -83,6 +88,23 @@
   width: 100%;
   max-width: 1280px;
   padding-inline: clamp(16px, 4vw, 40px);
+}
+
+/* Deep brand surface (same gradient as the landing hero): white text, lime focus ring. */
+@utility bg-brand-gradient {
+  background-image: linear-gradient(180deg, #050a3a 0%, #0a1696 55%, #1233d8 100%);
+  background-color: var(--color-navy);
+  & :focus-visible {
+    outline-color: var(--color-lime);
+  }
+}
+
+@utility bg-brand-navy {
+  background-image: linear-gradient(90deg, #050a3a 0%, #0a1696 100%);
+  background-color: var(--color-navy);
+  & :focus-visible {
+    outline-color: var(--color-lime);
+  }
 }
 
 @utility no-scrollbar {

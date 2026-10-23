@@ -12,7 +12,7 @@ export function CheckBox({ checked, onChange, label }: { checked: boolean | "mix
       onClick={onChange}
       className="relative flex-none cursor-pointer p-0 after:absolute after:-inset-[11px] after:content-['']"
     >
-      <span aria-hidden className={cn("grid size-[22px] place-items-center rounded-[7px] border-2 border-ink text-lime", checked ? "bg-ink" : "bg-white")}>
+      <span aria-hidden className={cn("grid size-[22px] place-items-center rounded-[7px] border-2 border-royal text-lime", checked ? "bg-royal" : "bg-white")}>
         {checked === "mixed" ? <Minus className="size-3.5" /> : checked ? <Check className="size-3.5" /> : null}
       </span>
     </button>

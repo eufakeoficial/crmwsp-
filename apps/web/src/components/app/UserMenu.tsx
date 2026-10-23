@@ -70,7 +70,7 @@ export function UserMenu({ placement = "topbar", tone, className }: { placement?
         data-testid="user-menu-trigger"
         className={cn(
           "grid size-9 cursor-pointer place-items-center rounded-full text-[13px] font-extrabold",
-          placement === "rail" || tone === "lime" ? "bg-lime text-ink hover:opacity-90" : "bg-ink text-lime hover:bg-ink-2",
+          placement === "rail" || tone === "lime" ? "bg-lime text-ink hover:opacity-90" : "bg-royal text-lime hover:bg-azure",
           tone === "lime" && "focus-visible:outline-lime",
         )}
       >

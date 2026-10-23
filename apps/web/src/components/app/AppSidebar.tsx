@@ -21,7 +21,7 @@ export function SidebarLink({ item, active, count, onNavigate }: { item: NavItem
       aria-current={active ? "page" : undefined}
       className={cn(
         "flex min-h-[34px] items-center gap-2.5 rounded-full px-3 py-0.5 text-[13px] no-underline",
-        active ? "bg-lime font-extrabold text-ink" : "font-semibold text-white hover:bg-ink-2",
+        active ? "bg-lime font-extrabold text-ink" : "font-semibold text-white hover:bg-white/10",
       )}
     >
       <Icon aria-hidden className="size-4 flex-none" />
@@ -38,7 +38,7 @@ export function SidebarLink({ item, active, count, onNavigate }: { item: NavItem
 
 function SubLinks({ items, pathname, counts, onNavigate }: { items: readonly NavItem[]; pathname: string; counts: NavCounts; onNavigate?: (() => void) | undefined }) {
   return (
-    <div className="ml-5 flex flex-col gap-0.5 border-l border-ink-4 pl-2">
+    <div className="ml-5 flex flex-col gap-0.5 border-l border-white/25 pl-2">
       {items.map((c) => (
         <SidebarLink key={c.key} item={c} active={isActive(pathname, c.href)} count={counts[c.key]} onNavigate={onNavigate} />
       ))}
@@ -67,20 +67,20 @@ export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNa
           aria-expanded={moreOpen}
           aria-controls="nav-more"
           onClick={() => setMoreToggled((v) => !v)}
-          className="flex min-h-[34px] w-full cursor-pointer items-center gap-2.5 rounded-full border-0 bg-transparent px-3 py-0.5 text-left text-[13px] font-semibold text-white hover:bg-ink-2"
+          className="flex min-h-[34px] w-full cursor-pointer items-center gap-2.5 rounded-full border-0 bg-transparent px-3 py-0.5 text-left text-[13px] font-semibold text-white hover:bg-white/10"
         >
           <ChevronDown aria-hidden className={cn("size-4 flex-none transition-transform", moreOpen ? "" : "-rotate-90")} />
           <span className="flex-1">Más</span>
         </button>
         {moreOpen ? (
-          <div id="nav-more" className="ml-5 flex flex-col gap-0.5 border-l border-ink-4 pl-2">
+          <div id="nav-more" className="ml-5 flex flex-col gap-0.5 border-l border-white/25 pl-2">
             {NAV_MORE.map((i) => (
               <SidebarLink key={i.key} item={i} active={isActive(pathname, i.href)} count={counts[i.key]} {...(onNavigate ? { onNavigate } : {})} />
             ))}
           </div>
         ) : null}
       </div>
-      <span aria-hidden className="mx-2 my-2.5 h-px flex-none bg-ink-3" />
+      <span aria-hidden className="mx-2 my-2.5 h-px flex-none bg-white/20" />
       {render(NAV_SECONDARY)}
     </>
   );
@@ -89,7 +89,7 @@ export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNa
 /** AI assistant card: links to the AI settings, where the assist mode (draft, human sends) is chosen. */
 export function AssistantCard() {
   return (
-    <div className="mt-auto flex flex-col items-start gap-2 rounded-[18px] bg-ink-2 p-3 text-white">
+    <div className="mt-auto flex flex-col items-start gap-2 rounded-[18px] bg-white/10 p-3 text-white">
       <span className="grid size-8 place-items-center rounded-lg bg-lime text-ink">
         <Sparkles aria-hidden className="size-5" />
       </span>
@@ -109,7 +109,7 @@ function AppRail({ counts = {} }: { counts?: NavCounts }) {
   return (
     <nav
       aria-label="Principal"
-      className="fixed inset-y-0 left-0 z-[25] hidden w-[72px] flex-col items-center bg-ink py-3 desk:flex"
+      className="fixed inset-y-0 left-0 z-[25] hidden w-[72px] flex-col items-center bg-brand-gradient py-3 desk:flex"
     >
       <Link href="/app" aria-label="CRMWSP, ir al inicio" title="CRMWSP" className="mb-2 flex-none rounded-xl no-underline">
         <LogoMark size={36} />
@@ -128,7 +128,7 @@ function AppRail({ counts = {} }: { counts?: NavCounts }) {
             aria-current={active ? "page" : undefined}
             className={cn(
               "relative grid size-11 flex-none place-items-center rounded-xl no-underline",
-              active ? "bg-lime text-ink" : "text-white hover:bg-ink-2",
+              active ? "bg-lime text-ink" : "text-white hover:bg-white/10",
             )}
           >
             <Icon aria-hidden className="size-5" />
@@ -147,12 +147,12 @@ function AppRail({ counts = {} }: { counts?: NavCounts }) {
   );
 }
 
-/** Floating black sidebar (desktop, from the `desk` breakpoint); `rail` swaps it for the icon-only rail. */
+/** Floating navy-to-royal sidebar (desktop, from the `desk` breakpoint); `rail` swaps it for the icon-only rail. */
 export function AppSidebar({ counts, rail = false }: { counts?: NavCounts; rail?: boolean }) {
   if (rail) return <AppRail {...(counts ? { counts } : {})} />;
   return (
     <nav aria-label="Principal" className="fixed top-0 bottom-0 left-0 z-[25] hidden w-[220px] p-3 desk:block">
-      <div className="flex h-full flex-col gap-1 overflow-y-auto rounded-[22px] bg-ink px-2.5 py-3.5 text-white [scrollbar-color:var(--color-ink-4)_transparent] [scrollbar-width:thin]">
+      <div className="flex h-full flex-col gap-1 overflow-y-auto rounded-[22px] bg-brand-gradient px-2.5 py-3.5 text-white [scrollbar-color:rgba(255,255,255,0.35)_transparent] [scrollbar-width:thin]">
         <Logo href="/app" inverted className="px-2 pb-3" />
         <NavLinks {...(counts ? { counts } : {})} />
         <AssistantCard />

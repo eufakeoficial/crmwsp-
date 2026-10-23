@@ -19,7 +19,7 @@ export function AppShell({ children, counts }: { children: ReactNode; counts?: N
 
   return (
     <>
-      <a href="#app-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[70] focus:rounded-full focus:bg-ink focus:px-4 focus:py-3 focus:font-bold focus:text-white">
+      <a href="#app-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[70] focus:rounded-full focus:bg-royal focus:px-4 focus:py-3 focus:font-bold focus:text-white">
         Saltar al contenido
       </a>
       <AppSidebar rail={inbox} {...(counts ? { counts } : {})} />
