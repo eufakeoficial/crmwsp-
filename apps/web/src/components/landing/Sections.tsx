@@ -5,9 +5,12 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { buttonClasses } from "@/components/ui";
 import { LOGOS, MEDIA, PRICING_TEASER, TESTIMONIALS, type MediaSpec } from "./media";
+import { COMPARISON_COLUMNS, COMPARISON_ROWS, DEFINITION, FAQ, INTEGRATIONS, STEPS } from "./content";
 import { MediaSlot } from "./MediaSlot";
 import { ArrowLink, ArrowNudge, Float, Marquee, QuoteSteps, Reveal, Spin, Stagger, StaggerItem, StepNumber, StepsProgress, Tilt } from "./motion";
 import { DISPLAY, H2, PILL_OUTLINE, SECTION } from "./styles";
+
+export { FAQ };
 
 // Interactive accordion in its own chunk (server-rendered, hydrated lazily).
 const Accordion = dynamic(() => import("@/components/ui/Accordion").then((mod) => mod.Accordion));
@@ -25,14 +28,58 @@ function Heading({ id, title, lead }: { id: string; title: string; lead?: string
   );
 }
 
-const INTEGRATIONS = ["WhatsApp · Gupshup", "MercadoPago", "NOWPayments", "Meta Ads"] as const;
-
 /** Integration wordmarks as plain text (no logos): factual, nothing to fabricate. */
 export function TrustStrip() {
   return (
     <section aria-label="Integraciones" className="container-page py-[clamp(32px,5vw,56px)]">
       <p className="m-0 mb-4 text-center text-sm font-semibold tracking-wide text-ink-3 uppercase">Se integra con</p>
       <Marquee items={INTEGRATIONS} itemClassName={`${DISPLAY} text-[clamp(16px,2vw,22px)] font-bold tracking-[-0.02em] text-ink`} />
+    </section>
+  );
+}
+
+/** Answer-first definition block: one entity-clear paragraph that AI engines can quote verbatim. */
+export function WhatIs() {
+  return (
+    <section id="que-es" aria-labelledby="que-es-title" className="container-page py-[clamp(32px,5vw,64px)]">
+      <Reveal from="left" blur className="max-w-[72ch]">
+        <h2 id="que-es-title" className={H2}>¿Qué es Vende+ WSP?</h2>
+        <p id="que-es-definicion" className="mt-5 mb-0 text-[clamp(1.0625rem,1rem+0.4vw,1.25rem)] leading-relaxed text-ink">{DEFINITION}</p>
+      </Reveal>
+    </section>
+  );
+}
+
+/** Capability-based comparison by product category: no competitor brands, no unverifiable claims. */
+export function Comparison() {
+  return (
+    <section id="comparativa" aria-labelledby="comparativa-title" className={SECTION}>
+      <Heading id="comparativa-title" title="Vende+ WSP vs. WhatsApp Business y un CRM genérico." lead="Una comparación por capacidades. Las funciones exactas de cada herramienta varían." />
+      <Reveal>
+        <div role="region" aria-label="Tabla comparativa, desplázala horizontalmente en pantallas pequeñas" tabIndex={0} className="overflow-x-auto rounded-[28px] border border-line bg-white">
+          <table className="w-full min-w-[720px] border-collapse text-left text-sm">
+            <caption className="sr-only">Comparación de capacidades entre la app WhatsApp Business, un CRM genérico y Vende+ WSP</caption>
+            <thead>
+              <tr>
+                <th scope="col" className="p-4 font-semibold text-ink-3">Capacidad</th>
+                {COMPARISON_COLUMNS.map((col, i) => (
+                  <th key={col} scope="col" className={`${DISPLAY} p-4 font-semibold ${i === 2 ? "bg-lime text-ink" : "text-ink"}`}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARISON_ROWS.map(({ capability, cells }) => (
+                <tr key={capability} className="border-t border-line align-top">
+                  <th scope="row" className="p-4 font-semibold text-ink">{capability}</th>
+                  {cells.map((cell, i) => (
+                    <td key={cell} className={`p-4 ${i === 2 ? "bg-lime/30 font-semibold text-ink" : "text-ink-3"}`}>{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Reveal>
     </section>
   );
 }
@@ -235,13 +282,6 @@ export function Differentiators() {
   );
 }
 
-const STEPS = [
-  { title: "Conecta tu número", text: "Vincula tu WhatsApp Business mediante un proveedor oficial de la API." },
-  { title: "Carga tu catálogo y tu playbook", text: "Sube productos, precios y reglas de venta: son la fuente de la IA." },
-  { title: "Atiende con tu equipo y la IA", text: "La IA responde con cita; tu equipo toma el control cuando hace falta." },
-  { title: "Cotiza y cobra", text: "Envía el presupuesto y cobra; el pago se marca al confirmarlo el proveedor." },
-] as const;
-
 export function HowItWorks() {
   return (
     <section id="como-funciona" aria-labelledby="como-title" className={SECTION}>
@@ -361,15 +401,6 @@ export function PricingTeaser() {
     </section>
   );
 }
-
-export const FAQ = [
-  { question: "¿Necesito un número nuevo de WhatsApp?", answer: "Conectas tu número a través de un proveedor oficial de la API de WhatsApp Business. Te guiamos en el proceso." },
-  { question: "¿La IA puede dar precios equivocados?", answer: "No: solo afirma precios, stock o plazos si puede citar tu catálogo. Si no, deriva la conversación a una persona." },
-  { question: "¿Cómo se confirman los pagos?", answer: "Solo por la confirmación del proveedor de pagos o por conciliación. Una imagen de comprobante nunca marca un pago como pagado." },
-  { question: "¿Mis datos están separados de los de otras empresas?", answer: "Sí. Cada empresa trabaja en su propio espacio aislado y las claves se guardan cifradas." },
-  { question: "¿Qué es BYOK y por qué importa?", answer: "Puedes usar tu propia clave de IA (BYOK) y pagar el consumo directo al proveedor, sin margen nuestro sobre la IA." },
-  { question: "¿Puedo cancelar cuando quiera?", answer: "Sí. Puedes cancelar tu suscripción en cualquier momento desde tu cuenta." },
-] as const;
 
 export function Faq() {
   return (
