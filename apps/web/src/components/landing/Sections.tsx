@@ -16,15 +16,14 @@ export { FAQ };
 // Interactive accordion in its own chunk (server-rendered, hydrated lazily).
 const Accordion = dynamic(() => import("@/components/ui/Accordion").then((mod) => mod.Accordion));
 
-const CARD = "flex flex-col gap-3 rounded-[28px] border border-line bg-white p-6 transition-colors hover:border-line-2";
 const SQUARE_BTN = "grid size-16 shrink-0 place-items-center rounded-2xl border-2 border-lime text-lime no-underline transition hover:bg-lime hover:text-ink";
 
 /** Big two-line heading with a small grey side text, as in the reference. */
-function Heading({ id, title, lead }: { id: string; title: string; lead?: string }) {
+function Heading({ id, title, lead, dark = false }: { id: string; title: string; lead?: string; dark?: boolean }) {
   return (
     <Reveal as="header" from="left" blur className="mb-8 flex flex-col gap-3 desk:flex-row desk:items-end desk:justify-between desk:gap-12">
       <h2 id={id} className={`${H2} max-w-[22ch]`}>{title}</h2>
-      {lead ? <p className="m-0 max-w-[34ch] text-ink-3">{lead}</p> : null}
+      {lead ? <p className={`m-0 max-w-[34ch] ${dark ? "text-white/85" : "text-ink-3"}`}>{lead}</p> : null}
     </Reveal>
   );
 }
@@ -53,34 +52,51 @@ export function WhatIs() {
 
 /** Capability-based comparison by product category: no competitor brands, no unverifiable claims. */
 export function Comparison() {
+  const last = COMPARISON_ROWS.length - 1;
   return (
-    <section id="comparativa" aria-labelledby="comparativa-title" className={SECTION}>
-      <Heading id="comparativa-title" title="Vende+ WSP vs. WhatsApp Business y un CRM genérico." lead="Una comparación por capacidades. Las funciones exactas de cada herramienta varían." />
-      <Reveal>
-        <div role="region" aria-label="Tabla comparativa, desplázala horizontalmente en pantallas pequeñas" tabIndex={0} className="overflow-x-auto rounded-[28px] border border-line bg-white">
-          <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-            <caption className="sr-only">Comparación de capacidades entre la app WhatsApp Business, un CRM genérico y Vende+ WSP</caption>
-            <thead>
-              <tr>
-                <th scope="col" className="p-4 font-semibold text-ink-3">Capacidad</th>
-                {COMPARISON_COLUMNS.map((col, i) => (
-                  <th key={col} scope="col" className={`${DISPLAY} p-4 font-semibold ${i === 2 ? "bg-lime text-ink" : "text-ink"}`}>{col}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {COMPARISON_ROWS.map(({ capability, cells }) => (
-                <tr key={capability} className="border-t border-line align-top">
-                  <th scope="row" className="p-4 font-semibold text-ink">{capability}</th>
-                  {cells.map((cell, i) => (
-                    <td key={cell} className={`p-4 ${i === 2 ? "bg-lime/30 font-semibold text-ink" : "text-ink-3"}`}>{cell}</td>
+    <section id="comparativa" aria-labelledby="comparativa-title" className="container-page scroll-mt-24 pb-[clamp(56px,8vw,112px)]">
+      <div className="relative isolate overflow-hidden rounded-[clamp(28px,4vw,48px)] bg-[linear-gradient(160deg,#050a3a_0%,#0a1696_55%,#1233d8_100%)] px-[clamp(16px,4vw,48px)] py-[clamp(40px,6vw,80px)] text-white">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(255,255,255,0.6)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.6)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+          <div className="absolute -top-24 -left-24 size-80 rounded-full bg-azure opacity-60 blur-3xl" />
+          <div className="absolute -right-20 -bottom-24 size-96 rounded-full bg-lime/20 blur-3xl" />
+        </div>
+        <Heading dark id="comparativa-title" title="Vende+ WSP vs. WhatsApp Business y un CRM genérico." lead="Una comparación por capacidades. Las funciones exactas de cada herramienta varían." />
+        <Reveal>
+          <div role="region" aria-label="Tabla comparativa, desplázala horizontalmente en pantallas pequeñas" tabIndex={0} className="overflow-x-auto overscroll-x-contain rounded-[24px] border border-white/15 bg-white/[0.06] py-3 backdrop-blur-sm focus-visible:outline-2 focus-visible:outline-lime">
+            <table className="w-full min-w-[720px] border-separate border-spacing-0 text-left text-sm">
+              <caption className="sr-only">Comparación de capacidades entre la app WhatsApp Business, un CRM genérico y Vende+ WSP</caption>
+              <thead>
+                <tr>
+                  <th scope="col" className="sticky left-0 z-10 bg-[#0a1696] p-4 font-semibold text-white/85">Capacidad</th>
+                  {COMPARISON_COLUMNS.map((col, i) => (
+                    <th key={col} scope="col" className={`${DISPLAY} p-4 font-semibold ${i === 2 ? "rounded-t-2xl border-x-2 border-t-2 border-lime bg-lime text-ink shadow-[0_0_40px_-8px_rgba(210,243,76,0.7)]" : "text-white/85"}`}>{col}</th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Reveal>
+              </thead>
+              <Stagger as="tbody">
+                {COMPARISON_ROWS.map(({ capability, cells }, r) => (
+                  <StaggerItem as="tr" key={capability} className="align-top">
+                    <th scope="row" className="sticky left-0 z-10 border-t border-white/15 bg-[#0a1696] p-4 font-semibold text-white">{capability}</th>
+                    {cells.map((cell, i) => (
+                      <td key={cell} className={i === 2
+                        ? `border-x-2 border-t border-lime border-t-lime/30 bg-lime/15 p-4 font-semibold text-white ${r === last ? "rounded-b-2xl border-b-2" : ""}`
+                        : "border-t border-white/15 bg-white/[0.04] p-4 text-white/80"}>
+                        {i === 2 ? (
+                          <span className="flex items-start gap-2">
+                            <span aria-hidden className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-lime text-ink"><Check className="size-3.5" /></span>
+                            <span>{cell}</span>
+                          </span>
+                        ) : cell}
+                      </td>
+                    ))}
+                  </StaggerItem>
+                ))}
+              </Stagger>
+            </table>
+          </div>
+        </Reveal>
+      </div>
     </section>
   );
 }
@@ -285,19 +301,26 @@ export function Differentiators() {
 
 export function HowItWorks() {
   return (
-    <section id="como-funciona" aria-labelledby="como-title" className={SECTION}>
-      <Heading id="como-title" title="Listo para atender en cuatro pasos." />
-      <StepsProgress>
-      <Stagger as="ol" className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 desk:grid-cols-4">
-        {STEPS.map(({ title, text }, index) => (
-          <StaggerItem key={title} lift className={CARD}>
-            <StepNumber index={index} total={STEPS.length} className={DISPLAY} />
-            <h3 className={`${DISPLAY} m-0 text-base font-semibold`}><span className="sr-only">Paso {index + 1}: </span>{title}</h3>
-            <p className="m-0 text-ink-3">{text}</p>
-          </StaggerItem>
-        ))}
-      </Stagger>
-      </StepsProgress>
+    <section id="como-funciona" aria-labelledby="como-title" className="container-page scroll-mt-24 pb-[clamp(56px,8vw,112px)]">
+      <div className="relative isolate overflow-hidden rounded-[clamp(28px,4vw,48px)] bg-[linear-gradient(160deg,#050a3a_0%,#0a1696_55%,#1233d8_100%)] px-[clamp(16px,4vw,48px)] py-[clamp(40px,6vw,80px)] text-white">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(255,255,255,0.6)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.6)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+          <div className="absolute -top-24 -left-24 size-80 rounded-full bg-azure opacity-60 blur-3xl" />
+          <div className="absolute -right-20 -bottom-24 size-96 rounded-full bg-lime/20 blur-3xl" />
+        </div>
+        <Heading dark id="como-title" title="Listo para atender en cuatro pasos." />
+        <StepsProgress>
+          <Stagger as="ol" className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 desk:grid-cols-4">
+            {STEPS.map(({ title, text }, index) => (
+              <StaggerItem key={title} lift className="flex flex-col gap-3 rounded-[28px] border border-white/20 bg-white/10 p-6 shadow-[0_12px_40px_-16px_rgba(0,0,0,0.5)] backdrop-blur-md transition-colors hover:border-lime/60 hover:bg-white/[0.16]">
+                <StepNumber index={index} total={STEPS.length} className={DISPLAY} />
+                <h3 className={`${DISPLAY} m-0 text-lg font-semibold text-white`}><span className="sr-only">Paso {index + 1}: </span>{title}</h3>
+                <p className="m-0 text-white/85">{text}</p>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        </StepsProgress>
+      </div>
     </section>
   );
 }

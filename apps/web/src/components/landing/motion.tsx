@@ -23,7 +23,7 @@ export function LandingMotion({ children }: { children: ReactNode }) {
   );
 }
 
-type Tag = "dl" | "div" | "li" | "p" | "header" | "ul" | "ol" | "section" | "span";
+type Tag = "dl" | "div" | "li" | "p" | "header" | "ul" | "ol" | "section" | "span" | "tbody" | "tr";
 const tagOf = (as: Tag) => m[as] as unknown as typeof m.div;
 
 /** Pointer-follow 3D tilt (mouse only, off under reduced motion). Returns style + handlers for a motion element. */
@@ -135,7 +135,7 @@ const ITEM_POP: Variants = {
   show: { opacity: 1, scale: 1, transition: SPRING },
 };
 
-interface StaggerProps extends Omit<HTMLMotionProps<"ul">, "ref"> { as?: "ul" | "ol" | "div" | "dl" }
+interface StaggerProps extends Omit<HTMLMotionProps<"ul">, "ref"> { as?: "ul" | "ol" | "div" | "dl" | "tbody" }
 
 /** Container that staggers its StaggerItem children on scroll. */
 export function Stagger({ as = "ul", ...rest }: StaggerProps) {
@@ -143,7 +143,7 @@ export function Stagger({ as = "ul", ...rest }: StaggerProps) {
   return <Tag data-lp="" variants={LIST} initial="hidden" whileInView="show" viewport={VIEWPORT} {...(rest as object)} />;
 }
 
-interface StaggerItemProps extends Omit<HTMLMotionProps<"li">, "ref"> { as?: "li" | "div"; pop?: boolean; lift?: boolean }
+interface StaggerItemProps extends Omit<HTMLMotionProps<"li">, "ref"> { as?: "li" | "div" | "tr"; pop?: boolean; lift?: boolean }
 
 export function StaggerItem({ as = "li", pop = false, lift = false, ...rest }: StaggerItemProps) {
   const Tag = tagOf(as);
@@ -328,7 +328,7 @@ export function QuoteSteps({ steps }: { steps: readonly { label: string; active:
 
 const StepsContext = createContext<MotionValue<number> | null>(null);
 
-/** Wraps the "cómo funciona" list: a lime bar fills as the section scrolls through, lighting each step. */
+/** Wraps the "cómo funciona" list: a lime connector line draws as the section scrolls through, lighting each step. */
 export function StepsProgress({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start 85%", "end 60%"] });
@@ -336,8 +336,8 @@ export function StepsProgress({ children }: { children: ReactNode }) {
   return (
     <StepsContext.Provider value={progress}>
       <div ref={ref}>
-        <div aria-hidden className="mb-5 h-1 overflow-hidden rounded-full bg-line">
-          <m.div className="h-full origin-left rounded-full bg-lime" style={{ scaleX: progress }} />
+        <div aria-hidden className="mb-6 h-1 overflow-hidden rounded-full bg-white/20">
+          <m.div className="h-full origin-left rounded-full bg-lime shadow-[0_0_16px_rgba(210,243,76,0.8)]" style={{ scaleX: progress }} />
         </div>
         {children}
       </div>
@@ -345,16 +345,16 @@ export function StepsProgress({ children }: { children: ReactNode }) {
   );
 }
 
-/** Numbered badge that fills lime once the scroll progress reaches its step. */
+/** Big lime step number, rendered once (a glow layer behind it lights up with the scroll progress). */
 export function StepNumber({ index, total, className }: { index: number; total: number; className?: string }) {
   const progress = useContext(StepsContext);
-  const fallback = useMotionValue(0);
+  const fallback = useMotionValue(1);
   const at = (index + 0.5) / total;
-  const fill = useTransform(progress ?? fallback, [Math.max(at - 0.12, 0), at], [0, 1]);
+  const glow = useTransform(progress ?? fallback, [Math.max(at - 0.12, 0), at], [0.15, 1]);
   return (
-    <span aria-hidden className={`relative grid size-11 place-items-center rounded-full bg-ink font-bold text-lime ${className ?? ""}`}>
+    <span aria-hidden className={`relative inline-block text-[clamp(3rem,2.4rem+2vw,4.5rem)] leading-none font-extrabold tracking-[-0.04em] text-lime ${className ?? ""}`}>
+      <m.span className="absolute inset-0 -z-10 rounded-full bg-lime/40 blur-2xl" style={{ opacity: glow }} />
       {index + 1}
-      <m.span className="absolute inset-0 grid place-items-center rounded-full bg-lime text-ink" style={{ opacity: fill }}>{index + 1}</m.span>
     </span>
   );
 }
