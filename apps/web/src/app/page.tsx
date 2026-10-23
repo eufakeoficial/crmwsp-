@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { Hero } from "@/components/landing/Hero";
 import { LandingStyles } from "@/components/landing/LandingStyles";
+import { LandingMotion } from "@/components/landing/motion";
 import { DemoVideo, Collaboration, Differentiators, Faq, Features, FinalCta, HowItWorks, LookingTo, PricingTeaser, ProblemSolution, Proof, Showcase, TrustStrip } from "@/components/landing/Sections";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
@@ -14,6 +15,7 @@ export default async function HomePage() {
     <>
       <LandingStyles />
       <SiteHeader hasSession={hasSession} />
+      <LandingMotion>
       <main>
         <Hero />
         <TrustStrip />
@@ -30,6 +32,7 @@ export default async function HomePage() {
         <Faq />
         <FinalCta />
       </main>
+      </LandingMotion>
       <SiteFooter />
     </>
   );

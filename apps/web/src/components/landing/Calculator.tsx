@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { Reveal } from "./motion";
 import { DISPLAY } from "./styles";
 
 const PRESETS = [
@@ -18,7 +19,7 @@ function clamp(raw: string, max: number): number {
 }
 
 const FIELD = "w-full rounded-2xl border border-line bg-paper-2 px-4 py-3 text-base text-ink outline-none focus-visible:border-ink";
-const TAB = "min-h-11 cursor-pointer rounded-full px-5 text-sm font-bold";
+const TAB = "min-h-11 min-w-11 cursor-pointer rounded-full px-5 text-sm font-bold";
 
 /** Client-side savings estimator. Pure arithmetic on the inputs; nothing is sent anywhere. */
 export function SavingsCalculator() {
@@ -38,8 +39,8 @@ export function SavingsCalculator() {
 
   return (
     <div>
-      <div className="rounded-[28px] bg-lime px-5 py-[clamp(28px,4vw,48px)] text-center text-ink">
-        <h2 id="calculadora-title" className={`${DISPLAY} m-0 mx-auto max-w-[22ch] text-[clamp(24px,3.4vw,40px)] leading-[1.1] font-bold tracking-[-0.02em] text-balance`}>
+      <Reveal spring y={36} className="rounded-[28px] bg-lime px-4 py-[clamp(28px,4vw,48px)] text-center text-ink sm:px-5">
+        <h2 id="calculadora-title" className={`${DISPLAY} m-0 mx-auto max-w-[22ch] text-[clamp(1.5rem,1.1rem+1.8vw,2.5rem)] leading-[1.1] font-bold tracking-[-0.02em] text-balance`}>
           Calcula cuánto tiempo puede ahorrarte la IA.
         </h2>
         <div role="group" aria-label="Ejemplos de volumen" className="mt-6 flex flex-wrap justify-center gap-2">
@@ -66,10 +67,10 @@ export function SavingsCalculator() {
             {CUSTOM}
           </button>
         </div>
-      </div>
+      </Reveal>
 
       <div className="mt-4 grid gap-4 desk:grid-cols-[1.6fr_1fr]">
-        <div className="rounded-[28px] bg-white p-[clamp(20px,3vw,32px)] text-ink">
+        <Reveal spring y={40} delay={0.05} className="rounded-[28px] bg-white p-[clamp(20px,3vw,32px)] text-ink">
           <h3 className={`${DISPLAY} m-0 text-lg font-semibold`}>Calculadora de ahorro</h3>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <div>
@@ -85,13 +86,13 @@ export function SavingsCalculator() {
                 <span>Mensajes que resolvería la IA (supuesto)</span>
                 <span className="text-ink">{pct}%</span>
               </label>
-              <input id={idPct} type="range" min={10} max={90} step={5} value={pct} onChange={(e) => setPct(Number(e.target.value))} className="h-6 w-full cursor-pointer accent-ink" />
+              <input id={idPct} type="range" min={10} max={90} step={5} value={pct} onChange={(e) => setPct(Number(e.target.value))} className="h-11 w-full cursor-pointer accent-ink" />
             </div>
           </div>
           <p className="mt-4 mb-0 text-sm text-ink-3">Calculado sobre {DAYS} días al mes.</p>
-        </div>
+        </Reveal>
 
-        <div className="rounded-[28px] bg-white p-[clamp(20px,3vw,32px)] text-ink">
+        <Reveal spring y={40} delay={0.15} className="rounded-[28px] bg-white p-[clamp(20px,3vw,32px)] text-ink">
           <h3 className={`${DISPLAY} m-0 text-lg font-semibold`}>Estimación mensual</h3>
           <div aria-live="polite">
             <p className="mt-5 mb-0 text-sm text-ink-3">Tiempo dedicado a responder hoy</p>
@@ -108,7 +109,7 @@ export function SavingsCalculator() {
             </div>
           </div>
           <p className="mt-4 mb-0 text-xs text-ink-3">Estimación orientativa con los datos que ingreses y el supuesto de {pct}%. No es una promesa de resultados.</p>
-        </div>
+        </Reveal>
       </div>
     </div>
   );
