@@ -163,6 +163,17 @@ export async function runSubscriptionReconcileTick(deps: SubscriptionBillingDeps
   return res;
 }
 
+/**
+ * Switches tenant plans whose covering paid period changed (a stacked charge whose period began).
+ * Settlement never grants a future period's plan early (finding F7, migration 0065).
+ */
+export async function runSubscriptionPlanSync(deps: Pick<SubscriptionBillingDeps, "db" | "logger">, limit = 200): Promise<number> {
+  const [row] = await deps.db.execute<{ n: number | null }>(sql`select public.subscription_plan_sync_due(${limit}) as n`);
+  const n = Number(row?.n ?? 0);
+  if (n > 0) (deps.logger ?? silent).info(`subscription plan sync: ${n} tenant(s) switched`);
+  return n;
+}
+
 export interface SubscriptionBillingWorkerOptions extends SubscriptionBillingDeps {
   connection: ConnectionOptions;
   queueName?: string;
@@ -174,7 +185,11 @@ export function createSubscriptionBillingWorker(opts: SubscriptionBillingWorkerO
     queueName,
     async (job: Job) => {
       if (job.name === SETTLE_SUBSCRIPTION_EVENT_JOB) return settleSubscriptionEvent(deps, job.data);
-      if (job.name === SUBSCRIPTION_RECONCILE_TICK_JOB) return runSubscriptionReconcileTick(deps);
+      if (job.name === SUBSCRIPTION_RECONCILE_TICK_JOB) {
+        const res = await runSubscriptionReconcileTick(deps);
+        await runSubscriptionPlanSync(deps);
+        return res;
+      }
       throw new UnrecoverableError("unknown job name");
     },
     { connection, concurrency: 2 },

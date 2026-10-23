@@ -1,7 +1,7 @@
 import type { Database, Transaction } from "@crmwsp/db";
 import { UnrecoverableError } from "bullmq";
 import { describe, expect, it, vi } from "vitest";
-import { isSubscriptionRestricted, runSubscriptionReconcileTick, settleSubscriptionEvent } from "../subscription-billing/index.js";
+import { isSubscriptionRestricted, runSubscriptionPlanSync, runSubscriptionReconcileTick, settleSubscriptionEvent } from "../subscription-billing/index.js";
 
 const now = new Date("2026-10-23T12:00:00Z");
 const txWith = (d: string | null) => ({ execute: vi.fn(async () => [{ d }]) }) as unknown as Transaction;
@@ -31,5 +31,11 @@ describe("subscription billing worker", () => {
 
   it("rejects invalid job data as unrecoverable", async () => {
     await expect(settleSubscriptionEvent({ db: {} as Database, provider: null }, { eventId: "x" })).rejects.toBeInstanceOf(UnrecoverableError);
+  });
+
+  it("plan sync delegates to the SQL due-switch and returns the switched count", async () => {
+    const execute = vi.fn(async () => [{ n: 2 }]);
+    expect(await runSubscriptionPlanSync({ db: { execute } as unknown as Database })).toBe(2);
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 });

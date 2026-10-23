@@ -3,7 +3,7 @@
  * Provider: NOWPayments one-off crypto invoices; each settled payment grants one 30-day period.
  * There is no provider-side recurring billing: renewing means paying again.
  */
-import type { PlanDefinition } from "./index.js";
+import type { PlanDefinition, PlanId } from "./index.js";
 
 export const SUBSCRIPTION_PERIOD_DAYS = 30;
 /** Days after the paid period ends before the tenant is restricted (never deleted). */
@@ -188,4 +188,25 @@ export function applySubscriptionAccess(plan: PlanDefinition, access: Subscripti
 /** Price (major units, 2 decimals) charged for one 30-day period of a plan. */
 export function periodPriceUsd(plan: PlanDefinition): string {
   return plan.priceMonthlyUsd.toFixed(2);
+}
+
+/** One settled (paid, not refunded) charge period; dates are ISO `YYYY-MM-DD`, end exclusive. */
+export interface SettledPeriod {
+  plan: PlanId;
+  periodStart: string;
+  periodEnd: string;
+}
+
+/**
+ * Plan granted on `date` (ISO day): the plan of the settled period covering it, or null when none
+ * does. Each charge grants its plan only for its own [periodStart, periodEnd) window, so a
+ * higher-tier charge stacked behind cheaper prepaid periods does not upgrade them (finding F7).
+ * Mirrors `subscription_effective_plan_internal` (migration 0065).
+ */
+export function subscriptionPlanAt(periods: readonly SettledPeriod[], date: string): PlanId | null {
+  let found: SettledPeriod | null = null;
+  for (const p of periods) {
+    if (p.periodStart <= date && date < p.periodEnd && (!found || p.periodStart > found.periodStart)) found = p;
+  }
+  return found ? found.plan : null;
 }
