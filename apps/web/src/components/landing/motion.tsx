@@ -403,42 +403,32 @@ export function AnimatedNumber({ value, className }: { value: number; className?
 
 interface DemoPlayerProps { webm: string; mp4: string; poster: string; label: string; width: number; height: number }
 
-/** Silent looping demo: plays only while in view; under reduced motion it never autoplays and shows controls. */
+/** Silent looping demo: autoplays muted on load and loops; shows controls only if the browser blocks playback. */
 export function DemoPlayer({ webm, mp4, poster, label, width, height }: DemoPlayerProps) {
   const ref = useRef<HTMLVideoElement>(null);
-  const reduce = useReducedMotion();
   const [blocked, setBlocked] = useState(false);
   useEffect(() => {
     const el = ref.current;
-    if (!el || reduce) return;
+    if (!el) return;
     // React does not reliably reflect `muted` as a DOM property; browsers only autoplay muted media.
     el.muted = true;
-    const start = () => void el.play().catch(() => setBlocked(true));
-    if (typeof IntersectionObserver === "undefined") {
-      start();
-      return;
-    }
-    const io = new IntersectionObserver(([entry]) => {
-      if (!entry) return;
-      if (entry.isIntersecting) start();
-      else el.pause();
-    }, { threshold: 0.2 });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [reduce]);
+    el.defaultMuted = true;
+    el.play().catch(() => setBlocked(true));
+  }, []);
   return (
     <video
       ref={ref}
       className="block h-auto w-full"
       width={width}
       height={height}
+      autoPlay
       muted
       loop
       playsInline
-      preload="metadata"
+      preload="auto"
       poster={poster}
       aria-label={label}
-      {...(reduce || blocked ? { controls: true } : {})}
+      {...(blocked ? { controls: true } : {})}
     >
       <source src={webm} type="video/webm" />
       <source src={mp4} type="video/mp4" />
