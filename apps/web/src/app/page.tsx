@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { SiteAssistant } from "@/components/landing/Assistant";
+import { BackToTop } from "@/components/landing/BackToTop";
 import { DemoVideo } from "@/components/landing/DemoVideo";
 import { DEMO_VIDEO_PLAYBOOK } from "@/components/landing/content";
 import { Hero } from "@/components/landing/Hero";
@@ -46,6 +47,7 @@ export default async function HomePage() {
         <Faq />
         <FinalCta />
       </main>
+      <BackToTop />
       <SiteAssistant />
       </LandingMotion>
       <SiteFooter />

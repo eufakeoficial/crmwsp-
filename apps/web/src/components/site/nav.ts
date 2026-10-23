@@ -3,11 +3,11 @@ export interface SiteNavItem {
   label: string;
 }
 
-/** Placeholder anchors for the future landing. */
+/** Landing anchors, listed in page order so the menu scrolls top to bottom. */
 export const SITE_NAV: readonly SiteNavItem[] = [
+  { href: "/#demo-venta", label: "Demo" },
   { href: "/#beneficios", label: "Beneficios" },
   { href: "/#como-funciona", label: "Cómo funciona" },
-  { href: "/#demo", label: "Demo" },
   { href: "/#precios", label: "Precios" },
   { href: "/#preguntas", label: "Preguntas" },
 ];
