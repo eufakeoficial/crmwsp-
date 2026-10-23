@@ -22,6 +22,10 @@ export const channelConnections = pgTable(
     phoneE164: text("phone_e164").notNull(),
     externalAppId: text("external_app_id"),
     credentialsEncrypted: bytea("credentials_encrypted"),
+    /** Gupshup Partner API app id (uuid); needed for template submission/listing. Not a secret. */
+    gupshupAppId: text("gupshup_app_id"),
+    /** Gupshup Partner API app token (`Authorization` header), encrypted like the API key. */
+    partnerTokenEncrypted: bytea("partner_token_encrypted"),
     webhookToken: text("webhook_token").notNull().unique("channel_connections_webhook_token_unique"),
     status: channelConnectionStatus("status").notNull().default("pending"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

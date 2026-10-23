@@ -392,6 +392,13 @@
       "when": 1792570020000,
       "tag": "0060_follow_up_quote_unanswered",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792570030000,
+      "tag": "0061_channel_partner_credentials",
+      "breakpoints": true
     }
   ]
 }

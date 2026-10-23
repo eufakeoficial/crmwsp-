@@ -190,6 +190,31 @@ export const v3EnvelopeSchema = z.object({
 
 // ---------- send API response ----------
 
+// ---------- Templates (Partner API: /partner/app/{appId}/templates, partner app token) ----------
+
+const templateRowSchema = z
+  .object({
+    id: z.string().min(1).max(256),
+    elementName: z.string().min(1).max(512),
+    languageCode: z.string().min(2).max(16),
+    category: z.string().max(64).optional(),
+    status: z.string().max(64).optional(),
+    data: z.string().max(4096).optional(),
+    reason: z.string().max(1024).nullish(),
+  })
+  .loose();
+export type GupshupTemplateRow = z.infer<typeof templateRowSchema>;
+
+export const templateListResponseSchema = z.object({
+  status: z.string(),
+  templates: z.array(templateRowSchema).default([]),
+});
+
+export const templateSubmitResponseSchema = z.object({
+  status: z.string(),
+  template: templateRowSchema.optional(),
+});
+
 export const sendResponseSchema = z.object({
   status: z.string(),
   messageId: z.string().min(1).optional(),
