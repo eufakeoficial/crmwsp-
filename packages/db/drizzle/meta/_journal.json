@@ -385,6 +385,13 @@
       "when": 1792570010000,
       "tag": "0059_rls_sales_playbooks",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792570020000,
+      "tag": "0060_follow_up_quote_unanswered",
+      "breakpoints": true
     }
   ]
 }

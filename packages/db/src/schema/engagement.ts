@@ -27,7 +27,7 @@ export const templateCategory = pgEnum("template_category", ["marketing", "utili
 export const templateStatus = pgEnum("template_status", ["approved", "pending", "rejected", "paused", "disabled"]);
 export const followUpStatus = pgEnum("follow_up_status", ["suggested", "scheduled", "sent", "skipped", "cancelled"]);
 /** What created a follow-up: a person, or one of the automatic recovery rules. */
-export const followUpRule = pgEnum("follow_up_rule", ["manual", "lead_stalled", "order_pending_payment"]);
+export const followUpRule = pgEnum("follow_up_rule", ["manual", "lead_stalled", "order_pending_payment", "quote_unanswered"]);
 
 export interface ConsentEvidence {
   messageId?: string;
