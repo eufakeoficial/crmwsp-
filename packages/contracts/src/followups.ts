@@ -3,7 +3,7 @@ import { isoDateTimeSchema, uuidSchema } from "./common.js";
 
 export const followUpStatusSchema = z.enum(["suggested", "scheduled", "sent", "skipped", "cancelled"]);
 export type FollowUpStatus = z.infer<typeof followUpStatusSchema>;
-export const followUpRuleSchema = z.enum(["manual", "lead_stalled", "order_pending_payment"]);
+export const followUpRuleSchema = z.enum(["manual", "lead_stalled", "order_pending_payment", "quote_unanswered"]);
 export type FollowUpRule = z.infer<typeof followUpRuleSchema>;
 
 export const followUpSchema = z.object({
@@ -83,6 +83,8 @@ const ruleSettingsSchema = z.object({
 export const followUpSettingsSchema = z.object({
   leadStalled: ruleSettingsSchema,
   orderPendingPayment: ruleSettingsSchema,
+  /** Quote sent (status `sent`) and the contact has not written since. */
+  quoteUnanswered: ruleSettingsSchema,
   /** Local (tenant timezone) window in which nothing is sent; may wrap midnight. Null disables it. */
   quietHours: z.object({ start: hhmm, end: hhmm }).nullable(),
 });
@@ -91,6 +93,7 @@ export type FollowUpSettings = z.infer<typeof followUpSettingsSchema>;
 export const patchFollowUpSettingsRequestSchema = z.object({
   leadStalled: ruleSettingsSchema.partial().optional(),
   orderPendingPayment: ruleSettingsSchema.partial().optional(),
+  quoteUnanswered: ruleSettingsSchema.partial().optional(),
   quietHours: z.object({ start: hhmm, end: hhmm }).nullable().optional(),
 });
 export type PatchFollowUpSettingsRequest = z.infer<typeof patchFollowUpSettingsRequestSchema>;

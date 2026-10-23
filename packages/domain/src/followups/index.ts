@@ -20,6 +20,12 @@ export const DEFAULT_FOLLOW_UP_SETTINGS: FollowUpSettings = {
     message: "Hi! Your order is still waiting for payment. Do you need help completing it?",
     templateId: null,
   },
+  quoteUnanswered: {
+    enabled: false,
+    delayHours: 48,
+    message: "Hi! Did you get a chance to review our quote? We can adjust it or answer any question you have.",
+    templateId: null,
+  },
   quietHours: null,
 };
 
@@ -32,6 +38,10 @@ export function resolveFollowUpSettings(raw: unknown): FollowUpSettings {
       ...DEFAULT_FOLLOW_UP_SETTINGS.orderPendingPayment,
       ...(isObj(r.orderPendingPayment) ? r.orderPendingPayment : {}),
     },
+    quoteUnanswered: {
+      ...DEFAULT_FOLLOW_UP_SETTINGS.quoteUnanswered,
+      ...(isObj(r.quoteUnanswered) ? r.quoteUnanswered : {}),
+    },
     quietHours: r.quietHours === undefined ? DEFAULT_FOLLOW_UP_SETTINGS.quietHours : r.quietHours,
   };
   const parsed = followUpSettingsSchema.safeParse(merged);
@@ -42,6 +52,7 @@ export function mergeFollowUpSettings(current: FollowUpSettings, patch: PatchFol
   return followUpSettingsSchema.parse({
     leadStalled: { ...current.leadStalled, ...(patch.leadStalled ?? {}) },
     orderPendingPayment: { ...current.orderPendingPayment, ...(patch.orderPendingPayment ?? {}) },
+    quoteUnanswered: { ...current.quoteUnanswered, ...(patch.quoteUnanswered ?? {}) },
     quietHours: patch.quietHours === undefined ? current.quietHours : patch.quietHours,
   });
 }
@@ -104,6 +115,10 @@ export interface DispatchInput {
   approvedTemplate: { id: string; body: string } | null;
   /** Order status when the follow-up targets an order. */
   orderStatus: string | null;
+  /** Quote status when the follow-up targets a quote (omitted otherwise). */
+  quoteStatus?: string | null;
+  /** Quote `valid_until`; an elapsed quote is no longer worth chasing. */
+  quoteValidUntil?: Date | null;
   quietHours: FollowUpSettings["quietHours"];
   timeZone: string;
 }
@@ -118,7 +133,7 @@ export type DispatchDecision =
 
 /**
  * Pure decision for one due follow-up. Order: not-pending → noop; contact replied or order no
- * longer awaiting payment → cancel; opt-out → skip; quiet hours → defer; window open → free text;
+ * longer awaiting payment → cancel; quote no longer `sent` (accepted/rejected/expired/cancelled) or past `valid_until` → cancel; opt-out → skip; quiet hours → defer; window open → free text;
  * window closed → approved template with explicit consent, else skip.
  */
 export function decideDispatch(i: DispatchInput): DispatchDecision {
@@ -128,6 +143,12 @@ export function decideDispatch(i: DispatchInput): DispatchDecision {
   }
   if (i.orderStatus !== null && i.orderStatus !== "pending_payment") {
     return { action: "cancel", reason: `order_${i.orderStatus}` };
+  }
+  if (i.quoteStatus != null && i.quoteStatus !== "sent") {
+    return { action: "cancel", reason: `quote_${i.quoteStatus}` };
+  }
+  if (i.quoteStatus != null && i.quoteValidUntil && i.quoteValidUntil.getTime() <= i.now.getTime()) {
+    return { action: "cancel", reason: "quote_expired" };
   }
   if (i.conversationResolved) return { action: "cancel", reason: "conversation_resolved" };
   if (i.consent === "revoked") return { action: "skip", reason: "consent_revoked" };
@@ -145,4 +166,5 @@ export function decideDispatch(i: DispatchInput): DispatchDecision {
 
 /** Stable dedupe keys: one automatic follow-up per triggering message / order. */
 export const leadStalledKey = (messageId: string): string => `lead_stalled:${messageId}`;
+export const quoteUnansweredKey = (quoteId: string): string => `quote_unanswered:${quoteId}`;
 export const orderPendingKey = (orderId: string): string => `order_pending_payment:${orderId}`;

@@ -5,6 +5,7 @@ import {
   isWindowOpen,
   mergeFollowUpSettings,
   quietHoursEnd,
+  quoteUnansweredKey,
   resolveFollowUpSettings,
   type DispatchInput,
 } from "./index.js";
@@ -101,5 +102,55 @@ describe("settings", () => {
     expect(ok.leadStalled).toMatchObject({ enabled: true, delayHours: 2 });
     expect(ok.orderPendingPayment.delayHours).toBe(24);
     expect(mergeFollowUpSettings(ok, { orderPendingPayment: { delayHours: 6 } }).orderPendingPayment.delayHours).toBe(6);
+  });
+});
+
+describe("quote_unanswered", () => {
+  const q = (o: Partial<DispatchInput> = {}): DispatchInput =>
+    base({ quoteStatus: "sent", quoteValidUntil: new Date(now.getTime() + 86_400_000), ...o });
+
+  it("defaults to disabled with a 48h delay", () => {
+    expect(DEFAULT_FOLLOW_UP_SETTINGS.quoteUnanswered).toMatchObject({ enabled: false, delayHours: 48, templateId: null });
+    expect(resolveFollowUpSettings(undefined).quoteUnanswered.delayHours).toBe(48);
+  });
+  it("merges a per-tenant delay and ignores invalid values", () => {
+    const s = resolveFollowUpSettings({ quoteUnanswered: { enabled: true, delayHours: 72 } });
+    expect(s.quoteUnanswered).toMatchObject({ enabled: true, delayHours: 72 });
+    expect(resolveFollowUpSettings({ quoteUnanswered: { delayHours: 0 } }).quoteUnanswered.delayHours).toBe(48);
+    expect(mergeFollowUpSettings(s, { quoteUnanswered: { delayHours: 24 } }).quoteUnanswered.delayHours).toBe(24);
+  });
+  it("sends free text inside the window while the quote is still sent", () => {
+    expect(decideDispatch(q())).toEqual({ action: "send_text", body: "hello" });
+  });
+  it("cancels when the quote was accepted, rejected, expired or cancelled", () => {
+    for (const st of ["accepted", "rejected", "expired", "cancelled"]) {
+      expect(decideDispatch(q({ quoteStatus: st }))).toEqual({ action: "cancel", reason: `quote_${st}` });
+    }
+  });
+  it("cancels once valid_until has passed even if the status is still sent", () => {
+    expect(decideDispatch(q({ quoteValidUntil: h(1) }))).toEqual({ action: "cancel", reason: "quote_expired" });
+  });
+  it("cancels when the contact replied after the follow-up was created", () => {
+    expect(decideDispatch(q({ lastInboundAt: h(1) }))).toEqual({ action: "cancel", reason: "contact_replied" });
+  });
+  it("respects consent and the 24h window rules", () => {
+    expect(decideDispatch(q({ consent: "revoked" }))).toEqual({ action: "skip", reason: "consent_revoked" });
+    expect(decideDispatch(q({ lastInboundAt: h(30) }))).toEqual({
+      action: "skip",
+      reason: "window_closed_no_template",
+    });
+    const tpl = { id: "t1", body: "tpl" };
+    expect(decideDispatch(q({ lastInboundAt: h(30), approvedTemplate: tpl }))).toEqual({
+      action: "skip",
+      reason: "window_closed_no_consent",
+    });
+    expect(decideDispatch(q({ lastInboundAt: h(30), approvedTemplate: tpl, consent: "granted" }))).toEqual({
+      action: "send_template",
+      templateId: "t1",
+      body: "tpl",
+    });
+  });
+  it("builds a stable dedupe key per quote", () => {
+    expect(quoteUnansweredKey("abc")).toBe("quote_unanswered:abc");
   });
 });

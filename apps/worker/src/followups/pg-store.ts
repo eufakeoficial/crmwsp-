@@ -5,9 +5,10 @@ import {
   messageTemplates,
   messages,
   orders,
+  quotes,
   type Transaction,
 } from "@crmwsp/db";
-import { leadStalledKey, orderPendingKey, type ConsentState } from "@crmwsp/domain";
+import { leadStalledKey, orderPendingKey, quoteUnansweredKey, type ConsentState } from "@crmwsp/domain";
 import type { FollowUpSettings } from "@crmwsp/contracts";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import type { DueFollowUp, FollowUpStore } from "./engine.js";
@@ -26,6 +27,7 @@ export function createPgFollowUpStore(tx: Transaction, tenantId: string): Follow
           messageBody: followUps.messageBody,
           templateId: followUps.templateId,
           orderId: followUps.orderId,
+          quoteId: followUps.quoteId,
         })
         .from(followUps)
         .where(
@@ -75,6 +77,16 @@ export function createPgFollowUpStore(tx: Transaction, tenantId: string): Follow
           const [o] = await tx.select({ status: orders.status }).from(orders).where(eq(orders.id, r.orderId));
           orderStatus = o?.status ?? "deleted";
         }
+        let quoteStatus: string | null = null;
+        let quoteValidUntil: Date | null = null;
+        if (r.quoteId) {
+          const [q] = await tx
+            .select({ status: quotes.status, validUntil: quotes.validUntil })
+            .from(quotes)
+            .where(eq(quotes.id, r.quoteId));
+          quoteStatus = q?.status ?? "deleted";
+          quoteValidUntil = q?.validUntil ?? null;
+        }
         out.push({
           id: r.id,
           conversationId: r.conversationId,
@@ -88,6 +100,8 @@ export function createPgFollowUpStore(tx: Transaction, tenantId: string): Follow
           consent: (consent?.status ?? "unknown") as ConsentState,
           approvedTemplate,
           orderStatus,
+          quoteStatus,
+          quoteValidUntil,
         });
       }
       return out;
@@ -211,6 +225,34 @@ export async function createRuleFollowUps(tx: Transaction, s: FollowUpSettings):
         and o.updated_at > now() - ${lookback}::interval
         and not exists (
           select 1 from follow_ups f where f.order_id = o.id and f.status in ('suggested', 'scheduled')
+        )
+      on conflict (tenant_id, dedupe_key) where dedupe_key is not null do nothing
+      returning id`);
+    created += rows.length;
+  }
+  const quo = s.quoteUnanswered;
+  if (quo.enabled) {
+    const delay = `${quo.delayHours} hours`;
+    const lookback = `${quo.delayHours + 7 * 24} hours`;
+    // Unanswered = still `sent`, still valid, and the contact has not written since it was sent.
+    // Never stacks on a conversation that already has a pending follow-up (one nudge at a time).
+    const rows = await tx.execute(sql`
+      insert into follow_ups (tenant_id, conversation_id, quote_id, rule, dedupe_key, reason, message_body, template_id, scheduled_at, status)
+      select q.tenant_id, q.conversation_id, q.id, 'quote_unanswered', ${quoteUnansweredKey("")} || q.id::text,
+             ${`Quote sent ${quo.delayHours}h ago without a reply`} || ' (' || q.number || ')',
+             ${quo.message}, ${quo.templateId}::uuid, now(), 'scheduled'
+      from quotes q
+      join conversations c on c.id = q.conversation_id and c.tenant_id = q.tenant_id
+      where q.status = 'sent'
+        and q.conversation_id is not null
+        and q.sent_at is not null
+        and q.sent_at <= now() - ${delay}::interval
+        and q.sent_at > now() - ${lookback}::interval
+        and (q.valid_until is null or q.valid_until > now())
+        and c.status <> 'resolved'
+        and (c.last_inbound_at is null or c.last_inbound_at < q.sent_at)
+        and not exists (
+          select 1 from follow_ups f where f.conversation_id = q.conversation_id and f.status in ('suggested', 'scheduled')
         )
       on conflict (tenant_id, dedupe_key) where dedupe_key is not null do nothing
       returning id`);
