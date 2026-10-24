@@ -22,6 +22,10 @@ describe("isActive", () => {
     expect(new Set(all.map((i) => i.key)).size).toBe(all.length);
     expect(new Set(all.map((i) => i.href)).size).toBe(all.length);
   });
+  it("shows Soporte next to Configuración for every member", () => {
+    expect(NAV_SECONDARY.map((i) => i.key)).toEqual(["settings", "support"]);
+    expect(NAV_SECONDARY.find((i) => i.key === "support")?.href).toBe("/app/support");
+  });
   it("detects when the active route is inside Más", () => {
     expect(isMoreActive("/app/products/42")).toBe(true);
     expect(isMoreActive("/app/payments/reviews")).toBe(true);

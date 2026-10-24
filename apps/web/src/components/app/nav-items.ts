@@ -1,4 +1,4 @@
-import { AlertCircle, BookOpen, Bot, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -55,6 +55,7 @@ export const NAV_MORE: readonly NavItem[] = [
 
 export const NAV_SECONDARY: readonly NavItem[] = [
   { key: "settings", label: "Configuración", href: "/app/settings", icon: Settings, children: SETTINGS_SECTIONS },
+  { key: "support", label: "Soporte", href: "/app/support", icon: LifeBuoy },
 ];
 
 /** Active item from the path: `/app` only matches exactly, the rest match by prefix. */

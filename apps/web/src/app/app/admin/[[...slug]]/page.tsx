@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { AuditPage } from "@/components/platform/AuditPage";
+import { CannedResponsesPage } from "@/components/platform/CannedResponsesPage";
+import { SupportInbox } from "@/components/platform/SupportInbox";
 import { ChannelsPage } from "@/components/platform/ChannelsPage";
 import { PaymentsPage } from "@/components/platform/PaymentsPage";
 import { PlansPage } from "@/components/platform/PlansPage";
@@ -21,6 +23,8 @@ const SECTIONS: Record<string, () => React.JSX.Element> = {
   payments: () => <PaymentsPage />,
   plans: () => <PlansPage />,
   usage: () => <UsagePage />,
+  support: () => <SupportInbox />,
+  canned: () => <CannedResponsesPage />,
   audit: () => <AuditPage />,
   settings: () => <PlatformSettingsPage />,
 };
