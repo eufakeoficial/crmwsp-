@@ -1,7 +1,7 @@
 "use client";
 
 import type { Channel } from "@crmwsp/contracts";
-import { Lock, Plug } from "lucide-react";
+import { Lock, MailCheck, Plug } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { useSession } from "@/components/app/SessionProvider";
@@ -10,13 +10,14 @@ import { canManageChannels } from "@/components/app/roles";
 import { useToast } from "@/lib/hooks/use-toast";
 import { buildDialog360ConnectUrl, DIALOG360_STATE_KEY } from "@/lib/dialog360";
 import { channelsApi } from "@/lib/inbox-api";
-import { channelErrorMessage, isEncryptionNotConfigured } from "@/lib/messages";
+import { api } from "@/lib/api";
+import { EMAIL_NOT_VERIFIED_TEXT, channelErrorMessage, errorMessage, isEmailNotVerified, isEncryptionNotConfigured } from "@/lib/messages";
 import { ChannelCard } from "./ChannelCard";
 import { ConnectChannelDialog } from "./ConnectChannelDialog";
 import { PartnerCredentialsDialog } from "./PartnerCredentialsDialog";
 
 export function ChannelsView() {
-  const { tenant } = useSession();
+  const { me, tenant } = useSession();
   const canManage = canManageChannels(tenant?.role);
   const [channels, setChannels] = useState<Channel[] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -26,6 +27,7 @@ export function ChannelsView() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [d360PartnerId, setD360PartnerId] = useState<string | null>(null);
   const { message, show } = useToast();
+  const [resending, setResending] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -73,7 +75,22 @@ export function ChannelsView() {
     }
   }
 
+  async function resendVerification() {
+    setResending(true);
+    try {
+      await api.resendVerification();
+      show(`Te enviamos un correo a ${me.user.email}.`);
+    } catch (err) {
+      show(errorMessage(err));
+    } finally {
+      setResending(false);
+    }
+  }
+
   const noKeys = isEncryptionNotConfigured(error);
+  const isOwner = tenant?.role === "owner";
+  // Connecting WhatsApp waits for the owner's verified email (API: 403 EMAIL_NOT_VERIFIED).
+  const emailBlocked = (isOwner && me.user.emailVerified === false) || isEmailNotVerified(error);
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -81,16 +98,33 @@ export function ChannelsView() {
         {canManage ? (
           <div className="flex flex-wrap gap-2">
             {d360PartnerId ? (
-              <Button variant="whatsapp" onClick={() => void startDialog360(d360PartnerId)}>
+              <Button variant="whatsapp" disabled={emailBlocked} onClick={() => void startDialog360(d360PartnerId)}>
                 <Plug aria-hidden className="size-5" />Conectar con 360dialog (mantén tu WhatsApp Business)
               </Button>
             ) : null}
-            <Button variant={d360PartnerId ? "outline" : "whatsapp"} onClick={() => setConnecting(true)}>
+            <Button variant={d360PartnerId ? "outline" : "whatsapp"} disabled={emailBlocked} onClick={() => setConnecting(true)}>
               <Plug aria-hidden className="size-5" />Conectar WhatsApp (Gupshup)
             </Button>
           </div>
         ) : null}
       </div>
+      {emailBlocked ? (
+        <div className="mb-4">
+          <Banner tone="info" icon={MailCheck}>
+            <b>{EMAIL_NOT_VERIFIED_TEXT}.</b>{" "}
+            {isOwner
+              ? "Te enviamos un enlace al registrarte. Mientras tanto puedes configurar todo lo demás."
+              : "Quien creó la cuenta debe confirmar su correo."}
+            {isOwner ? (
+              <span className="mt-2 block">
+                <Button variant="outline" size="sm" disabled={resending} onClick={() => void resendVerification()}>
+                  {resending ? "Enviando…" : "Reenviar correo"}
+                </Button>
+              </span>
+            ) : null}
+          </Banner>
+        </div>
+      ) : null}
       {noKeys ? (
         <div className="mb-4">
           <Banner tone="info" icon={Lock}>

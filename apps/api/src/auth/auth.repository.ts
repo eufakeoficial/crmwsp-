@@ -84,6 +84,31 @@ export class AuthRepository {
     return rows[0]?.user_id ?? undefined;
   }
 
+  /** `email_verification_issue` (0095): no row for unknown or already verified users. */
+  async issueEmailVerification(
+    userId: string,
+    tokenHash: Buffer,
+    ttlSeconds: number,
+  ): Promise<{ userId: string; email: string; name: string | null } | undefined> {
+    const rows = await this.handle.sql<{ user_id: string; email: string; name: string | null }[]>`
+      select user_id, email, name from public.email_verification_issue(${userId}::uuid, ${tokenHash}, ${ttlSeconds})`;
+    const r = rows[0];
+    return r ? { userId: r.user_id, email: r.email, name: r.name } : undefined;
+  }
+
+  /** `email_verification_consume` (0095): marks the email verified; undefined if the token is invalid. */
+  async consumeEmailVerification(tokenHash: Buffer): Promise<string | undefined> {
+    const rows = await this.handle.sql<{ user_id: string | null }[]>`
+      select public.email_verification_consume(${tokenHash}) as user_id`;
+    return rows[0]?.user_id ?? undefined;
+  }
+
+  /** `user_email_verified_at` (0095). */
+  async isEmailVerified(userId: string): Promise<boolean> {
+    const rows = await this.handle.sql<{ v: Date | null }[]>`select public.user_email_verified_at(${userId}::uuid) as v`;
+    return rows[0]?.v != null;
+  }
+
   async createSession(input: {
     userId: string;
     tokenHash: Buffer;

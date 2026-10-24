@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { errorResponseSchema } from "@crmwsp/contracts";
-import { createDb, inArray, tenants, users } from "@crmwsp/db";
+import { createDb, eq, inArray, tenants, users } from "@crmwsp/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../app.module.js";
 
@@ -33,6 +33,10 @@ describe.skipIf(!hasEnv)("channels without master keys", () => {
   it("the API boots and channel creation answers 503 with a clear error", async () => {
     const signup = await app.inject({ method: "POST", url: "/auth/signup", payload: acc });
     expect(signup.statusCode).toBe(201);
+    // Channel connection requires a verified owner email (0095).
+    const migrator = createDb(process.env["DATABASE_URL_MIGRATOR"] as string, { max: 1 });
+    await migrator.db.update(users).set({ emailVerifiedAt: new Date() }).where(eq(users.email, acc.email));
+    await migrator.close();
     const cookie = String(signup.headers["set-cookie"]).split(";")[0] ?? "";
     const tenant = (signup.json() as { tenants: { id: string }[] }).tenants[0]!.id;
     const res = await app.inject({

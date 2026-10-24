@@ -49,6 +49,11 @@ export const resetPasswordRequestSchema = z.object({
 });
 export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
 
+export const verifyEmailRequestSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, "Invalid token"),
+});
+export type VerifyEmailRequest = z.infer<typeof verifyEmailRequestSchema>;
+
 /** Tenant lifecycle (ADR 0011): only `active` tenants can use the panel, channels and AI. */
 export const tenantStatusSchema = z.enum(["active", "pending_approval", "rejected", "suspended"]);
 export type TenantStatus = z.infer<typeof tenantStatusSchema>;
@@ -64,7 +69,13 @@ export const userTenantSchema = z.object({
 export type UserTenant = z.infer<typeof userTenantSchema>;
 
 export const meResponseSchema = z.object({
-  user: z.object({ id: uuidSchema, email: z.string(), name: z.string().nullable() }),
+  user: z.object({
+    id: uuidSchema,
+    email: z.string(),
+    name: z.string().nullable(),
+    /** Missing on older API responses = verified. */
+    emailVerified: z.boolean().optional(),
+  }),
   tenants: z.array(userTenantSchema),
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
