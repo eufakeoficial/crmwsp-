@@ -25,23 +25,27 @@ npx --yes tsx emailing/scripts/preview.ts
 ```
 Abre `emailing/preview/index.html`. Las vistas usan el logo local `../assets`.
 
-## Plantillas y dónde se envían hoy
-Hoy el código solo usa `renderEmail({title, body, ctaLabel, ctaUrl})` de `packages/mailer` (plantilla genérica). Estas plantillas aún no reemplazan esa función; el nombre indica qué enviaría cada ruta.
+## Plantillas y dónde se envían
+Todas se envían como correos de servicio (no hay mecanismo de baja de avisos; ver ADR 0019).
 
-| Plantilla | Ruta de código actual | Estado |
+| Plantilla | Ruta de código | Cuándo |
 |---|---|---|
-| `invitacion-equipo` | `apps/api/src/team/invitation-token.ts` (`invitationEmail`), enviada en `team.service.ts` | Mismo asunto y variables (`tenantName`, `role`, `inviterName`, `link`); falta conectar |
-| `recordatorio-conecta-whatsapp` | `apps/worker/src/index.ts` (`sendSetupReminder`) | Mismo asunto; falta conectar |
-| `cuenta-aprobada`, `cuenta-rechazada`, `cuenta-suspendida` | `apps/api/src/platform/platform.service.ts` (`notifyOwner`) | Mismos asuntos; falta conectar |
-| `notificacion-generica` | `apps/worker/src/index.ts` (`sendOwnerEmail`) | Falta conectar |
-| `bienvenida-verificacion` | Ninguna | No cableada (no hay verificación de correo) |
-| `recuperar-contrasena` | Ninguna | No cableada |
-| `prueba-iniciada`, `prueba-por-terminar`, `prueba-terminada` | Ninguna | No cableadas |
-| `pago-confirmado`, `pago-por-vencer`, `cuenta-solo-lectura` | Ninguna (la liquidación está en `apps/worker/src/subscription-billing`) | No cableadas |
-| `referido-recompensa` | Ninguna (programa en billing) | No cableada |
-| `ticket-respuesta` | Ninguna | No cableada |
+| `bienvenida` | `apps/api/src/auth/auth.service.ts` (`signup`) | Al registrarse, en segundo plano |
+| `recuperar-contrasena` | `auth.service.ts` (`forgotPassword`) | `POST /auth/password/forgot` (enlace `/reset/<token>`, 30 min) |
+| `invitacion-equipo` | `apps/api/src/team/invitation-token.ts`, enviada en `team.service.ts` | Al invitar |
+| `recordatorio-conecta-whatsapp` | `apps/worker/src/index.ts` (`sendSetupReminder`) | Día 5 del setup sin canal |
+| `cuenta-aprobada`, `cuenta-rechazada`, `cuenta-suspendida` | `apps/api/src/platform/platform.service.ts` (`notifyOwner`) | Cambio de estado por plataforma |
+| `notificacion-generica` | `apps/worker/src/index.ts` (`sendOwnerEmail`) | Avisos al dueño |
+| `pago-confirmado` | `apps/worker/src/lifecycle-emails` (`runPaidChargeEmails`) | Cobro liquidado como pagado (incluye anual y cupón sin costo) |
+| `pago-por-vencer` | `lifecycle-emails` (`runTenantLifecycleEmails`) | 3 días antes del último día pagado, una vez por período |
+| `cuenta-solo-lectura` | `lifecycle-emails` | Primer día tras la gracia de un plan pagado, una vez |
+| `prueba-iniciada`, `prueba-por-terminar`, `prueba-terminada` | `lifecycle-emails` | Inicio, 2 días antes del fin, fin de la gracia |
+| `referido-recompensa` | `lifecycle-emails` (`runReferralRewardEmails`) | Al otorgarse el crédito al referente |
+| `bienvenida-verificacion` | Ninguna | Sin verificación de correo |
+| `ticket-respuesta` | Ninguna | Pendiente de la rama de soporte |
 
-## Pendientes a confirmar
-- Rutas de los enlaces de ejemplo (`/app/settings`, `/verify/…`, `/reset/…`, `/unsubscribe`): son provisionales salvo `/app`, `/app/channels` e `/invite/<token>`.
-- Montos, planes y formatos de fecha llegan ya formateados desde quien llama.
-- `optional` (recordatorio, prueba por terminar, referido) exige enlaces de preferencias y baja en el contexto.
+Los correos del worker reclaman su clave en `email_dispatches` antes de enviar (como mucho una vez) y corren en el tick de suscripciones, después del commit del pago.
+
+## Pendientes
+- Preferencias de avisos y baja (`optional` + `List-Unsubscribe` quedan listos en el renderer, sin uso).
+- Fechas en UTC en los correos del worker (sin zona horaria del tenant).

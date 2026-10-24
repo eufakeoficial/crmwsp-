@@ -1,7 +1,9 @@
 import {
   TENANT_HEADER,
   type ErrorCode,
+  type ForgotPasswordRequest,
   type LoginRequest,
+  type ResetPasswordRequest,
   type SignupRequest,
   errorResponseSchema,
   meResponseSchema,
@@ -111,6 +113,8 @@ export const api = {
   signup: (input: SignupRequest) => request("/auth/signup", { method: "POST", body: input, schema: meResponseSchema }),
   login: (input: LoginRequest) => request("/auth/login", { method: "POST", body: input, schema: meResponseSchema }),
   logout: () => request("/auth/logout", { method: "POST" }),
+  forgotPassword: (input: ForgotPasswordRequest) => request("/auth/password/forgot", { method: "POST", body: input }),
+  resetPassword: (input: ResetPasswordRequest) => request("/auth/password/reset", { method: "POST", body: input }),
   me: () => request("/auth/me", { schema: meResponseSchema }),
   members: () => request("/tenant/members", { schema: tenantMembersResponseSchema }),
 };

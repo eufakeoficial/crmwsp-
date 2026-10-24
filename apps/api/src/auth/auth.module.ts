@@ -5,7 +5,8 @@ import { RATE_LIMIT_STORE, defaultRateLimitStore } from "../common/rate-limit-st
 import { AuthController } from "./auth.controller.js";
 import { SESSION_TTL_SECONDS, sessionTtlSecondsFromEnv } from "./auth.config.js";
 import { AuthRepository } from "./auth.repository.js";
-import { AuthService } from "./auth.service.js";
+import { createMailerFromEnv } from "@crmwsp/mailer";
+import { AUTH_MAILER, AuthService } from "./auth.service.js";
 import {
   ACCOUNT_BACKOFF,
   AUTH_IP_RATE_LIMIT,
@@ -31,6 +32,7 @@ const CLIENT_IP_HOOK = Symbol("CLIENT_IP_HOOK");
     { provide: AUTH_IP_RATE_LIMIT, useValue: DEFAULT_AUTH_IP_RATE_LIMIT },
     { provide: ACCOUNT_BACKOFF, useValue: DEFAULT_ACCOUNT_BACKOFF },
     { provide: RATE_LIMIT_STORE, useFactory: defaultRateLimitStore },
+    { provide: AUTH_MAILER, useFactory: () => createMailerFromEnv() },
     // Pins request.ip to the real client IP (common/client-ip.ts) on every route.
     {
       provide: CLIENT_IP_HOOK,

@@ -36,7 +36,6 @@ import {
 import { currentMonthUtc, dayRangeUtc, estimateMrr, microCentsToUsd } from "@crmwsp/domain";
 import { type Mailer, emailContextFromEnv, siteLink, templateMessage } from "@crmwsp/mailer";
 import { pgCode } from "../inbox/audit.js";
-import { publicWebUrl } from "../team/invitation-token.js";
 import { PlatformRepository } from "./platform.repository.js";
 
 /** Nest injection token for the mailer used by the platform module. */

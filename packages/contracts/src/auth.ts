@@ -35,6 +35,17 @@ export const loginRequestSchema = z.object({
 });
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
+/** POST /auth/password/forgot: always answers 200, whether the account exists or not. */
+export const forgotPasswordRequestSchema = z.object({ email: emailSchema });
+export type ForgotPasswordRequest = z.infer<typeof forgotPasswordRequestSchema>;
+
+/** POST /auth/password/reset: single-use 43-char base64url token from the email link. */
+export const resetPasswordRequestSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, "Invalid token"),
+  password: passwordSchema,
+});
+export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
+
 /** Tenant lifecycle (ADR 0011): only `active` tenants can use the panel, channels and AI. */
 export const tenantStatusSchema = z.enum(["active", "pending_approval", "rejected", "suspended"]);
 export type TenantStatus = z.infer<typeof tenantStatusSchema>;

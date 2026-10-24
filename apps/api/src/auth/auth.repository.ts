@@ -61,6 +61,26 @@ export class AuthRepository {
     await this.handle.sql`select public.tenant_referral_record(${tenantId}::uuid, ${code})`;
   }
 
+  /** `password_reset_request` (0074): no row for unknown emails / accounts without a password. */
+  async requestPasswordReset(
+    email: string,
+    tokenHash: Buffer,
+    ttlSeconds: number,
+    ip: string | null,
+  ): Promise<{ userId: string; email: string; name: string | null } | undefined> {
+    const rows = await this.handle.sql<{ user_id: string; email: string; name: string | null }[]>`
+      select user_id, email, name from public.password_reset_request(${email}, ${tokenHash}, ${ttlSeconds}, ${ip && ip !== "unknown" ? ip : null})`;
+    const r = rows[0];
+    return r ? { userId: r.user_id, email: r.email, name: r.name } : undefined;
+  }
+
+  /** `password_reset_consume` (0074): sets the password and revokes all sessions; undefined if invalid. */
+  async consumePasswordReset(tokenHash: Buffer, passwordHash: string): Promise<string | undefined> {
+    const rows = await this.handle.sql<{ user_id: string | null }[]>`
+      select public.password_reset_consume(${tokenHash}, ${passwordHash}) as user_id`;
+    return rows[0]?.user_id ?? undefined;
+  }
+
   async createSession(input: {
     userId: string;
     tokenHash: Buffer;

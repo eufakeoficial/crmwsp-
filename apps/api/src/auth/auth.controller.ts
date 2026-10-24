@@ -1,5 +1,11 @@
 import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res } from "@nestjs/common";
-import { type MeResponse, loginRequestSchema, signupRequestSchema } from "@crmwsp/contracts";
+import {
+  type MeResponse,
+  forgotPasswordRequestSchema,
+  loginRequestSchema,
+  resetPasswordRequestSchema,
+  signupRequestSchema,
+} from "@crmwsp/contracts";
 import { type HttpReply, type HttpRequest, type RequestUser, headerValue } from "../common/http.js";
 import { clientIp } from "../common/client-ip.js";
 import { parseOrThrow } from "../common/zod.js";
@@ -44,6 +50,29 @@ export class AuthController {
     const user = await this.auth.resolve(token);
     if (!user) throw new Error("session not found right after login");
     return this.auth.me(user);
+  }
+
+  /** Always 200 with the same body: never reveals whether the email has an account. */
+  @Post("password/forgot")
+  @Public({ sameOrigin: true })
+  @HttpCode(200)
+  async forgotPassword(@Body() body: unknown, @Req() req: HttpRequest): Promise<{ ok: true }> {
+    await this.auth.forgotPassword(parseOrThrow(forgotPasswordRequestSchema, body), clientInfo(req));
+    return { ok: true };
+  }
+
+  /** Every session of the user is revoked, including the caller's cookie. */
+  @Post("password/reset")
+  @Public({ sameOrigin: true })
+  @HttpCode(200)
+  async resetPassword(
+    @Body() body: unknown,
+    @Req() req: HttpRequest,
+    @Res({ passthrough: true }) reply: HttpReply,
+  ): Promise<{ ok: true }> {
+    await this.auth.resetPassword(parseOrThrow(resetPasswordRequestSchema, body), clientInfo(req));
+    clearSessionCookie(reply);
+    return { ok: true };
   }
 
   // Public so an expired session can still clear its cookie; it only revokes

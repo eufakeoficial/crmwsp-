@@ -4,13 +4,16 @@ import { isDisposableEmail, normalizeSignupEmail } from "@crmwsp/domain";
 import {
   ConflictError,
   ValidationError,
+  type ForgotPasswordRequest,
   type LoginRequest,
+  type ResetPasswordRequest,
   type MeResponse,
   RateLimitedError,
   type SignupRequest,
   UnauthorizedError,
   type TenantId,
 } from "@crmwsp/contracts";
+import { emailContextFromEnv, siteLink, templateMessage, type MailMessage, type Mailer } from "@crmwsp/mailer";
 import type { RequestUser } from "../common/http.js";
 import { RATE_LIMIT_STORE, type CounterStore } from "../common/rate-limit-store.js";
 import { AuthRepository, type UserTenantRow } from "./auth.repository.js";
@@ -31,6 +34,11 @@ export interface ClientInfo {
   ip: string | null;
   userAgent: string | null;
 }
+
+/** Nest injection token of the auth mailer (welcome + password reset). */
+export const AUTH_MAILER = Symbol("AUTH_MAILER");
+/** Password reset links live 30 minutes. */
+export const PASSWORD_RESET_TTL_SECONDS = 30 * 60;
 
 const isUniqueViolation = (err: unknown): boolean => (err as { code?: unknown } | null)?.code === "23505";
 
@@ -55,6 +63,7 @@ export class AuthService implements OnModuleInit {
     @Inject(AUTH_IP_RATE_LIMIT) ipRateLimit: RateLimitOptions,
     @Inject(RATE_LIMIT_STORE) store: CounterStore,
     @Inject(ACCOUNT_BACKOFF) backoff: BackoffOptions,
+    @Inject(AUTH_MAILER) private readonly mailer: Mailer,
   ) {
     this.limiter = new StoreRateLimiter(rateLimit, store, "auth");
     this.ipLimiter = new StoreRateLimiter(ipRateLimit, store, "auth");
@@ -101,6 +110,11 @@ export class AuthService implements OnModuleInit {
       });
     }
     await this.audit([tenantId], "auth.signup", userId, { ua: ua(client) }, client);
+    // Welcome email after the signup committed; never blocks or fails the signup.
+    const ctx = emailContextFromEnv();
+    this.mailInBackground("bienvenida", () =>
+      templateMessage(input.email, "bienvenida", { name: input.name, tenantName: input.tenantName, appUrl: siteLink(ctx, "/app") }, ctx),
+    );
     return { token: await this.openSession(userId, client), userId };
   }
 
@@ -121,6 +135,45 @@ export class AuthService implements OnModuleInit {
     }
     await this.backoff.success(account);
     return { token: await this.openSession(row.userId, client), userId: row.userId };
+  }
+
+  /**
+   * Starts a password reset. Same outcome for unknown emails (no user enumeration): the token is
+   * stored hashed only for real password accounts and the email/audit run in the background so
+   * the response time does not reveal whether the account exists.
+   */
+  async forgotPassword(input: ForgotPasswordRequest, client: ClientInfo): Promise<void> {
+    await this.limited("forgot", input.email, client, async () => {
+      await this.ipLimiter.consume(`ip:${client.ip ?? "-"}`);
+      await this.limiter.consume(`forgot:${client.ip ?? "-"}:${input.email}`);
+    });
+    const token = newSessionToken();
+    const row = await this.repo.requestPasswordReset(input.email, hashSessionToken(token), PASSWORD_RESET_TTL_SECONDS, client.ip);
+    this.logger.log({ event: "auth.password_reset_requested", email: hashEmail(input.email), ip: client.ip, knownUser: Boolean(row) });
+    if (!row) return;
+    void this.auditUser(row.userId, "auth.password_reset_requested", { ua: ua(client) }, client);
+    const ctx = emailContextFromEnv();
+    this.mailInBackground("recuperar-contrasena", () =>
+      templateMessage(
+        row.email,
+        "recuperar-contrasena",
+        { name: row.name ?? "", resetUrl: siteLink(ctx, `/reset/${token}`), minutes: PASSWORD_RESET_TTL_SECONDS / 60 },
+        ctx,
+      ),
+    );
+  }
+
+  /** Sets a new password from a valid single-use token and revokes every session of the user. */
+  async resetPassword(input: ResetPasswordRequest, client: ClientInfo): Promise<void> {
+    await this.limited("reset", "", client, async () => {
+      await this.ipLimiter.consume(`ip:${client.ip ?? "-"}`);
+      await this.limiter.consume(`reset:${client.ip ?? "-"}`);
+    });
+    const passwordHash = await hashPassword(input.password);
+    const userId = await this.repo.consumePasswordReset(hashSessionToken(input.token), passwordHash);
+    if (!userId) throw new ValidationError("Invalid or expired reset link");
+    this.logger.log({ event: "auth.password_reset", userId, ip: client.ip });
+    await this.auditUser(userId, "auth.password_reset", { ua: ua(client), sessionsRevoked: true }, client);
   }
 
   async logout(token: string | undefined, client: ClientInfo = { ip: null, userAgent: null }): Promise<void> {
@@ -164,7 +217,7 @@ export class AuthService implements OnModuleInit {
    * Runs the limit checks; a hit is logged (warn) before the 429 propagates. No DB lookup on this
    * path (a rate-limited flood must stay cheap), so auth.rate_limited is log-only.
    */
-  private async limited(kind: "login" | "signup", email: string, client: ClientInfo, checks: () => Promise<void>): Promise<void> {
+  private async limited(kind: "login" | "signup" | "forgot" | "reset", email: string, client: ClientInfo, checks: () => Promise<void>): Promise<void> {
     try {
       await checks();
     } catch (err) {
@@ -173,6 +226,13 @@ export class AuthService implements OnModuleInit {
       }
       throw err;
     }
+  }
+
+  /** Sends after the caller's work is done; a mail failure is only logged (never the address). */
+  private mailInBackground(template: string, build: () => MailMessage): void {
+    void Promise.resolve()
+      .then(() => this.mailer.send(build()))
+      .catch((err: unknown) => this.logger.warn({ event: "auth.email_failed", template, error: err instanceof Error ? err.name : "Error" }));
   }
 
   private async auditUser(userId: string, action: string, diff: Record<string, unknown>, client: ClientInfo): Promise<void> {
