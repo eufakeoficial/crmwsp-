@@ -39,9 +39,20 @@ function accessOf(s: PlanUsageSnapshot, paidUntil: string | null): TenantAccess 
   return tenantAccess(paidUntil, lifecycleOf(s), new Date());
 }
 
-/** Plan + admin overrides, then capped by the access state (setup caps AI, restricted = nothing). */
-function effectivePlan(s: PlanUsageSnapshot, paidUntil: string | null): PlanDefinition {
-  return applyTenantAccess(resolveEffectivePlan(s.plan, s.limitsOverride), accessOf(s, paidUntil));
+/**
+ * Plan + admin overrides, then capped by the access state (setup caps AI, restricted = nothing).
+ * `ownAiKey` (BYOK) lifts the monthly `ai_messages` cap; setup/restricted still block the AI.
+ */
+function effectivePlan(s: PlanUsageSnapshot, paidUntil: string | null, ownAiKey = false): PlanDefinition {
+  return applyTenantAccess(resolveEffectivePlan(s.plan, s.limitsOverride), accessOf(s, paidUntil), { ownAiKey });
+}
+
+/** True when the active LLM connection of the current tenant holds its own provider key (BYOK, ADR 0008). */
+async function readOwnAiKey(tx: Transaction): Promise<boolean> {
+  const [row] = await tx.execute<{ own: boolean }>(
+    sql`select exists (select 1 from llm_connections where is_active and api_key_encrypted is not null) as own`,
+  );
+  return row?.own === true;
 }
 
 export type TrialStartOutcome = "started" | "denied" | "ineligible";
@@ -98,9 +109,13 @@ export class PlanLimitsService {
 
   /** Throws `PlanLimitExceededError` (402) if `amount` more units would exceed the plan. Consumes nothing. */
   async assert(tenantId: string, key: LimitKey, amount = 1, tx?: Transaction): Promise<void> {
-    const { snapshot, paidUntil } = await this.run(tenantId, tx, async (t) => ({ snapshot: await readPlanUsage(t), paidUntil: await readPaidUntil(t) }));
+    const { snapshot, paidUntil, ownAiKey } = await this.run(tenantId, tx, async (t) => ({
+      snapshot: await readPlanUsage(t),
+      paidUntil: await readPaidUntil(t),
+      ownAiKey: key === "ai_messages" && (await readOwnAiKey(t)),
+    }));
     if (SETUP_BLOCKED.has(key) && accessOf(snapshot, paidUntil) === "setup") throw setupRequired();
-    const plan = effectivePlan(snapshot, paidUntil);
+    const plan = effectivePlan(snapshot, paidUntil, ownAiKey);
     const result = checkLimit(plan, key, usedByKey(snapshot)[key], amount);
     if (!result.allowed) {
       throw new PlanLimitExceededError(`Plan ${plan.name}: ${key} ${result.reason}`, {
@@ -118,7 +133,7 @@ export class PlanLimitsService {
       const usage = await readPlanUsage(t);
       const paidUntil = await readPaidUntil(t);
       if (SETUP_BLOCKED.has(key) && accessOf(usage, paidUntil) === "setup") throw setupRequired();
-      const plan = effectivePlan(usage, paidUntil);
+      const plan = effectivePlan(usage, paidUntil, key === "ai_messages" && (await readOwnAiKey(t)));
       const limit = plan.limits[key];
       const total = await consumeUsage(t, tenantId, key, amount, limit);
       if (total === null) {
@@ -176,7 +191,7 @@ export class PlanLimitsService {
   async snapshot(tx: Transaction): Promise<BillingPlanResponse> {
     const s = await readPlanUsage(tx);
     const paidUntil = await readPaidUntil(tx);
-    const plan = effectivePlan(s, paidUntil);
+    const plan = effectivePlan(s, paidUntil, await readOwnAiKey(tx));
     const access = accessOf(s, paidUntil);
     const now = new Date();
     const items = summarizeUsage(plan, usedByKey(s));

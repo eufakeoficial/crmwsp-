@@ -12,7 +12,7 @@ import {
 import { AI_ACTION_TYPES, aiActionSchema, normalizeReactionEmoji } from "@crmwsp/contracts";
 import type { PlaybookConfig, SalesStage } from "@crmwsp/contracts";
 import type { AiActionType, AiDecision, AiTurnOutput } from "@crmwsp/contracts";
-import { checkLimit, resolveEffectivePlan } from "@crmwsp/billing";
+import { aiMessagesAllowed } from "./plan-gate.js";
 import {
   agentConfigs,
   consumeUsage,
@@ -373,7 +373,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
 
   // Plan limit (monthly AI messages): same contract as the budget, the AI stops, the inbox doesn't.
   const usage = await readPlanUsage(tx);
-  if (!checkLimit(resolveEffectivePlan(usage.plan, usage.limitsOverride), "ai_messages", usage.aiMessages, 1).allowed) {
+  if (!(await aiMessagesAllowed(tx, usage, conn))) {
     await handoffWriter(tx, c, events).record("plan_limit_reached", null);
     return { done: { result: { outcome: "handoff", reason: "plan_limit_reached" }, events, connection: conn } };
   }

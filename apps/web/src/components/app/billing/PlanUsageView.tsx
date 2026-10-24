@@ -32,7 +32,9 @@ const ACCESS_LABEL: Record<BillingPlanResponse["subscription"]["access"], string
 
 function UsageRow({ item }: { item: BillingPlanResponse["usage"][number] }) {
   const { key, limit, used, percent, exceeded } = item;
-  const text = limit === null ? `${fmt(used)} · ilimitado` : limit === 0 ? "No incluido en tu plan" : `${fmt(used)} de ${fmt(limit)}`;
+  // `ai_messages` has no cap (null) when the tenant uses its own AI key (BYOK).
+  const unlimited = key === "ai_messages" ? "Ilimitado (tu clave)" : "ilimitado";
+  const text = limit === null ? `${fmt(used)} · ${unlimited}` : limit === 0 ? "No incluido en tu plan" : `${fmt(used)} de ${fmt(limit)}`;
   const tone = percent !== null && percent >= 100 ? "bg-red-600" : percent !== null && percent >= 80 ? "bg-amber-500" : "bg-ink";
   return (
     <li className="flex flex-col gap-1.5">

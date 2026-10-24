@@ -71,13 +71,23 @@ export function extendLifecycle(lifecycle: TrialLifecycle, kind: "setup" | "tria
   return { ...lifecycle, trialEndsAt: from(lifecycle.trialEndsAt) };
 }
 
+export interface TenantAccessOptions {
+  /**
+   * The tenant's AI runs on its own provider key (BYOK, ADR 0008): the monthly `ai_messages` cap
+   * is lifted, because the tenant pays the provider directly. The cap only applies to SaaS credits.
+   * Setup and restricted access still win: they block or cap the AI even with BYOK.
+   */
+  ownAiKey?: boolean;
+}
+
 /** Limits under an access state: setup caps the AI simulator; restricted removes everything. */
-export function applyTenantAccess(plan: PlanDefinition, access: TenantAccess): PlanDefinition {
+export function applyTenantAccess(plan: PlanDefinition, access: TenantAccess, opts: TenantAccessOptions = {}): PlanDefinition {
   if (access === "setup") {
     const ai = plan.limits.ai_messages;
     return { ...plan, limits: { ...plan.limits, ai_messages: ai === null ? SETUP_AI_MESSAGES : Math.min(ai, SETUP_AI_MESSAGES) } };
   }
   if (access === "restricted" || access === "payment_required") return applySubscriptionAccess(plan, "restricted");
+  if (opts.ownAiKey) return { ...plan, limits: { ...plan.limits, ai_messages: null } };
   return plan;
 }
 
