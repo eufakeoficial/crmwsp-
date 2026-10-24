@@ -21,7 +21,7 @@ const LABELS: Record<PlanLimitKeyDto, string> = {
 const fmt = (n: number) => n.toLocaleString("es");
 
 function UsageRow({ item }: { item: BillingPlanResponse["usage"][number] }) {
-  const { key, limit, used, percent } = item;
+  const { key, limit, used, percent, exceeded } = item;
   const text = limit === null ? `${fmt(used)} · ilimitado` : limit === 0 ? "No incluido en tu plan" : `${fmt(used)} de ${fmt(limit)}`;
   const tone = percent !== null && percent >= 100 ? "bg-red-600" : percent !== null && percent >= 80 ? "bg-amber-500" : "bg-ink";
   return (
@@ -34,6 +34,13 @@ function UsageRow({ item }: { item: BillingPlanResponse["usage"][number] }) {
         <div role="progressbar" aria-label={LABELS[key]} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="h-2 overflow-hidden rounded-full bg-line">
           <div className={`h-full ${tone}`} style={{ width: `${percent}%` }} />
         </div>
+      ) : null}
+      {exceeded ? (
+        <p className="m-0 text-xs font-semibold text-red-600">
+          {key === "contacts"
+            ? "Superaste el límite de tu plan: los mensajes de clientes nuevos se siguen recibiendo, pero no podrás importar contactos hasta mejorar el plan."
+            : "Superaste el límite de tu plan."}
+        </p>
       ) : null}
     </li>
   );

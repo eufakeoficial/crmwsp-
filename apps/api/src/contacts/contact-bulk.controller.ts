@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { Body, Controller, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, HttpCode, Inject, Post, Req, UseGuards } from "@nestjs/common";
 import {
   BULK_MAX_ROWS,
+  PlanLimitExceededError,
   ValidationError,
   contactBulkRequestSchema,
   importContactsRequestSchema,
@@ -16,6 +17,7 @@ import { TenantGuard } from "../auth/tenant.guard.js";
 import type { HttpRequest } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
+import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import { writeAudit } from "../inbox/audit.js";
 import { contactFilterWhere } from "./contact-query.js";
 
@@ -69,6 +71,32 @@ async function upsertMarketingConsents(tx: Transaction, tenantId: string, writes
 @Controller("contact-book")
 @UseGuards(TenantGuard)
 export class ContactBulkController {
+  constructor(@Inject(PlanLimitsService) private readonly limits: Pick<PlanLimitsService, "assert" | "lock">) {}
+
+  /**
+   * Refuses (402, nothing written) an import whose NEW phones would exceed the `contacts` limit.
+   * Runs under the per-tenant contacts lock so two imports cannot both pass at the cap.
+   */
+  private async assertImportFits(tx: Transaction, tenantId: string, phones: readonly string[]): Promise<void> {
+    await this.limits.lock(tx, tenantId, "contacts");
+    let fresh = 0;
+    for (const part of chunks(phones, 500)) {
+      const known = await tx.select({ phoneE164: contacts.phoneE164 }).from(contacts).where(inArray(contacts.phoneE164, [...part]));
+      fresh += part.length - known.length;
+    }
+    if (fresh === 0) return;
+    try {
+      await this.limits.assert(tenantId, "contacts", fresh, tx);
+    } catch (err) {
+      if (!(err instanceof PlanLimitExceededError)) throw err;
+      const d = (err.details ?? {}) as { limit?: number; used?: number };
+      const room = Math.max(0, (d.limit ?? 0) - (d.used ?? 0));
+      throw new PlanLimitExceededError(
+        `The import would add ${fresh} new contacts but your plan allows ${room} more (limit ${d.limit ?? 0}). Nothing was imported.`,
+        { details: { ...d, key: "contacts", requested: fresh, remaining: room } },
+      );
+    }
+  }
   /** Tag / consent changes over an explicit id list or every contact matching a filter (max 10k). */
   @Post("bulk")
   @HttpCode(200)
@@ -138,6 +166,7 @@ export class ContactBulkController {
     if (parsed.truncated) throw new ValidationError("the file has more than 5000 rows");
     const plan = planContactImport(parsed.rows);
     return db.run(async (tx) => {
+      await this.assertImportFits(tx, db.tenantId, plan.rows.map((r) => r.phoneE164));
       let created = 0;
       let updated = 0;
       const consentWrites: ConsentWrite[] = [];

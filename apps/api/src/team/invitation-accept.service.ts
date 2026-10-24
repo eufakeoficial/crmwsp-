@@ -10,6 +10,8 @@ import {
   UnauthorizedError,
   ValidationError,
 } from "@crmwsp/contracts";
+import { sql, type Transaction } from "@crmwsp/db";
+import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import { DB_HANDLE, type DbHandle } from "../common/http.js";
 import { pgCode } from "../inbox/audit.js";
 import { AuthService, type ClientInfo } from "../auth/auth.service.js";
@@ -50,6 +52,7 @@ export class InvitationAcceptService {
     @Inject(DB_HANDLE) private readonly handle: DbHandle,
     @Inject(AuthService) private readonly auth: AuthService,
     @Inject(INVITE_RATE_LIMIT) rateLimit: RateLimitOptions,
+    @Inject(PlanLimitsService) private readonly limits: Pick<PlanLimitsService, "assert">,
   ) {
     this.limiter = new InMemoryRateLimiter(rateLimit);
   }
@@ -64,15 +67,30 @@ export class InvitationAcceptService {
     return { tenantName: r.tenant_name, email: r.email, role: r.role, expiresAt: new Date(r.expires_at).toISOString(), hasAccount: r.has_account };
   }
 
+  /**
+   * Seats were reserved when the invitation was sent, but the plan may have shrunk since (limit
+   * lowered by the platform, subscription restricted). After consuming the invitation, inside the
+   * same transaction, the tenant must not be above its seat limit; otherwise everything rolls back.
+   * The pending invitation already counted as a seat, so the check books 0 more units.
+   */
+  private async assertSeatsAfterAccept(tx: Transaction, tenantId: string): Promise<void> {
+    await tx.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
+    await this.limits.assert(tenantId, "seats", 0, tx);
+  }
+
   /** Signed-in user: adds the membership if the session's email is the invited one. */
   async acceptAsUser(token: string, userId: string, client: ClientInfo): Promise<AcceptInvitationResponse> {
     this.limiter.consume(`invite:${client.ip ?? "-"}`);
     try {
-      const rows = await this.handle.sql<{ tenant_id: string; role: InvitableRole }[]>`
-        select tenant_id, role from public.team_invitation_accept(${hashInvitationToken(token)}, ${userId})`;
-      const r = rows[0];
-      if (!r) throw new NotFoundError(INVALID);
-      return { tenantId: r.tenant_id as TenantId, role: r.role };
+      return await this.handle.db.transaction(async (tx) => {
+        const rows = await tx.execute<{ tenant_id: string; role: InvitableRole }>(
+          sql`select tenant_id, role from public.team_invitation_accept(${hashInvitationToken(token)}, ${userId}::uuid)`,
+        );
+        const r = rows[0];
+        if (!r) throw new NotFoundError(INVALID);
+        await this.assertSeatsAfterAccept(tx, r.tenant_id);
+        return { tenantId: r.tenant_id as TenantId, role: r.role };
+      });
     } catch (err) {
       mapError(err);
     }
@@ -88,8 +106,13 @@ export class InvitationAcceptService {
     const passwordHash = await hashPassword(input.password);
     let row: { user_id: string; tenant_id: string; role: InvitableRole } | undefined;
     try {
-      [row] = await this.handle.sql<{ user_id: string; tenant_id: string; role: InvitableRole }[]>`
-        select user_id, tenant_id, role from public.team_invitation_signup(${hashInvitationToken(token)}, ${input.name}, ${passwordHash})`;
+      row = await this.handle.db.transaction(async (tx) => {
+        const [r] = await tx.execute<{ user_id: string; tenant_id: string; role: InvitableRole }>(
+          sql`select user_id, tenant_id, role from public.team_invitation_signup(${hashInvitationToken(token)}, ${input.name}, ${passwordHash})`,
+        );
+        if (r) await this.assertSeatsAfterAccept(tx, r.tenant_id);
+        return r;
+      });
     } catch (err) {
       // 23505 here = the email already has an account: the client must log in and accept.
       if (pgCode(err) === "23505") throw new UnauthorizedError("Log in to accept this invitation");

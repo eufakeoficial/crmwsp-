@@ -35,6 +35,8 @@ export const billingPlanResponseSchema = z.object({
       limit: z.number().int().nullable(),
       used: z.number().int(),
       percent: z.number().int().nullable(),
+      /** Used above the limit (inbound contacts are never blocked, ADR 0015). */
+      exceeded: z.boolean(),
     }),
   ),
   /** `nowpayments` when crypto subscription charging is configured on the server (ADR 0013). */

@@ -106,6 +106,11 @@ export interface UsageItem {
   used: number;
   /** 0-100, `null` when unlimited or not included. */
   percent: number | null;
+  /**
+   * Usage above the limit. Only possible where creation is never blocked (contacts created by
+   * inbound customer messages, ADR 0015) or after the limit was lowered.
+   */
+  exceeded: boolean;
 }
 
 export function summarizeUsage(plan: PlanDefinition, used: Partial<Record<LimitKey, number>>): UsageItem[] {
@@ -113,7 +118,7 @@ export function summarizeUsage(plan: PlanDefinition, used: Partial<Record<LimitK
     const limit = plan.limits[key];
     const u = Math.max(0, Math.floor(used[key] ?? 0));
     const percent = limit === null || limit === 0 ? null : Math.min(100, Math.round((u / limit) * 100));
-    return { key, limit, used: u, percent };
+    return { key, limit, used: u, percent, exceeded: limit !== null && u > limit };
   });
 }
 

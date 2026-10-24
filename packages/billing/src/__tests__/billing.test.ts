@@ -54,10 +54,18 @@ describe("checkLimit", () => {
 describe("summarizeUsage", () => {
   it("returns every key with percent capped at 100", () => {
     const items = summarizeUsage(PLANS.start, { ai_messages: 3_000, seats: 1 });
-    expect(items.find((i) => i.key === "ai_messages")).toEqual({ key: "ai_messages", limit: 2_000, used: 3_000, percent: 100 });
+    expect(items.find((i) => i.key === "ai_messages")).toEqual({ key: "ai_messages", limit: 2_000, used: 3_000, percent: 100, exceeded: true });
     expect(items.find((i) => i.key === "seats")?.percent).toBe(20);
     expect(items.find((i) => i.key === "broadcast_sends")?.percent).toBeNull();
     expect(items).toHaveLength(5);
+  });
+
+  it("flags usage above the limit (e.g. contacts created by inbound messages past the cap)", () => {
+    const items = summarizeUsage(PLANS.start, { contacts: 10_000 });
+    expect(items.find((i) => i.key === "contacts")?.exceeded).toBe(false);
+    const over = summarizeUsage(PLANS.start, { contacts: 10_001 });
+    expect(over.find((i) => i.key === "contacts")?.exceeded).toBe(true);
+    expect(summarizeUsage({ ...PLANS.start, limits: { ...PLANS.start.limits, contacts: null } }, { contacts: 1e6 }).find((i) => i.key === "contacts")?.exceeded).toBe(false);
   });
 });
 
