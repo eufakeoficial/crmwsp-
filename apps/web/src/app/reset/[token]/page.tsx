@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { AuthShell } from "@/components/AuthShell";
 import { Alert, Button, Label, PasswordInput } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
@@ -10,7 +10,11 @@ import { errorMessage } from "@/lib/messages";
 
 export default function ResetPasswordPage() {
   const params = useParams<{ token: string }>();
-  const token = String(params.token ?? "");
+  // Read once, then strip it from the address bar/history so it cannot leak (screenshots, history, Referer).
+  const [token] = useState(() => String(params.token ?? ""));
+  useEffect(() => {
+    if (token && window.location.pathname !== "/reset") window.history.replaceState(null, "", "/reset");
+  }, [token]);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
