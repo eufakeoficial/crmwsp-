@@ -14,7 +14,7 @@ describe("isActive", () => {
     expect(new Set(NAV_MAIN.map((i) => i.key)).size).toBe(NAV_MAIN.length);
   });
   it("keeps the daily items visible and the rest under Más", () => {
-    expect(NAV_MAIN.map((i) => i.label)).toEqual(["Inicio", "Inbox", "Contactos", "Pipeline", "Presupuestos", "Pedidos", "IA"]);
+    expect(NAV_MAIN.map((i) => i.label)).toEqual(["Inicio", "Inbox", "Contactos", "Pipeline", "Presupuestos", "Pedidos", "Agenda", "IA"]);
     expect(NAV_MORE.map((i) => i.label)).toEqual(["Comprobantes", "Rentabilidad", "Campañas", "Productos", "Canales", "Equipo"]);
   });
   it("has unique keys and hrefs across every group", () => {
