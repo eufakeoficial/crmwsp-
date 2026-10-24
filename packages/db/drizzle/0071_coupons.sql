@@ -142,13 +142,14 @@ SET search_path = pg_catalog, public, pg_temp
 AS $fn$
 DECLARE
   u record;
+  v_period text := CASE p_period_days WHEN 30 THEN 'monthly' WHEN 365 THEN 'annual' ELSE '' END;
 BEGIN
   IF NOT c."active" THEN RETURN 'inactive'; END IF;
   IF c."valid_from" IS NOT NULL AND pg_catalog.now() < c."valid_from" THEN RETURN 'not_started'; END IF;
   IF c."valid_until" IS NOT NULL AND pg_catalog.now() >= c."valid_until" THEN RETURN 'expired'; END IF;
   IF pg_catalog.cardinality(c."plans") > 0 AND NOT (p_plan = ANY (c."plans")) THEN RETURN 'plan_not_applicable'; END IF;
   IF c."type" <> 'free_days' AND c."period" <> 'any'
-     AND c."period" <> CASE p_period_days WHEN 30 THEN 'monthly' WHEN 365 THEN 'annual' ELSE '' END THEN
+     AND c."period" <> v_period THEN
     RETURN 'period_not_applicable';
   END IF;
   SELECT * INTO u FROM public."coupon_usage_internal"(c."id", p_tenant);
