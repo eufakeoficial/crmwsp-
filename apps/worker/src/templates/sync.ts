@@ -2,7 +2,7 @@ import { GUPSHUP_PARTNER_TOKEN_PURPOSE } from "@crmwsp/contracts";
 import type { CipherBox } from "@crmwsp/crypto";
 import { channelConnections, messageTemplates, withTenant, type Database, type Transaction } from "@crmwsp/db";
 import type { ProviderTemplate, WhatsAppProvider } from "@crmwsp/whatsapp";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Logger } from "../processors.js";
 
 /** AAD purpose of the encrypted Gupshup API key (same as outbound.ts / apps/api channels). */
@@ -10,6 +10,7 @@ export const TEMPLATE_SYNC_API_KEY_PURPOSE = "gupshup_api_key";
 
 export interface SyncChannel {
   id: string;
+  provider: "gupshup" | "360dialog";
   appName: string;
   sourcePhone: string;
   credentials: Buffer;
@@ -102,20 +103,22 @@ export async function syncTemplatesTenant(deps: TemplateSyncDeps, tenantId: stri
   const channels = await inTenant(tenantId, (s) => s.loadChannels());
   const res: TemplateSyncTenantResult = { channels: channels.length, updated: 0, imported: 0, failedChannels: 0, skippedChannels: 0 };
   for (const ch of channels) {
-    if (!ch.partnerAppId || !ch.partnerToken) {
+    // Only Gupshup needs Partner API credentials for templates; 360dialog authenticates with the channel key.
+    if (ch.provider === "gupshup" && (!ch.partnerAppId || !ch.partnerToken)) {
       res.skippedChannels++;
       logger.info("template sync skipped for a channel: no Gupshup partner credentials (app id/token) configured");
       continue;
     }
     try {
       const apiKey = deps.cipher.decrypt(ch.credentials, { tenantId, purpose: TEMPLATE_SYNC_API_KEY_PURPOSE });
-      const partnerToken = deps.cipher.decrypt(ch.partnerToken, { tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE });
+      const partnerToken = ch.partnerToken ? deps.cipher.decrypt(ch.partnerToken, { tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE }) : undefined;
       const remote = await deps.provider.listTemplates({
+        provider: ch.provider,
         apiKey,
         appName: ch.appName,
         sourcePhone: ch.sourcePhone,
-        partnerAppId: ch.partnerAppId,
-        partnerToken,
+        ...(ch.partnerAppId ? { partnerAppId: ch.partnerAppId } : {}),
+        ...(partnerToken ? { partnerToken } : {}),
       });
       const now = deps.now?.() ?? new Date();
       const counts = await inTenant(tenantId, async (s) => {
@@ -172,6 +175,7 @@ export function createPgTemplateSyncStore(tx: Transaction, tenantId: string): Te
       const rows = await tx
         .select({
           id: channelConnections.id,
+          provider: channelConnections.provider,
           appName: channelConnections.externalAppId,
           sourcePhone: channelConnections.phoneE164,
           credentials: channelConnections.credentialsEncrypted,
@@ -179,9 +183,9 @@ export function createPgTemplateSyncStore(tx: Transaction, tenantId: string): Te
           partnerToken: channelConnections.partnerTokenEncrypted,
         })
         .from(channelConnections)
-        .where(and(eq(channelConnections.provider, "gupshup"), eq(channelConnections.status, "active")));
+        .where(eq(channelConnections.status, "active"));
       const out: SyncChannel[] = [];
-      for (const r of rows) if (r.appName && r.credentials) out.push({ id: r.id, appName: r.appName, sourcePhone: r.sourcePhone, credentials: r.credentials, partnerAppId: r.partnerAppId, partnerToken: r.partnerToken });
+      for (const r of rows) if (r.appName && r.credentials) out.push({ id: r.id, provider: r.provider, appName: r.appName, sourcePhone: r.sourcePhone, credentials: r.credentials, partnerAppId: r.partnerAppId, partnerToken: r.partnerToken });
       return out;
     },
     async loadTemplates(channelId) {

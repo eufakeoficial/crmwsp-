@@ -13,7 +13,7 @@ import {
   type Database,
   type Transaction,
 } from "@crmwsp/db";
-import type { InboundWebhookResult, NormalizedInboundMessage, WhatsAppProvider } from "@crmwsp/whatsapp";
+import { BSP_HEADER, type InboundWebhookResult, type NormalizedInboundMessage, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { UnrecoverableError, type Queue } from "bullmq";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import {
@@ -113,7 +113,7 @@ async function loadResult<K extends "message" | "status">(
   const [event] = await tx.select().from(inboundEvents).where(eq(inboundEvents.id, eventId)).limit(1);
   if (!event) throw new UnrecoverableError("inbound event not found");
   const result = provider
-    .parseWebhook(event.payload, {})
+    .parseWebhook(event.payload, { [BSP_HEADER]: event.provider })
     .find((r): r is Extract<InboundWebhookResult, { kind: K }> => r.kind === kind && r.dedupeKey === event.dedupeKey);
   if (!result) throw new UnrecoverableError(`inbound event has no ${kind} for its dedupe key`);
   return { event, result };

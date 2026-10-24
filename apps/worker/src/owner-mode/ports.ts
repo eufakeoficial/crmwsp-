@@ -28,6 +28,7 @@ export function createOwnerSender(deps: { db: Database; provider: WhatsAppProvid
           credentials: channelConnections.credentialsEncrypted,
           appName: channelConnections.externalAppId,
           sourcePhone: channelConnections.phoneE164,
+          provider: channelConnections.provider,
         })
         .from(channelConnections)
         .where(eq(channelConnections.id, channelConnectionId))
@@ -36,7 +37,7 @@ export function createOwnerSender(deps: { db: Database; provider: WhatsAppProvid
     });
     if (!conn || conn.status === "disabled" || !conn.credentials || !conn.appName) throw new Error("owner channel unavailable");
     const apiKey = deps.cipher.decrypt(conn.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
-    await deps.provider.sendText({ apiKey, appName: conn.appName, sourcePhone: conn.sourcePhone }, toE164, text.slice(0, 4000));
+    await deps.provider.sendText({ provider: conn.provider, apiKey, appName: conn.appName, sourcePhone: conn.sourcePhone }, toE164, text.slice(0, 4000));
   };
 }
 

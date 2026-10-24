@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { parsePdf } from "@crmwsp/knowledge";
 import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
 import { createDb } from "@crmwsp/db";
-import { GupshupProvider } from "@crmwsp/whatsapp";
+import { createDefaultWhatsAppProvider } from "@crmwsp/whatsapp";
 import { Queue } from "bullmq";
 import { createAiWorker, createBspMediaLoader } from "./ai/index.js";
 import { AI_QUEUE_NAME, OUTBOUND_QUEUE_NAME, createRedis } from "./queue.js";
@@ -84,7 +84,7 @@ function main(): void {
     connection,
     concurrency: Number.isInteger(concurrency) && concurrency > 0 ? concurrency : 5,
     db: db.db,
-    provider: new GupshupProvider(),
+    provider: createDefaultWhatsAppProvider(),
     publisher,
     aiQueue,
     ownerQueue,
@@ -145,7 +145,7 @@ function main(): void {
       connection: createRedis(redisUrl),
       concurrency: 5,
       db: db.db,
-      provider: new GupshupProvider(),
+      provider: createDefaultWhatsAppProvider(),
       publisher,
       cipher,
       logger,
@@ -163,7 +163,7 @@ function main(): void {
       cipher,
       outboundQueue,
       lockRedis,
-      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider(), store: mediaStore }),
+      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: createDefaultWhatsAppProvider(), store: mediaStore }),
       logger,
     });
     // F4: order detection on voice notes, photos and PDFs (PDF text via @crmwsp/knowledge).
@@ -175,7 +175,7 @@ function main(): void {
       outboundQueue,
       aiQueue,
       pdfText: async (bytes) => (await parsePdf(bytes)).text,
-      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider(), store: mediaStore }),
+      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: createDefaultWhatsAppProvider(), store: mediaStore }),
       logger,
     });
     orderExtractionWorker.on("failed", (job, err) =>
@@ -186,7 +186,7 @@ function main(): void {
         connection: createRedis(redisUrl),
         db: db.db,
         store: mediaStore,
-        loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider() }),
+        loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: createDefaultWhatsAppProvider() }),
         logger,
       });
       mediaWorker.on("failed", (job, err) =>
@@ -216,7 +216,7 @@ function main(): void {
       db: db.db,
       publisher,
       outboundQueue,
-      sendOwnerText: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
+      sendOwnerText: createOwnerSender({ db: db.db, provider: createDefaultWhatsAppProvider(), cipher }),
       sendOwnerEmail: async (msg) => {
         if (!msg.to) return;
         const { text, html } = renderEmail({
@@ -247,7 +247,7 @@ function main(): void {
     );
     // WhatsApp template review status sync (every 15 min); channel API keys need the master keys.
     templateSyncQueue = new Queue(TEMPLATE_SYNC_QUEUE_NAME, { connection: createRedis(redisUrl) });
-    templateSyncWorker = createTemplateSyncWorker({ connection: createRedis(redisUrl), db: db.db, cipher, provider: new GupshupProvider(), logger });
+    templateSyncWorker = createTemplateSyncWorker({ connection: createRedis(redisUrl), db: db.db, cipher, provider: createDefaultWhatsAppProvider(), logger });
     void scheduleTemplateSyncTick(templateSyncQueue).catch((err: unknown) =>
       logger.warn(`template sync scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
     );
@@ -267,7 +267,7 @@ function main(): void {
     ownerWorker = createOwnerModeWorker({
       connection: createRedis(redisUrl),
       db: db.db,
-      send: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
+      send: createOwnerSender({ db: db.db, provider: createDefaultWhatsAppProvider(), cipher }),
       interpret: createOwnerInterpreter({ db: db.db, cipher, logger }),
       aiQueue,
       outboundQueue,

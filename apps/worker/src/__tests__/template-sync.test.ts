@@ -64,7 +64,7 @@ function fakeStore(channels: SyncChannel[], templates: Map<string, LocalTemplate
   return { store, applied };
 }
 
-const ch = (id: string): SyncChannel => ({ id, appName: `app-${id}`, sourcePhone: "+5491140000000", credentials: Buffer.from("enc"), partnerAppId: `pa-${id}`, partnerToken: Buffer.from("ptok") });
+const ch = (id: string): SyncChannel => ({ id, provider: "gupshup", appName: `app-${id}`, sourcePhone: "+5491140000000", credentials: Buffer.from("enc"), partnerAppId: `pa-${id}`, partnerToken: Buffer.from("ptok") });
 const PARTNER = "partner_TOKEN_secret";
 const cipher = { decrypt: vi.fn((_b: Buffer, ctx: { purpose: string }) => (ctx.purpose === "gupshup_partner_token" ? PARTNER : SECRET)) } as unknown as CipherBox;
 
@@ -81,9 +81,19 @@ describe("syncTemplatesTenant", () => {
       "tenant-1",
     );
     expect(res).toEqual({ channels: 1, updated: 1, imported: 0, failedChannels: 0, skippedChannels: 0 });
-    expect(listTemplates).toHaveBeenCalledWith({ apiKey: SECRET, appName: "app-c1", sourcePhone: "+5491140000000", partnerAppId: "pa-c1", partnerToken: PARTNER });
+    expect(listTemplates).toHaveBeenCalledWith({ provider: "gupshup", apiKey: SECRET, appName: "app-c1", sourcePhone: "+5491140000000", partnerAppId: "pa-c1", partnerToken: PARTNER });
     expect(cipher.decrypt).toHaveBeenCalledWith(expect.any(Buffer), { tenantId: "tenant-1", purpose: "gupshup_api_key" });
     expect(applied).toEqual([{ channelId: "c1", updates: 1, inserts: 0, now }]);
+  });
+
+  it("syncs a 360dialog channel without partner credentials", async () => {
+    const d360: SyncChannel = { id: "d1", provider: "360dialog", appName: "CH", sourcePhone: "+5491140000000", credentials: Buffer.from("enc"), partnerAppId: null, partnerToken: null };
+    const { store, applied } = fakeStore([d360], new Map());
+    const listTemplates = vi.fn(async (_c: WhatsAppConnection) => [remote({ name: "a" })]);
+    const res = await syncTemplatesTenant(deps({ provider: { listTemplates }, inTenant: (_t, fn) => fn(store) }), "tenant-1");
+    expect(res).toMatchObject({ channels: 1, imported: 1, skippedChannels: 0, failedChannels: 0 });
+    expect(listTemplates).toHaveBeenCalledWith({ provider: "360dialog", apiKey: SECRET, appName: "CH", sourcePhone: "+5491140000000" });
+    expect(applied).toHaveLength(1);
   });
 
   it("a failing channel does not stop the next and never logs the key", async () => {
