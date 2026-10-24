@@ -415,7 +415,7 @@ export function PricingTeaser() {
         <p className="m-0 rounded-full bg-lime px-3 py-1 text-sm font-bold">Precios</p>
         <h2 id="precios-title" className={`${H2} max-w-[24ch]`}>{published ? PRICING_TEASER.from : "Empieza gratis y elige tu plan cuando lo necesites."}</h2>
         <p className="m-0 max-w-[60ch] text-lg text-ink-3">
-          {published ? PRICING_TEASER.note : "Crea tu cuenta, conecta tu WhatsApp y revisa los planes dentro de la app. Puedes cancelar en cualquier momento."}
+          {published ? PRICING_TEASER.note : "Crea tu cuenta, conecta tu WhatsApp y revisa los planes dentro de la app. Sin permanencia ni cobros automáticos: cada pago cubre 30 días (o 365 en el plan anual)."}
         </p>
         <Link href="/signup" className={buttonClasses("primary", "", "lg")}>
           Ver planes al crear tu cuenta

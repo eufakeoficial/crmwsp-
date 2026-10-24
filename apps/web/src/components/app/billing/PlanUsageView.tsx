@@ -20,6 +20,13 @@ const LABELS: Record<PlanLimitKeyDto, string> = {
 
 const fmt = (n: number) => n.toLocaleString("es");
 
+const ACCESS_LABEL: Record<BillingPlanResponse["subscription"]["access"], string> = {
+  unbilled: "Sin suscripción registrada",
+  active: "Suscripción al día",
+  grace: "Período vencido: en días de gracia",
+  restricted: "Suscripción vencida: solo lectura (tus datos se conservan)",
+};
+
 function UsageRow({ item }: { item: BillingPlanResponse["usage"][number] }) {
   const { key, limit, used, percent, exceeded } = item;
   const text = limit === null ? `${fmt(used)} · ilimitado` : limit === 0 ? "No incluido en tu plan" : `${fmt(used)} de ${fmt(limit)}`;
@@ -60,8 +67,12 @@ function Body() {
         <p className="m-0 text-sm text-ink-3">Plan actual</p>
         <p className="m-0 text-[28px] font-extrabold">{data.plan.name}</p>
         <p className="m-0 text-ink-3">US${data.plan.priceMonthlyUsd} /mes · período {data.period}</p>
+        <p className={`m-0 mt-1 text-sm font-semibold ${data.subscription.access === "restricted" ? "text-red-600" : data.subscription.access === "grace" ? "text-amber-600" : ""}`}>
+          {ACCESS_LABEL[data.subscription.access]}
+          {data.subscription.paidUntil ? ` · pagado hasta el ${data.subscription.paidUntil}` : ""}
+        </p>
         <p className="m-0 mt-2 text-sm text-ink-3">
-          Paga o renueva tu suscripción (30 días por pago, en cripto) desde{" "}
+          Paga o renueva tu suscripción (30 días por pago, o 365 en el plan anual; en cripto, sin cobros automáticos) desde{" "}
           <Link href="/app/settings/billing" className="font-semibold underline">
             Ajustes › Suscripción
           </Link>

@@ -38,7 +38,7 @@ export const FAQ = [
   { question: "¿Cómo se confirman los pagos?", answer: "Solo por la confirmación del proveedor de pagos o por conciliación. Una imagen de comprobante nunca marca un pago como pagado. La única excepción es el marcado manual que hace un owner o admin, que queda auditado." },
   { question: "¿Mis datos están separados de los de otras empresas?", answer: "Sí. Cada empresa trabaja en su propio espacio aislado y las claves se guardan cifradas." },
   { question: "¿Qué es BYOK y por qué importa?", answer: "Puedes usar tu propia clave de IA (BYOK) y pagar el consumo directo al proveedor, sin margen nuestro sobre la IA." },
-  { question: "¿Puedo cancelar cuando quiera?", answer: "Sí. Puedes cancelar tu suscripción en cualquier momento desde tu cuenta." },
+  { question: "¿Hay permanencia o cobros automáticos?", answer: "No. No hay permanencia ni cobros automáticos: cada pago cubre 30 días (o 365 si pagas el plan anual). Si no renuevas, tienes 3 días de gracia y luego la cuenta pasa a solo lectura. Tus datos nunca se borran." },
 ] as const;
 
 export const COMPARISON_COLUMNS = ["App WhatsApp Business", "CRM genérico", "Vende+ WSP"] as const;
