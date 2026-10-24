@@ -69,7 +69,7 @@ Todas las tablas de negocio llevan `tenant_id uuid NOT NULL` con índice compues
 - `api_keys` — por tenant, hash, scopes, último uso.
 
 ### Canal
-- `channel_connections` — `provider` (`gupshup`; `360dialog` más adelante), número, identificador de canal del BSP, API key del BSP cifrada (envelope encryption), estado, calidad del número reportada por el BSP.
+- `channel_connections` — `provider` (`gupshup` o `360dialog`; este último permite Coexistence con la app WhatsApp Business, ADR 0014), número, identificador de canal del BSP, API key del BSP cifrada (envelope encryption), estado, calidad del número reportada por el BSP.
 - `message_templates` — plantillas aprobadas por Meta, categoría, idioma, estado, variables.
 
 ### Contactos y conversaciones

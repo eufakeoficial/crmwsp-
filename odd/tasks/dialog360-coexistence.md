@@ -28,13 +28,13 @@ Gupshup rechaza numeros que ya estan registrados en la app WhatsApp Business: ob
 - Todo acceso a datos por `withTenant`; ninguna tabla nueva.
 
 ## Tareas
-- [ ] T1 Provider 360dialog + parseo + tests (fixtures)
-- [ ] T2 Router de proveedores + `WhatsAppConnection.provider` + worker usa router
-- [ ] T3 Webhook 360dialog (api) con dedupe + tests
-- [ ] T4 Onboarding endpoint + contratos + env example
-- [ ] T5 UI boton + callback
-- [ ] T6 ADR + ARCHITECTURE
-- [ ] T7 Verificacion (typecheck/lint/test)
+- [x] T1 [1c78aeb] Provider 360dialog + parseo + tests (fixtures)
+- [x] T2 [816de05] Router de proveedores + `WhatsAppConnection.provider` + worker usa router
+- [x] T3 [9408b7b] Webhook 360dialog (api) con dedupe + tests
+- [x] T4 [a4668d1] Onboarding endpoint + contratos + env example
+- [x] T5 [4e5d4cf] UI boton + callback
+- [x] T6 ADR + ARCHITECTURE
+- [x] T7 Verificacion: typecheck y lint OK; tests OK salvo 1 fallo previo en packages/knowledge (CSV, ajeno); tests con DB omitidos (sin DATABASE_URL)
 
 ## Criterios de aceptacion
 - Webhook 360dialog con mismo mensaje dos veces crea un solo evento (dedupe `msg:<id>`).

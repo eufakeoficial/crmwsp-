@@ -32,7 +32,7 @@ describe("Dialog360PartnerClient", () => {
 
   it("does not leak credentials in errors", async () => {
     const { c } = client(json({ error: PARTNER_KEY }, 401));
-    const err = await c.createChannelApiKey("CH1").catch((e: unknown) => e as Error);
+    const err = (await c.createChannelApiKey("CH1").catch((e: unknown) => e)) as Error;
     expect(err.message).not.toContain(PARTNER_KEY);
     expect(JSON.stringify(err)).not.toContain(PARTNER_KEY);
   });
