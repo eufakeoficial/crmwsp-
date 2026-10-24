@@ -38,6 +38,8 @@ import {
 } from "./rate-limiter.js";
 import { hashSessionToken, newSessionToken } from "./session-token.js";
 
+import { META_CAPI, type MetaCapi } from "../tracking/meta-capi.js";
+
 export interface ClientInfo {
   ip: string | null;
   userAgent: string | null;
@@ -80,6 +82,7 @@ export class AuthService implements OnModuleInit {
     @Inject(ACCOUNT_BACKOFF) backoff: BackoffOptions,
     @Inject(AUTH_MAILER) private readonly mailer: Mailer,
     @Optional() @Inject(BusinessCategoryService) private readonly categories?: BusinessCategoryService,
+    @Optional() @Inject(META_CAPI) private readonly metaCapi?: MetaCapi | null,
   ) {
     this.limiter = new StoreRateLimiter(rateLimit, store, "auth");
     this.ipLimiter = new StoreRateLimiter(ipRateLimit, store, "auth");
@@ -143,6 +146,17 @@ export class AuthService implements OnModuleInit {
     await this.sendVerification(userId).catch((err: unknown) => {
       this.logger.warn(`verification email not issued (${err instanceof Error ? err.name : "unknown"})`);
     });
+    // Meta Conversions API: only with the visitor's consent; detached so it never delays or fails the signup.
+    if (input.tracking?.consent && this.metaCapi) {
+      void this.metaCapi.sendCompleteRegistration({
+        eventId: input.tracking.eventId,
+        email: input.email,
+        ip: client.ip,
+        userAgent: client.userAgent,
+        fbp: input.tracking.fbp,
+        fbc: input.tracking.fbc,
+      });
+    }
     return { token: await this.openSession(userId, client), userId };
   }
 

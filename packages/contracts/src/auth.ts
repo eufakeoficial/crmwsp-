@@ -28,6 +28,18 @@ export const signupRequestSchema = z.object({
   /** Business category (ADR 0021); optional: without it the panel asks for it later. */
   businessCategory: z.string().trim().regex(/^[a-z0-9_]{2,64}$/).optional(),
   businessCategoryDetail: z.string().trim().max(200).optional(),
+  /**
+   * Marketing attribution, sent only when the visitor accepted cookies. `eventId` is shared with the
+   * browser Meta Pixel event so Meta can deduplicate it against the server (Conversions API) event.
+   */
+  tracking: z
+    .object({
+      consent: z.boolean(),
+      eventId: z.string().trim().regex(/^[A-Za-z0-9_-]{8,64}$/),
+      fbp: z.string().trim().max(128).optional(),
+      fbc: z.string().trim().max(256).optional(),
+    })
+    .optional(),
 });
 export type SignupRequest = z.infer<typeof signupRequestSchema>;
 
