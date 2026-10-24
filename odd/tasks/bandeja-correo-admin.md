@@ -24,17 +24,24 @@ esta rama solo tiene hasta 0068). ADR: 0020.
 - Nunca auto-respuesta; ignorar Auto-Submitted / Precedence / bounces; límite por remitente.
 
 ## Tareas
-- [ ] T1 dominio (parseo, hilos, auto-submitted, saneado HTML, asunto) + contratos — ruta: inline
-- [ ] T2 migración 0075 + schema drizzle + tests de aislamiento — ruta: inline
-- [ ] T3 API: webhook Resend (firma), endpoints de plataforma de correo, mailer con cabeceras — ruta: inline
-- [ ] T4 worker: procesar evento Resend → ticket — ruta: inline
-- [ ] T5 Web: pestaña Correo (3 paneles), contador en AdminShell — ruta: inline
-- [ ] T6 ADR 0020 + cierre de este documento — ruta: inline
+- [x] T1 dominio + contratos — ruta: inline — commits 10d7cea, 5ef4dc6 (lint)
+- [x] T2 migración 0075 + schema drizzle + tests de aislamiento — ruta: inline — commit ce11c9e
+- [x] T3 API: webhook Resend, endpoints de correo, mailer con cabeceras — ruta: inline — commit 8e53db5
+- [x] T4 worker: evento Resend → ticket — ruta: inline — commit 2927689
+- [x] T5 Web: pestaña Correo, contador en AdminShell — ruta: inline — commit 9f9de19
+- [x] T6 ADR 0020 + cierre de este documento — ruta: inline
 
 Ruta: este worker es el escritor delegado; tareas inline.
 
 ## Evidencia
-(pendiente)
+- Tests de dominio escritos junto con la implementación (sin RED previo observado): 15 tests.
+- API: firma Svix (válida, alterada, vieja, sin cabeceras, secreto ausente), dedupe/encolado, 503;
+  servicio de correo (cabeceras de hilo, no registra si falla el envío, límite, dominio propio).
+- Worker: mapeo de correo recibido (saneado, refs, token, auto-respuesta).
+- DB (support-email-isolation, 6 tests): se saltan sin DATABASE_URL.
+- pnpm typecheck 16/16; pnpm lint 16/16; turbo test: todo verde salvo el fallo conocido
+  @crmwsp/knowledge parseCsvCatalog.
 
 ## Siguiente paso
-T1.
+- Ejecutar tests de DB contra Postgres; registrar el webhook en Resend; configurar env.
+- Opcional: notificar a los admins por el mecanismo de notificaciones al llegar correo nuevo.
