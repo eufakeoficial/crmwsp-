@@ -57,7 +57,7 @@ function toTicket(r: TicketRow): PlatformSupportTicket {
 }
 
 /** Maps the definer functions' SQLSTATEs (no data in them) to API errors. */
-async function guarded<T>(fn: () => Promise<T>): Promise<T> {
+export async function guarded<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (err) {

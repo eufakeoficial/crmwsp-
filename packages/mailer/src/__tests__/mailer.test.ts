@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { describe, expect, it, vi } from "vitest";
-import { MailerError, NoopMailer, SmtpMailer, createMailerFromEnv, escapeHtml, renderEmail } from "../index.js";
+import type { Transporter } from "nodemailer";
+import { MailerError, NoopMailer, SmtpMailer, createMailerFromEnv, escapeHtml, parseResendReceivedEmail, renderEmail } from "../index.js";
 
 describe("SmtpMailer", () => {
   it("sends through a transport and returns the messageId", async () => {
@@ -58,5 +59,25 @@ describe.skipIf(!process.env.SMTP_HOST)("Mailpit integration", () => {
     const mailer = createMailerFromEnv();
     const res = await mailer.send({ to: "dest@crmwsp.test", subject: "Prueba T26", ...renderEmail({ title: "Prueba", body: "Hola desde CRMWSP" }) });
     expect(res.messageId).toBeTruthy();
+  });
+});
+
+describe("threading headers and resend parsing", () => {
+  it("passes from/messageId/inReplyTo/references to the transport", async () => {
+    const sent: Record<string, unknown>[] = [];
+    const transport = { sendMail: async (m: Record<string, unknown>) => (sent.push(m), { messageId: "x" }) } as unknown as Transporter;
+    const mailer = new SmtpMailer({ from: "d <d@x.co>", transport });
+    await mailer.send({ to: "a@b.co", subject: "Re: hola", text: "t", from: "Vende+ WSP <contacto@vendemas.chat>", messageId: "<m@v>", inReplyTo: "<p@c>", references: ["<r@c>", "<p@c>"] });
+    expect(sent[0]).toMatchObject({ from: "Vende+ WSP <contacto@vendemas.chat>", messageId: "<m@v>", inReplyTo: "<p@c>", references: ["<r@c>", "<p@c>"] });
+  });
+  it("rejects header injection", async () => {
+    const transport = { sendMail: async () => ({ messageId: "x" }) } as unknown as Transporter;
+    const mailer = new SmtpMailer({ from: "d <d@x.co>", transport });
+    await expect(mailer.send({ to: "a@b.co", subject: "x\r\nBcc: e@v.il", text: "t" })).rejects.toBeInstanceOf(MailerError);
+  });
+  it("parses a received email", () => {
+    const e = parseResendReceivedEmail({ id: "e1", from: "A <a@b.co>", to: ["contacto@vendemas.chat"], subject: "S", html: "<p>x</p>", text: null, message_id: "<m@b>", attachments: [{ id: "a1", filename: "f.pdf", content_type: "application/pdf", size: 10 }] });
+    expect(e.messageId).toBe("<m@b>");
+    expect(e.attachments).toEqual([{ id: "a1", filename: "f.pdf", contentType: "application/pdf", size: 10 }]);
   });
 });

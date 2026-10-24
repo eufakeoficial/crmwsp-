@@ -7,6 +7,18 @@ export interface MailMessage {
   text: string;
   html?: string;
   replyTo?: string;
+  /** Overrides the default sender (e.g. "Vende+ WSP <contacto@vendemas.chat>"). */
+  from?: string;
+  /** RFC 5322 Message-ID to use (`<id@domain>`), so replies can be threaded. */
+  messageId?: string;
+  /** Threading headers for replies (`<id@domain>` values). */
+  inReplyTo?: string;
+  references?: string[];
+}
+
+/** Rejects header-injection characters in values that become mail headers. */
+export function assertSafeHeaderValue(value: string): void {
+  if (/[\r\n\0]/.test(value) || value.length > 998) throw new MailerError("unsafe header value");
 }
 
 export interface Mailer {
@@ -63,14 +75,20 @@ export class SmtpMailer implements Mailer {
   }
 
   async send(message: MailMessage): Promise<{ messageId: string }> {
+    for (const v of [message.from, message.messageId, message.inReplyTo, message.to, message.subject, ...(message.references ?? [])]) {
+      if (v !== undefined) assertSafeHeaderValue(v);
+    }
     try {
       const info = (await this.transport.sendMail({
-        from: this.from,
+        from: message.from ?? this.from,
         to: message.to,
         subject: message.subject,
         text: message.text,
         ...(message.html ? { html: message.html } : {}),
         ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+        ...(message.messageId ? { messageId: message.messageId } : {}),
+        ...(message.inReplyTo ? { inReplyTo: message.inReplyTo } : {}),
+        ...(message.references?.length ? { references: message.references } : {}),
       })) as { messageId?: string };
       return { messageId: String(info.messageId ?? "") };
     } catch (err) {
@@ -140,3 +158,5 @@ export function renderEmail(input: EmailTemplateInput): { text: string; html: st
   const html = `<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;color:#111;max-width:560px;margin:0 auto;padding:16px"><h2 style="margin:0 0 16px">${escapeHtml(input.title)}</h2>${paragraphs}${button}<p style="color:#666;font-size:12px;margin-top:24px">CRMWSP</p></body></html>`;
   return { text, html };
 }
+
+export * from "./resend.js";
