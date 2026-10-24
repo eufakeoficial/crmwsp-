@@ -3,6 +3,7 @@ import {
   createSubscriptionChargeRequestSchema,
   subscriptionQuoteRequestSchema,
   uuidSchema,
+  type ReferralSummary,
   type SubscriptionQuote,
   type BillingPlanResponse,
   type SubscriptionChargeDto,
@@ -58,6 +59,13 @@ export class BillingController {
   quote(@CurrentTenantDb() db: TenantDb, @Body() body: unknown): Promise<SubscriptionQuote> {
     const input = parseOrThrow(subscriptionQuoteRequestSchema, body);
     return this.subscriptions.quote(db, input.plan, input.period, input.couponCode);
+  }
+
+  /** GET /billing/referrals — referral code, referred count and pending/earned rewards (ADR 0017). */
+  @Get("referrals")
+  @Roles("owner", "admin")
+  referrals(@CurrentTenantDb() db: TenantDb): Promise<ReferralSummary> {
+    return this.subscriptions.referrals(db);
   }
 
   /** GET /billing/subscription/charges — latest 50 charges of the tenant. */

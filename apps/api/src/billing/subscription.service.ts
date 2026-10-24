@@ -8,6 +8,7 @@ import {
   normalizeCouponCode,
   periodPriceUsd,
   quoteCharge,
+  REFERRAL_REWARD_PERCENT,
   type BillingPeriod,
   type CouponDefinition,
   type CouponType,
@@ -22,6 +23,7 @@ import {
   type CouponIneligibilityDto,
   type SubscriptionChargeDto,
   type SubscriptionChargeList,
+  type ReferralSummary,
   type SubscriptionQuote,
 } from "@crmwsp/contracts";
 import { desc, eq, sql, subscriptionCharges, type DbHandle, type SubscriptionCharge, type Transaction } from "@crmwsp/db";
@@ -111,7 +113,7 @@ export class SubscriptionService {
         else coupon = found.coupon;
       }
     }
-    const credits = 0; // referral credits: T2
+    const credits = couponCode === undefined && period === "monthly" ? await readReferralCredits(tx) : 0;
     const q = quoteCharge(plan.id, period, coupon, credits);
     return {
       plan: plan.id,
@@ -145,7 +147,7 @@ export class SubscriptionService {
             ? await tx.execute<{ id: string }>(
                 sql`select public.subscription_coupon_grant(${code}, ${plan.id}, ${listPrice}::numeric, ${days}::integer, ${db.userId}::uuid) as id`,
               )
-            : [];
+            : await tx.execute<{ id: string }>(sql`select public.subscription_referral_grant(${plan.id}, ${listPrice}::numeric, ${db.userId}::uuid) as id`);
           return r?.id;
         });
         if (!id) throw new Error("free period grant returned no id");
@@ -184,6 +186,10 @@ export class SubscriptionService {
           [r] = await tx.execute<{ id: string }>(
             sql`select public.subscription_charge_create_with_coupon(${plan.id}, ${listPrice}::numeric, ${provider.payCurrency}, ${db.userId}::uuid, ${days}::integer, ${code}) as id`,
           );
+        } else if (quote.referralCredits > 0) {
+          [r] = await tx.execute<{ id: string }>(
+            sql`select public.subscription_charge_create_with_referral(${plan.id}, ${listPrice}::numeric, ${provider.payCurrency}, ${db.userId}::uuid) as id`,
+          );
         } else {
           [r] = await tx.execute<{ id: string }>(
             sql`select public.subscription_charge_create(${plan.id}, ${listPrice}::numeric, 'usd', ${provider.payCurrency}, ${db.userId}::uuid, ${days}::integer) as id`,
@@ -215,6 +221,26 @@ export class SubscriptionService {
       if (!row) throw new NotFoundError();
       return toChargeDto(row);
     });
+  }
+
+  /** Referral code, counts and credits of the current tenant (ADR 0017). */
+  async referrals(db: TenantDb): Promise<ReferralSummary> {
+    const [r] = await db.run((tx) =>
+      tx.execute<{ code: string; referred: number; pending: number; rewarded: number; rejected: number; credits_available: number; credits_used: number }>(
+        sql`select code, referred, pending, rewarded, rejected, credits_available, credits_used from public.tenant_referral_summary()`,
+      ),
+    );
+    if (!r) throw new NotFoundError();
+    return {
+      code: r.code,
+      referred: Number(r.referred),
+      pending: Number(r.pending),
+      rewarded: Number(r.rewarded),
+      rejected: Number(r.rejected),
+      creditsAvailable: Number(r.credits_available),
+      creditsUsed: Number(r.credits_used),
+      rewardPercent: REFERRAL_REWARD_PERCENT,
+    };
   }
 
   async listCharges(db: TenantDb): Promise<SubscriptionChargeList> {
@@ -293,6 +319,12 @@ async function lookupCoupon(tx: Transaction, raw: string): Promise<{ coupon: Cou
     },
     usage: { totalUsed: Number(r.total_used), tenantUsed: Number(r.tenant_used) },
   };
+}
+
+/** Available referral credits of the current tenant (`tenant_referral_credits_available`, 0072). */
+async function readReferralCredits(tx: Transaction): Promise<number> {
+  const [r] = await tx.execute<{ n: number | null }>(sql`select public.tenant_referral_credits_available() as n`);
+  return Number(r?.n ?? 0);
 }
 
 /** SQL `22023 coupon: <reason>` (e.g. a lost race on max_redemptions) → 400 with the reason. */

@@ -63,10 +63,33 @@ ninguna vía para que un tenant fije su propio precio ni se marque un período c
   `verified_by` distinto de `webhook | reconciliation` e ignora cualquier notificación sobre un
   canje. Los pedidos de clientes finales no cambian.
 
+### Referidos (migración 0072)
+- Cada tenant tiene un código de 8 caracteres (`tenant_referral_code`, creado al primer uso) y un
+  enlace `/signup?ref=CODE`, visible de forma discreta en Plan y uso. El alta guarda el referente
+  (`tenant_referral_record`, solo tenants creados hace < 10 min, una vez, nunca bloquea el alta).
+  Autorreferido imposible: `CHECK (referido <> referente)` y el alta crea siempre un tenant nuevo.
+- La recompensa **no** se da al registrarse: se decide dentro de la transacción que liquida como
+  pagado el **primer** cobro con proveedor del referido (`webhook | reconciliation`; los canjes de
+  cupón no cuentan). Antiabuso (señales T7, ADR 0015): sin recompensa si comparte email
+  normalizado o IP de alta con el referente, o si al número del referido se le negó la prueba por
+  reutilizado. Una recompensa por tenant referido de por vida (`UNIQUE`), así reintentos e IPN
+  repetidas son idempotentes.
+- La recompensa es un crédito de 20 % sobre el próximo pago **mensual**, acumulable hasta 100 %
+  (5 créditos = un mes gratis por cobro). Se aplica automáticamente cuando no se usa cupón (no se
+  combinan). El cobro reserva los créditos (`held_by_charge_id`) y se consumen al liquidarse; una
+  reserva de un cobro pendiente vence a las 24 h. Con 5 créditos el mes se concede sin pago por la
+  misma vía de canje (`subscription_referral_grant`, `verified_by = 'coupon'`).
+- Si el cobro que generó la recompensa se reembolsa, la recompensa no usada se revoca.
+- Las tablas de referidos son de plataforma (sin privilegios para la app); el tenant solo ve
+  contadores propios (`tenant_referral_summary`), nunca datos de otros tenants.
+
 ## Consecuencias
 - Un cobro pendiente con cupón reserva un uso hasta 24 h; si se paga después de ese plazo, el
   canje se registra igual y puede superar `max_redemptions` (riesgo acotado y visible en el
   backoffice).
 - Un tenant con `per_tenant_limit = 1` y un cobro pendiente con el cupón no puede crear otro con
   ese cupón (otro plan o período) hasta pagar o pasadas 24 h.
-- Un reembolso de un cobro con cupón no devuelve el uso.
+- Un reembolso de un cobro con cupón no devuelve el uso; tampoco devuelve créditos de referido
+  consumidos.
+- Un cobro pendiente cuya reserva de créditos venció y otro cobro que los reservó de nuevo pueden
+  pagarse ambos con descuento (fuga acotada a cobros abiertos > 24 h).

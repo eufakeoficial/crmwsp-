@@ -210,3 +210,20 @@ export const platformCouponRedemptionSchema = z.object({
 export type PlatformCouponRedemption = z.infer<typeof platformCouponRedemptionSchema>;
 export const platformCouponRedemptionListSchema = z.object({ items: z.array(platformCouponRedemptionSchema) });
 export type PlatformCouponRedemptionList = z.infer<typeof platformCouponRedemptionListSchema>;
+
+/** `GET /billing/referrals`: the tenant's referral link code and rewards (ADR 0017). */
+export const referralSummarySchema = z.object({
+  code: z.string(),
+  /** Tenants that signed up with the code. */
+  referred: z.number().int(),
+  /** Signed up, first payment not settled yet. */
+  pending: z.number().int(),
+  rewarded: z.number().int(),
+  /** Not rewarded by the anti-abuse rules, or revoked after a refund. */
+  rejected: z.number().int(),
+  /** Unused 20% credits (applied automatically to the next monthly payment, up to 100%). */
+  creditsAvailable: z.number().int(),
+  creditsUsed: z.number().int(),
+  rewardPercent: z.number().int(),
+});
+export type ReferralSummary = z.infer<typeof referralSummarySchema>;

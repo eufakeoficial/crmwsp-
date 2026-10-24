@@ -23,6 +23,8 @@ export const signupRequestSchema = z.object({
   password: passwordSchema,
   tenantName: z.string().trim().min(1).max(200),
   tenantSlug: tenantSlugSchema,
+  /** Referral code from `/signup?ref=CODE` (ADR 0017); unknown codes are ignored. */
+  referralCode: z.string().trim().max(32).regex(/^[A-Za-z0-9]*$/).optional(),
 });
 export type SignupRequest = z.infer<typeof signupRequestSchema>;
 

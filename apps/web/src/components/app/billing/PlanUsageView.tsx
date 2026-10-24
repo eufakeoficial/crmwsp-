@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { BillingPlanResponse, PlanLimitKeyDto } from "@crmwsp/contracts";
+import type { BillingPlanResponse, PlanLimitKeyDto, ReferralSummary } from "@crmwsp/contracts";
 import { SettingsFrame } from "@/components/ai/AccessGate";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
@@ -89,7 +89,44 @@ function Body() {
           ))}
         </ul>
       </Card>
+      <ReferralCard />
     </div>
+  );
+}
+
+/** Discreet referral link (ADR 0017): a credit when a referred company makes its first payment. */
+function ReferralCard() {
+  const [r, setR] = useState<ReferralSummary>();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    billingApi.referrals().then(setR, () => undefined);
+  }, []);
+  if (!r) return null;
+  const link = `${window.location.origin}/signup?ref=${r.code}`;
+  return (
+    <Card>
+      <details>
+        <summary className="cursor-pointer text-sm font-semibold">Recomienda y ahorra</summary>
+        <p className="m-0 mt-2 text-sm text-ink-3">
+          Cuando una empresa se registra con tu enlace y hace su primer pago, recibes {r.rewardPercent}% de descuento en tu próximo pago mensual
+          (acumulable hasta un mes gratis).
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <code className="break-all rounded bg-paper p-2 text-[13px]">{link}</code>
+          <button
+            type="button"
+            className="text-sm font-semibold underline"
+            onClick={() => void navigator.clipboard?.writeText(link).then(() => setCopied(true), () => undefined)}
+          >
+            {copied ? "Copiado" : "Copiar enlace"}
+          </button>
+        </div>
+        <p className="m-0 mt-2 text-[13px] text-ink-3">
+          {r.referred} registradas · {r.pending} esperando su primer pago · {r.rewarded} con recompensa · {r.creditsAvailable} recompensa(s) disponible(s) ·{" "}
+          {r.creditsUsed} usada(s)
+        </p>
+      </details>
+    </Card>
   );
 }
 

@@ -94,6 +94,12 @@ export class AuthService implements OnModuleInit {
     await this.repo.recordSignupSignals(tenantId, client.ip, normalizeSignupEmail(input.email)).catch((err: unknown) => {
       this.logger.warn(`signup signals not recorded (${err instanceof Error ? err.name : "unknown"})`);
     });
+    // Referral (ADR 0017): best effort, never blocks the signup; rewarded only on the first payment.
+    if (input.referralCode) {
+      await this.repo.recordReferral(tenantId, input.referralCode).catch((err: unknown) => {
+        this.logger.warn(`referral not recorded (${err instanceof Error ? err.name : "unknown"})`);
+      });
+    }
     await this.audit([tenantId], "auth.signup", userId, { ua: ua(client) }, client);
     return { token: await this.openSession(userId, client), userId };
   }

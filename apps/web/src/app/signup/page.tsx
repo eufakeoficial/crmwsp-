@@ -40,7 +40,10 @@ export default function SignupPage() {
 
     setBusy(true);
     try {
-      const me = await api.signup({ email, name, password, tenantName: tenantName.trim(), tenantSlug: slug });
+      // Referral link `/signup?ref=CODE` (ADR 0017); ignored when malformed.
+      const ref = new URLSearchParams(window.location.search).get("ref")?.trim() ?? "";
+      const referralCode = /^[A-Za-z0-9]{1,32}$/.test(ref) ? ref : undefined;
+      const me = await api.signup({ email, name, password, tenantName: tenantName.trim(), tenantSlug: slug, referralCode });
       router.replace(routeAfterAuth(me));
     } catch (err) {
       setError(errorMessage(err, "signup"));

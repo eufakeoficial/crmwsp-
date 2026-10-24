@@ -56,6 +56,11 @@ export class AuthRepository {
     await this.handle.sql`select public.tenant_signup_signals_record(${tenantId}::uuid, ${ip}::inet, ${emailNormalized})`;
   }
 
+  /** `tenant_referral_record` (0072): who referred a new tenant; unknown/self codes are ignored. */
+  async recordReferral(tenantId: string, code: string): Promise<void> {
+    await this.handle.sql`select public.tenant_referral_record(${tenantId}::uuid, ${code})`;
+  }
+
   async createSession(input: {
     userId: string;
     tokenHash: Buffer;
