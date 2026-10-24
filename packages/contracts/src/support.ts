@@ -18,7 +18,7 @@ export const SUPPORT_TICKET_PRIORITIES = ["low", "normal", "high", "urgent"] as 
 export const supportTicketPrioritySchema = z.enum(SUPPORT_TICKET_PRIORITIES);
 export type SupportTicketPriority = z.infer<typeof supportTicketPrioritySchema>;
 
-export const supportAuthorTypeSchema = z.enum(["tenant_user", "platform_admin"]);
+export const supportAuthorTypeSchema = z.enum(["tenant_user", "platform_admin", "email_contact"]);
 export type SupportAuthorType = z.infer<typeof supportAuthorTypeSchema>;
 
 export const SUPPORT_SUBJECT_MAX = 160;
