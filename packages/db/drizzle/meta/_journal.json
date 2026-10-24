@@ -448,6 +448,13 @@
       "when": 1792770000000,
       "tag": "0068_support_tickets",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792860000000,
+      "tag": "0075_support_email_inbox",
+      "breakpoints": true
     }
   ]
 }
