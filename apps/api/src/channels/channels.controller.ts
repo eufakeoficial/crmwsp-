@@ -7,23 +7,34 @@ import {
   NotFoundError,
   ValidationError,
   GUPSHUP_PARTNER_TOKEN_PURPOSE,
+  connect360dialogRequestSchema,
   createGupshupChannelRequestSchema,
   setPartnerCredentialsRequestSchema,
   submitTemplateRequestSchema,
   updateChannelRequestSchema,
   type Channel,
   type ChannelListResponse,
+  type Dialog360Config,
   type MessageTemplateDto,
 } from "@crmwsp/contracts";
-import { and, asc, channelConnections, eq, isUuid, messageTemplates, type ChannelConnection } from "@crmwsp/db";
-import { generateWebhookToken, type WhatsAppProvider } from "@crmwsp/whatsapp";
+import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, type ChannelConnection } from "@crmwsp/db";
+import { generateWebhookToken, type Dialog360PartnerClient, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import type { HttpRequest, RequestTenant } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { PG_UNIQUE_VIOLATION, pgCode, writeAudit } from "../inbox/audit.js";
-import { CHANNEL_PROVIDER, CIPHER_BOX, GUPSHUP_API_KEY_PURPOSE, webhookUrlFor } from "./channels.constants.js";
+import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_API_KEY_PURPOSE, webhookUrlFor } from "./channels.constants.js";
+
+function redactedHint(row: ChannelConnection, cipher: CipherBox): string | null {
+  if (!row.credentialsEncrypted) return null;
+  try {
+    return redact(cipher.decrypt(row.credentialsEncrypted, { tenantId: row.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE }));
+  } catch {
+    return null;
+  }
+}
 
 const ADMIN_ROLES = new Set(["owner", "admin"]);
 
@@ -33,6 +44,7 @@ export class ChannelsController {
   constructor(
     @Inject(CIPHER_BOX) private readonly cipher: CipherBox | null,
     @Inject(CHANNEL_PROVIDER) private readonly provider: WhatsAppProvider,
+    @Inject(DIALOG360_PARTNER) private readonly partner: Dialog360PartnerClient | null = null,
   ) {}
 
   private apiKeyHint(row: ChannelConnection): string | null {
@@ -51,7 +63,7 @@ export class ChannelsController {
       phoneE164: row.phoneE164,
       appName: row.externalAppId,
       status: row.status,
-      webhookUrl: privileged ? webhookUrlFor(row.webhookToken) : null,
+      webhookUrl: privileged ? webhookUrlFor(row.webhookToken, row.provider) : null,
       apiKeyHint: privileged ? (hint !== undefined ? hint : this.apiKeyHint(row)) : null,
       gupshupAppId: privileged ? row.gupshupAppId : null,
       partnerConfigured: row.gupshupAppId !== null && row.partnerTokenEncrypted !== null,
@@ -99,6 +111,82 @@ export class ChannelsController {
       if (pgCode(err) === PG_UNIQUE_VIOLATION) throw new ConflictError("A channel with this phone already exists");
       throw err;
     }
+  }
+
+  /** Public partner id (not a secret) so the web app can build the 360dialog Connect URL. */
+  @Get("360dialog/config")
+  @Roles("owner", "admin")
+  dialog360Config(): Dialog360Config {
+    return { partnerId: this.partner ? (process.env["D360_PARTNER_ID"] ?? null) : null };
+  }
+
+  /**
+   * 360dialog Connect callback (Embedded Signup, Coexistence): for each connected channel, creates its API
+   * key through the Partner API, stores it encrypted, points the channel webhook at our tokenized URL and
+   * creates the channel_connections row. Channels already connected for this tenant are returned untouched
+   * (regenerating a key would revoke the one in use). Partner API calls run outside any transaction.
+   */
+  @Post("360dialog/connect")
+  @Roles("owner", "admin")
+  @HttpCode(200)
+  async connect360dialog(@CurrentTenantDb() db: TenantDb, @Body() body: unknown, @Req() req: HttpRequest): Promise<ChannelListResponse> {
+    const input = parseOrThrow(connect360dialogRequestSchema, body);
+    const cipher = this.cipher;
+    if (!cipher) throw new EncryptionNotConfiguredError();
+    const partner = this.partner;
+    if (!partner) throw new EncryptionNotConfiguredError("360dialog partner credentials are not configured");
+    const channelIds = [...new Set(input.channelIds)];
+
+    const existing = await db.run((tx) =>
+      tx
+        .select()
+        .from(channelConnections)
+        .where(and(eq(channelConnections.provider, "360dialog"), inArray(channelConnections.externalAppId, channelIds))),
+    );
+    const known = new Set(existing.map((r) => r.externalAppId));
+    const items: ChannelConnection[] = [...existing];
+
+    for (const channelId of channelIds) {
+      if (known.has(channelId)) continue;
+      const phone = (await partner.findChannelPhone(channelId)) ?? (channelIds.length === 1 ? input.phoneE164 : undefined);
+      if (!phone) throw new ValidationError("phoneE164 is required: the phone number of the channel could not be determined");
+      const apiKey = await partner.createChannelApiKey(channelId);
+      const webhookToken = generateWebhookToken();
+      await partner.setWebhook(apiKey, webhookUrlFor(webhookToken, "360dialog"));
+      const credentials = cipher.encrypt(apiKey, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
+      try {
+        const row = await db.run(async (tx) => {
+          const [created] = await tx
+            .insert(channelConnections)
+            .values({
+              tenantId: db.tenantId,
+              provider: "360dialog",
+              phoneE164: phone,
+              externalAppId: channelId,
+              credentialsEncrypted: credentials,
+              webhookToken,
+              status: "active",
+            })
+            .returning();
+          if (!created) throw new Error("insert returned no row");
+          await writeAudit(tx, {
+            tenantId: db.tenantId,
+            userId: db.userId,
+            entity: "channel_connection",
+            entityId: created.id,
+            action: "channel.created",
+            diff: { provider: "360dialog", phoneE164: phone, channelId, status: "active" },
+            ip: req.ip,
+          });
+          return created;
+        });
+        items.push(row);
+      } catch (err) {
+        if (pgCode(err) === PG_UNIQUE_VIOLATION) throw new ConflictError("A channel with this phone already exists");
+        throw err;
+      }
+    }
+    return { items: items.map((r) => this.toDto(r, true, redactedHint(r, cipher))) };
   }
 
   @Get()
@@ -213,18 +301,25 @@ export class ChannelsController {
       if (dup) throw new ConflictError("A template with this name and language already exists on this channel");
       return ch;
     });
-    if (channel.provider !== "gupshup") throw new ValidationError("template submission is only supported for Gupshup channels");
+    if (channel.provider !== "gupshup" && channel.provider !== "360dialog") throw new ValidationError("template submission is not supported for this channel");
     if (channel.status === "disabled") throw new ValidationError("channel is disabled");
     if (!channel.credentials || !channel.appName) throw new ValidationError("channel has no credentials");
-    if (!channel.partnerAppId || !channel.partnerToken) {
+    if (channel.provider === "gupshup" && (!channel.partnerAppId || !channel.partnerToken)) {
       throw new ValidationError("channel has no Gupshup partner credentials (app id and token); set them with PUT /channels/:id/partner-credentials");
     }
 
     const apiKey = this.cipher.decrypt(channel.credentials, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
-    const partnerToken = this.cipher.decrypt(channel.partnerToken, { tenantId: db.tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE });
+    const partnerToken = channel.partnerToken ? this.cipher.decrypt(channel.partnerToken, { tenantId: db.tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE }) : undefined;
     // Provider errors are ExternalProviderError (HTTP mapped by the global filter); they never carry the key.
     const submitted = await this.provider.submitTemplate(
-      { apiKey, appName: channel.appName, sourcePhone: channel.phoneE164, partnerAppId: channel.partnerAppId, partnerToken },
+      {
+        provider: channel.provider,
+        apiKey,
+        appName: channel.appName,
+        sourcePhone: channel.phoneE164,
+        ...(channel.partnerAppId ? { partnerAppId: channel.partnerAppId } : {}),
+        ...(partnerToken ? { partnerToken } : {}),
+      },
       {
         name: input.name,
         language: input.language,

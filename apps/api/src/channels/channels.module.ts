@@ -1,8 +1,8 @@
 import { Logger, Module } from "@nestjs/common";
 import { createCipherBox, loadMasterKeysFromEnv, type CipherBox } from "@crmwsp/crypto";
 import { AuthModule } from "../auth/auth.module.js";
-import { createDefaultWhatsAppProvider, type WhatsAppProvider } from "@crmwsp/whatsapp";
-import { CHANNEL_PROVIDER, CIPHER_BOX } from "./channels.constants.js";
+import { Dialog360PartnerClient, createDefaultWhatsAppProvider, type WhatsAppProvider } from "@crmwsp/whatsapp";
+import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER } from "./channels.constants.js";
 import { ChannelsController } from "./channels.controller.js";
 
 /**
@@ -26,6 +26,14 @@ function cipherFromEnv(): CipherBox | null {
   controllers: [ChannelsController],
   providers: [
     { provide: CIPHER_BOX, useFactory: cipherFromEnv },
+    {
+      provide: DIALOG360_PARTNER,
+      useFactory: (): Dialog360PartnerClient | null => {
+        const partnerId = process.env["D360_PARTNER_ID"];
+        const partnerApiKey = process.env["D360_PARTNER_API_KEY"];
+        return partnerId && partnerApiKey ? new Dialog360PartnerClient({ partnerId, partnerApiKey }) : null;
+      },
+    },
     { provide: CHANNEL_PROVIDER, useFactory: (): WhatsAppProvider => createDefaultWhatsAppProvider() },
   ],
   // Shared with AiModule (same crypto box, other AAD purpose).

@@ -63,12 +63,22 @@ const req = { ip: "127.0.0.1" } as unknown as HttpRequest;
 const body = { name: "promo_otono", language: "es", category: "marketing", body: "Hola {{1}}", example: "Hola Ana" };
 
 describe("POST /channels/:id/templates", () => {
+  it("submits for a 360dialog channel without partner credentials", async () => {
+    const { db } = fakeDb([[channelRow({ provider: "360dialog", partnerAppId: null, partnerToken: null })], []]);
+    const { controller, submitTemplate } = make();
+    await controller.submitTemplate(db, CHANNEL, body, req);
+    expect(submitTemplate).toHaveBeenCalledWith(
+      { provider: "360dialog", apiKey: SECRET, appName: "DemoApp", sourcePhone: "+5491140000000" },
+      expect.objectContaining({ name: "promo_otono" }),
+    );
+  });
+
   it("submits to the BSP with the decrypted key and stores the answered status", async () => {
     const { db, inserts } = fakeDb([[channelRow()], []]);
     const { controller, submitTemplate, cipher } = make();
     const out = await controller.submitTemplate(db, CHANNEL, body, req);
     expect(submitTemplate).toHaveBeenCalledWith(
-      { apiKey: SECRET, appName: "DemoApp", sourcePhone: "+5491140000000", partnerAppId: "app-uuid-1", partnerToken: PARTNER },
+      { provider: "gupshup", apiKey: SECRET, appName: "DemoApp", sourcePhone: "+5491140000000", partnerAppId: "app-uuid-1", partnerToken: PARTNER },
       { name: "promo_otono", language: "es", category: "marketing", body: "Hola {{1}}", example: "Hola Ana" },
     );
     expect(cipher?.decrypt).toHaveBeenCalledWith(expect.any(Buffer), { tenantId: TENANT, purpose: "gupshup_api_key" });
@@ -96,7 +106,6 @@ describe("POST /channels/:id/templates", () => {
     await expect(controller.submitTemplate(fakeDb([]).db, CHANNEL, { ...body, name: "Bad Name" }, req)).rejects.toBeInstanceOf(ValidationError);
     await expect(controller.submitTemplate(fakeDb([]).db, CHANNEL, { ...body, example: undefined }, req)).rejects.toBeInstanceOf(ValidationError);
     await expect(controller.submitTemplate(fakeDb([[channelRow({ status: "disabled" })], []]).db, CHANNEL, body, req)).rejects.toBeInstanceOf(ValidationError);
-    await expect(controller.submitTemplate(fakeDb([[channelRow({ provider: "360dialog" })], []]).db, CHANNEL, body, req)).rejects.toBeInstanceOf(ValidationError);
     expect(submitTemplate).not.toHaveBeenCalled();
   });
 

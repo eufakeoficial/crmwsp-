@@ -8,3 +8,5 @@ export type { Dialog360ProviderOptions } from "./dialog360/provider.js";
 export { RoutingWhatsAppProvider, BSP_HEADER } from "./router.js";
 export type { BspName } from "./router.js";
 export { createDefaultWhatsAppProvider } from "./default.js";
+export { Dialog360PartnerClient, extractChannelPhone } from "./dialog360/partner.js";
+export type { Dialog360PartnerOptions } from "./dialog360/partner.js";
