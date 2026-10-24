@@ -483,6 +483,20 @@
       "when": 1792740000000,
       "tag": "0074_email_dispatches_password_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792750000000,
+      "tag": "0075_support_tickets",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1792760000000,
+      "tag": "0076_support_email_inbox",
+      "breakpoints": true
     }
   ]
 }

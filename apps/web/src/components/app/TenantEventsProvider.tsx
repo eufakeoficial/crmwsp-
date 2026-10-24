@@ -1,10 +1,11 @@
 "use client";
 
-import type { InboxEvent, ThreadEvent } from "@crmwsp/contracts";
+import type { InboxEvent, SupportEvent, ThreadEvent } from "@crmwsp/contracts";
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { type EventsStatus, useTenantEvents } from "@/lib/hooks/use-tenant-events";
 import { APPROVALS_CHANGED } from "@/lib/ai-actions";
 import { conversationsApi } from "@/lib/inbox-api";
+import { SUPPORT_CHANGED, SUPPORT_READ, supportApi } from "@/lib/support-api";
 import { useSession } from "./SessionProvider";
 
 /** Inbox listeners get thread events (incl. ai.reply_drafted / ai.handoff, which carry conversationId) and resyncs. */
@@ -17,6 +18,8 @@ interface EventsValue {
   subscribe: (listener: Listener) => () => void;
   /** Open conversations with unread messages (sidebar counter). */
   unreadOpen: number;
+  /** Support tickets with a support reply not yet opened (sidebar counter). */
+  supportUnread: number;
 }
 
 const EventsContext = createContext<EventsValue | null>(null);
@@ -35,6 +38,10 @@ export function useInboxEvents(listener: Listener): EventsStatus {
 
 export function useUnreadOpen(): number {
   return useContext(EventsContext)?.unreadOpen ?? 0;
+}
+
+export function useSupportUnread(): number {
+  return useContext(EventsContext)?.supportUnread ?? 0;
 }
 
 const MAX_PAGES = 5;
@@ -83,7 +90,38 @@ export function TenantEventsProvider({ children }: { children: ReactNode }) {
     },
     [refreshCount],
   );
-  const status = useTenantEvents(tenantId, dispatch, () => dispatch({ type: "resync" }));
+  // Support tickets (ADR 0016): sidebar badge + window event so the Soporte page refetches.
+  const [supportUnread, setSupportUnread] = useState(0);
+  const refreshSupport = useCallback(() => {
+    supportApi.unreadCount().then((r) => setSupportUnread(r.unreadCount), () => undefined);
+  }, []);
+  useEffect(() => {
+    setSupportUnread(0);
+    if (tenantId !== null) refreshSupport();
+  }, [tenantId, refreshSupport]);
+  const onSupport = useCallback(
+    (e: SupportEvent) => {
+      refreshSupport();
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(SUPPORT_CHANGED, { detail: e.ticketId }));
+    },
+    [refreshSupport],
+  );
+  useEffect(() => {
+    // The Soporte page marks threads as read: it fires the same event to refresh the badge.
+    const onLocal = () => refreshSupport();
+    window.addEventListener(SUPPORT_READ, onLocal);
+    return () => window.removeEventListener(SUPPORT_READ, onLocal);
+  }, [refreshSupport]);
+
+  const status = useTenantEvents(
+    tenantId,
+    dispatch,
+    () => {
+      dispatch({ type: "resync" });
+      refreshSupport();
+    },
+    onSupport,
+  );
   const subscribe = useCallback((l: Listener) => {
     listeners.current.add(l);
     return () => {
@@ -91,6 +129,6 @@ export function TenantEventsProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const value = useMemo(() => ({ status, subscribe, unreadOpen }), [status, subscribe, unreadOpen]);
+  const value = useMemo(() => ({ status, subscribe, unreadOpen, supportUnread }), [status, subscribe, unreadOpen, supportUnread]);
   return <EventsContext.Provider value={value}>{children}</EventsContext.Provider>;
 }

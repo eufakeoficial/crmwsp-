@@ -1,7 +1,7 @@
 import type { Database } from "@crmwsp/db";
 import type { MailMessage } from "@crmwsp/mailer";
 import { describe, expect, it } from "vitest";
-import { formatAmount, formatDay, lifecycleMessage, runPaidChargeEmails } from "../lifecycle-emails/index.js";
+import { formatAmount, formatDay, lifecycleMessage, runPaidChargeEmails, runSupportReplyEmails } from "../lifecycle-emails/index.js";
 
 const ctx = { siteUrl: "https://www.vendemas.chat", assetsUrl: "https://www.vendemas.chat/brand" };
 const clean = (m: MailMessage) => {
@@ -16,7 +16,7 @@ function fakeDb(rows: unknown[]) {
     execute: async (q: { queryChunks: unknown[] }) => {
       const text = JSON.stringify(q.queryChunks);
       if (text.includes("email_dispatch_claim")) {
-        const key = q.queryChunks.find((c): c is string => typeof c === "string" && c.startsWith("charge-paid:")) ?? "";
+        const key = q.queryChunks.find((c): c is string => typeof c === "string" && /^[a-z-]+:/.test(c)) ?? "";
         const ok = !claimed.has(key);
         claimed.add(key);
         return [{ ok }];
@@ -94,5 +94,34 @@ describe("lifecycleMessage", () => {
   it("renewal uses the real Start price", () => {
     const m = lifecycleMessage("o@x.test", row, { template: "pago-por-vencer", dedupeKey: "k", dueDate: "2026-11-30", daysLeft: 3 }, ctx);
     expect(m.text).toContain("49,00 USD al mes");
+  });
+});
+
+describe("runSupportReplyEmails", () => {
+  const reply = (over: Record<string, unknown> = {}) => ({
+    message_id: "33333333-3333-4333-8333-333333333333", tenant_id: "t1", ticket_number: 1042,
+    ticket_subject: "No llegan mis mensajes", creator_email: "c@x.test", creator_name: "Camila",
+    agent_name: null, body: "Ya renovamos la sesión.", ...over,
+  });
+
+  it("sends ticket-respuesta once per platform reply, to the ticket creator", async () => {
+    const sent: MailMessage[] = [];
+    const deps = { db: fakeDb([reply()]), ctx, send: async (m: MailMessage) => void sent.push(m) };
+    expect(await runSupportReplyEmails(deps)).toBe(1);
+    expect(await runSupportReplyEmails(deps)).toBe(0);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.to).toBe("c@x.test");
+    expect(sent[0]?.subject).toBe("Respuesta a tu consulta #1042: No llegan mis mensajes");
+    expect(sent[0]?.text).toContain("Equipo de soporte");
+    expect(sent[0]?.html).toContain("https://www.vendemas.chat/app/support");
+    clean(sent[0] as MailMessage);
+  });
+
+  it("skips rows without creator email and truncates long replies", async () => {
+    const sent: MailMessage[] = [];
+    const db = fakeDb([reply({ creator_email: null }), reply({ message_id: "44444444-4444-4444-8444-444444444444", body: "x".repeat(2000) })]);
+    expect(await runSupportReplyEmails({ db, ctx, send: async (m: MailMessage) => void sent.push(m) })).toBe(1);
+    expect(sent[0]?.text).toContain("…");
+    expect(sent[0]?.text).not.toContain("x".repeat(601));
   });
 });

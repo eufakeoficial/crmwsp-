@@ -1,4 +1,4 @@
-import { Building2, Landmark, ChartColumn, CreditCard, History, House, Plug, Receipt, Settings, Ticket, UserCheck, Users, type LucideIcon } from "lucide-react";
+import { Building2, Landmark, ChartColumn, CreditCard, History, House, LifeBuoy, Mail, MessageSquareText, Plug, Receipt, Settings, Ticket, UserCheck, Users, type LucideIcon } from "lucide-react";
 
 export interface AdminNavItem {
   key: string;
@@ -44,6 +44,9 @@ export const ADMIN_NAV: readonly AdminNavGroup[] = [
     id: "support",
     title: "SOPORTE",
     items: [
+      { key: "support", label: "Tickets", href: `${ADMIN_BASE}/support`, icon: LifeBuoy },
+      { key: "email", label: "Correo", href: `${ADMIN_BASE}/email`, icon: Mail },
+      { key: "canned", label: "Respuestas rápidas", href: `${ADMIN_BASE}/canned`, icon: MessageSquareText },
       { key: "audit", label: "Registro de actividad", href: `${ADMIN_BASE}/audit`, icon: History },
     ],
   },

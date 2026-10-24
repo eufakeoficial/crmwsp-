@@ -12,6 +12,18 @@ export interface MailMessage {
   replyTo?: string;
   /** Extra headers (e.g. RFC 8058 List-Unsubscribe for optional emails). */
   headers?: Record<string, string>;
+  /** Overrides the default sender (e.g. "Vende+ WSP <contacto@vendemas.chat>"). */
+  from?: string;
+  /** RFC 5322 Message-ID to use (`<id@domain>`), so replies can be threaded. */
+  messageId?: string;
+  /** Threading headers for replies (`<id@domain>` values). */
+  inReplyTo?: string;
+  references?: string[];
+}
+
+/** Rejects header-injection characters in values that become mail headers. */
+export function assertSafeHeaderValue(value: string): void {
+  if (/[\r\n\0]/.test(value) || value.length > 998) throw new MailerError("unsafe header value");
 }
 
 export interface Mailer {
@@ -68,15 +80,31 @@ export class SmtpMailer implements Mailer {
   }
 
   async send(message: MailMessage): Promise<{ messageId: string }> {
+    const headerValues = [
+      message.from,
+      message.messageId,
+      message.inReplyTo,
+      message.to,
+      message.subject,
+      message.replyTo,
+      ...(message.references ?? []),
+      ...Object.entries(message.headers ?? {}).flat(),
+    ];
+    for (const v of headerValues) {
+      if (v !== undefined) assertSafeHeaderValue(v);
+    }
     try {
       const info = (await this.transport.sendMail({
-        from: this.from,
+        from: message.from ?? this.from,
         to: message.to,
         subject: message.subject,
         text: message.text,
         ...(message.html ? { html: message.html } : {}),
         ...(message.replyTo ? { replyTo: message.replyTo } : {}),
         ...(message.headers && Object.keys(message.headers).length ? { headers: message.headers } : {}),
+        ...(message.messageId ? { messageId: message.messageId } : {}),
+        ...(message.inReplyTo ? { inReplyTo: message.inReplyTo } : {}),
+        ...(message.references?.length ? { references: message.references } : {}),
       })) as { messageId?: string };
       return { messageId: String(info.messageId ?? "") };
     } catch (err) {
@@ -151,3 +179,5 @@ export function templateMessage<K extends EmailKey>(to: string, key: K, data: Em
   const email = renderTemplate(key, data, ctx);
   return { to, subject: email.subject.slice(0, 200), text: email.text, html: email.html, ...(Object.keys(email.headers).length ? { headers: email.headers } : {}) };
 }
+
+export * from "./resend.js";
