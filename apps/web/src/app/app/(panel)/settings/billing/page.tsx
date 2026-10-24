@@ -5,7 +5,10 @@ import {
   billingPlanResponseSchema,
   subscriptionChargeListSchema,
   subscriptionChargeSchema,
+  subscriptionQuoteSchema,
   type BillingPeriodDto,
+  type CouponIneligibilityDto,
+  type SubscriptionQuote,
   type BillingPlanResponse,
   type SubscriptionChargeDto,
 } from "@crmwsp/contracts";
@@ -23,9 +26,29 @@ const api = {
   plan: () => request("/billing/plan", { schema: billingPlanResponseSchema }),
   charges: () => request("/billing/subscription/charges", { schema: subscriptionChargeListSchema }),
   charge: (id: string) => request(`/billing/subscription/charges/${id}`, { schema: subscriptionChargeSchema }),
-  create: (plan: "start" | "pro", period: BillingPeriodDto) =>
-    request("/billing/subscription/charges", { method: "POST", body: { plan, period }, schema: subscriptionChargeSchema }),
+  create: (plan: "start" | "pro", period: BillingPeriodDto, couponCode?: string) =>
+    request("/billing/subscription/charges", { method: "POST", body: { plan, period, couponCode }, schema: subscriptionChargeSchema }),
+  quote: (plan: "start" | "pro", period: BillingPeriodDto, couponCode?: string) =>
+    request("/billing/subscription/quote", { method: "POST", body: { plan, period, couponCode }, schema: subscriptionQuoteSchema }),
 };
+
+const COUPON_ERROR: Record<CouponIneligibilityDto, string> = {
+  not_found: "Ese cupón no existe.",
+  inactive: "Ese cupón no está activo.",
+  not_started: "Ese cupón todavía no está vigente.",
+  expired: "Ese cupón ya venció.",
+  plan_not_applicable: "El cupón no aplica a este plan.",
+  period_not_applicable: "El cupón no aplica a este período de pago.",
+  exhausted: "El cupón ya alcanzó su límite de usos.",
+  tenant_limit: "Ya usaste este cupón (o tienes un pago pendiente con él).",
+};
+
+function priceLabel(q: SubscriptionQuote | undefined, fallback: number): string {
+  if (!q) return `US$${fallback}`;
+  if (q.freeDays > 0) return `${q.freeDays} días gratis`;
+  if (q.free) return "Gratis";
+  return q.discount !== "0.00" ? `US$${q.finalPrice} (antes US$${q.listPrice})` : `US$${q.finalPrice}`;
+}
 
 const POLL_MS = 10_000;
 
@@ -90,6 +113,22 @@ function Body() {
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [period, setPeriod] = useState<BillingPeriodDto>("monthly");
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState<string>();
+  const [quotes, setQuotes] = useState<Partial<Record<"start" | "pro", SubscriptionQuote>>>({});
+
+  // Server-side price preview (ADR 0017): the client never computes the price it pays.
+  useEffect(() => {
+    let alive = true;
+    Promise.all([api.quote("start", period, coupon), api.quote("pro", period, coupon)]).then(
+      ([start, pro]) => alive && setQuotes({ start, pro }),
+      () => alive && setQuotes({}),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [period, coupon, charges.length]);
+  const couponError = quotes.start?.couponError && quotes.pro?.couponError ? quotes.start.couponError : null;
 
   const load = useCallback(() => {
     Promise.all([api.plan(), api.charges()]).then(
@@ -121,8 +160,15 @@ function Body() {
   const pay = (p: "start" | "pro") => {
     setBusy(true);
     setError(undefined);
-    api.create(p, period).then(
-      (c) => setCharges((cs) => [c, ...cs.filter((x) => x.id !== c.id)]),
+    api.create(p, period, quotes[p]?.couponError ? undefined : coupon).then(
+      (c) => {
+        setCharges((cs) => [c, ...cs.filter((x) => x.id !== c.id)]);
+        if (c.status === "paid") {
+          setCoupon(undefined);
+          setCouponInput("");
+          load();
+        }
+      },
       (err: unknown) => setError(errorMessage(err)),
     ).finally(() => setBusy(false));
   };
@@ -147,12 +193,41 @@ function Body() {
                   </Button>
                 ))}
               </div>
+              <form
+                className="mt-3 flex flex-wrap items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setCoupon(couponInput.trim() || undefined);
+                }}
+              >
+                <input
+                  aria-label="Cupón de descuento"
+                  placeholder="Cupón de descuento"
+                  value={couponInput}
+                  maxLength={32}
+                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                  className="h-9 rounded-xl border-[1.5px] border-ink bg-white px-2.5 text-[13px] uppercase"
+                />
+                <Button size="sm" variant="outline" type="submit">Aplicar</Button>
+                {coupon ? (
+                  <Button size="sm" variant="ghost" type="button" onClick={() => { setCoupon(undefined); setCouponInput(""); }}>
+                    Quitar
+                  </Button>
+                ) : null}
+                {coupon && couponError ? <span className="text-[13px] text-red-700">{COUPON_ERROR[couponError]}</span> : null}
+                {coupon && !couponError && quotes.start?.coupon ? <span className="text-[13px] text-ink-3">Cupón {quotes.start.coupon.code} aplicado.</span> : null}
+              </form>
+              {!coupon && (quotes.start?.referralCredits ?? 0) > 0 ? (
+                <p className="m-0 mt-2 text-[13px] text-ink-3">
+                  Tienes {quotes.start?.referralCredits} recompensa(s) por referidos: se aplican al próximo pago mensual.
+                </p>
+              ) : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button disabled={busy} onClick={() => pay("start")}>
-                  Pagar {PERIOD_DAYS[period]} días Start · US${period === "annual" ? 490 : 49}
+                  {quotes.start?.free ? "Activar" : "Pagar"} {quotes.start?.freeDays ? "" : `${PERIOD_DAYS[period]} días `}Start · {priceLabel(quotes.start, period === "annual" ? 490 : 49)}
                 </Button>
                 <Button disabled={busy} variant="accent" onClick={() => pay("pro")}>
-                  Pagar {PERIOD_DAYS[period]} días Pro · US${period === "annual" ? 890 : 89}
+                  {quotes.pro?.free ? "Activar" : "Pagar"} {quotes.pro?.freeDays ? "" : `${PERIOD_DAYS[period]} días `}Pro · {priceLabel(quotes.pro, period === "annual" ? 890 : 89)}
                 </Button>
               </div>
             </>
@@ -170,7 +245,8 @@ function Body() {
             {charges.map((c) => (
               <li key={c.id} className="flex justify-between gap-3">
                 <span>
-                  {new Date(c.createdAt).toLocaleDateString("es")} · {c.plan === "pro" ? "Pro" : "Start"} · {c.period === "annual" ? "anual" : "mensual"} · US${c.priceAmount}
+                  {new Date(c.createdAt).toLocaleDateString("es")} · {c.plan === "pro" ? "Pro" : "Start"} · {c.verifiedBy === "coupon" ? `${c.periodDays} días sin cargo` : c.period === "annual" ? "anual" : "mensual"} · US${c.priceAmount}
+                  {c.couponCode ? ` · cupón ${c.couponCode}` : c.referralCredits > 0 ? " · referidos" : ""}
                 </span>
                 <span className="text-ink-3">
                   {STATUS_LABEL[c.status]}

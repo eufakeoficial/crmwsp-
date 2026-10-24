@@ -4,7 +4,8 @@
  * (monthly) or 365 days (annual, ADR 0015). There is no provider-side recurring billing: renewing
  * means paying again.
  */
-import { getPlan, type PlanDefinition, type PlanId } from "./index.js";
+import { expectedChargePrice } from "./coupons.js";
+import { type PlanDefinition, type PlanId } from "./index.js";
 
 /** Days granted by a monthly charge. */
 export const SUBSCRIPTION_PERIOD_DAYS = 30;
@@ -120,6 +121,8 @@ export interface LocalCharge {
   plan: PlanId;
   /** Days the charge grants (`subscription_charges.period_days`): 30 or 365. */
   periodDays: number;
+  /** Discount stored at creation (`subscription_charges.discount_amount`, ADR 0017); missing = 0. */
+  discountAmount?: string | null | undefined;
 }
 
 export type SettlementDecision =
@@ -130,14 +133,17 @@ export type SettlementDecision =
  * Decides what a provider report does to a local charge. `paid` requires a finished/confirmed
  * status AND `actually_paid >= pay_amount`, matching order id, price currency
  * (case-insensitive) and exact price amount. The stored price must also be the exact price of
- * the charge's plan for its period (49/89 monthly, 490/890 annual), so a charge can never grant
+ * the charge's plan for its period (49/89 monthly, 490/890 annual) minus its stored discount, so a charge can never grant
  * 365 days for a monthly price. Paid/refunded charges only move paid → refunded.
  */
 export function decideSettlement(charge: LocalCharge, report: ProviderPaymentReport): SettlementDecision {
   if (report.orderId !== charge.id) return { kind: "ignore", reason: "mismatch" };
   const period = billingPeriodFromDays(charge.periodDays);
   const stored = parseDecimal(charge.priceAmount);
-  if (period === null || stored === null || compareDecimal(stored, periodPriceUsd(getPlan(charge.plan), period)) !== 0) {
+  // Invariant (ADR 0017): stored price == plan price for the period - stored discount, and > 0
+  // (zero-price periods are coupon grants and never go through a provider).
+  const expected = period === null ? null : expectedChargePrice(charge.plan, period, charge.discountAmount ?? "0");
+  if (expected === null || stored === null || compareDecimal(stored, "0") <= 0 || compareDecimal(stored, expected) !== 0) {
     return { kind: "ignore", reason: "mismatch" };
   }
   if (charge.providerPaymentId !== null && charge.providerPaymentId !== report.paymentId) return { kind: "ignore", reason: "mismatch" };

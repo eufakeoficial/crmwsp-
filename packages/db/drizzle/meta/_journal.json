@@ -455,6 +455,13 @@
       "when": 1792700000000,
       "tag": "0069_trial_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1792710000000,
+      "tag": "0071_coupons",
+      "breakpoints": true
     }
   ]
 }

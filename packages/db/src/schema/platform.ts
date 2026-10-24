@@ -45,7 +45,7 @@ export const platformAuditEvents = pgTable(
   (t) => [index("platform_audit_events_tenant_idx").on(t.tenantId, t.createdAt), index("platform_audit_events_created_idx").on(t.createdAt)],
 );
 
-export const subscriptionPaymentMethods = ["transfer", "cash", "card_manual", "mercadopago", "stripe", "nowpayments"] as const;
+export const subscriptionPaymentMethods = ["transfer", "cash", "card_manual", "mercadopago", "stripe", "nowpayments", "coupon"] as const;
 
 /**
  * SaaS revenue: recorded manually by a platform admin, or written by `subscription_charge_apply`
@@ -74,12 +74,12 @@ export const subscriptionPayments = pgTable(
   (t) => [
     index("subscription_payments_tenant_idx").on(t.tenantId, t.periodEnd),
     index("subscription_payments_created_idx").on(t.createdAt),
-    check("subscription_payments_amount_check", sql`${t.amountMinor} > 0`),
+    check("subscription_payments_amount_check", sql`${t.amountMinor} > 0 OR (${t.method} = 'coupon' AND ${t.amountMinor} = 0)`),
     check("subscription_payments_currency_check", sql`${t.currency} ~ '^[A-Z]{3}$'`),
     check("subscription_payments_period_check", sql`${t.periodEnd} >= ${t.periodStart}`),
     check(
       "subscription_payments_method_check",
-      sql`${t.method} IN ('transfer', 'cash', 'card_manual', 'mercadopago', 'stripe', 'nowpayments')`,
+      sql`${t.method} IN ('transfer', 'cash', 'card_manual', 'mercadopago', 'stripe', 'nowpayments', 'coupon')`,
     ),
   ],
 );

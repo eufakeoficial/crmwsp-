@@ -28,6 +28,10 @@ import {
   platformTenantSchema,
   subscriptionPaymentListSchema,
   subscriptionPaymentSchema,
+  platformCouponListSchema,
+  platformCouponSchema,
+  platformCouponRedemptionListSchema,
+  type PlatformCouponSaveRequest,
 } from "@crmwsp/contracts";
 import { ApiError, request } from "./api";
 
@@ -55,6 +59,13 @@ export const platformApi = {
     request(`/platform/users/${encodeURIComponent(id)}/revoke-sessions`, { method: "POST", schema: revokeSessionsResponseSchema }),
   channels: (q: PlatformChannelListQuery = {}) => request("/platform/channels", { query: { status: q.status }, schema: platformChannelListSchema }),
   plans: () => request("/platform/plans", { schema: platformPlansSchema }),
+  coupons: () => request("/platform/coupons", { schema: platformCouponListSchema }),
+  createCoupon: (body: PlatformCouponSaveRequest) => request("/platform/coupons", { method: "POST", body, schema: platformCouponSchema }),
+  updateCoupon: (id: string, body: PlatformCouponSaveRequest) =>
+    request(`/platform/coupons/${encodeURIComponent(id)}`, { method: "PUT", body, schema: platformCouponSchema }),
+  deleteCoupon: (id: string) => request(`/platform/coupons/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  couponRedemptions: (id: string) =>
+    request(`/platform/coupons/${encodeURIComponent(id)}/redemptions`, { schema: platformCouponRedemptionListSchema }),
   usage: (q: PlatformUsageQuery = {}) => request("/platform/usage", { query: { month: q.month }, schema: platformUsageSchema }),
   audit: (q: PlatformAuditQuery = {}) =>
     request("/platform/audit", {

@@ -1,7 +1,9 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, UseGuards } from "@nestjs/common";
 import {
   createSubscriptionChargeRequestSchema,
+  subscriptionQuoteRequestSchema,
   uuidSchema,
+  type SubscriptionQuote,
   type BillingPlanResponse,
   type SubscriptionChargeDto,
   type SubscriptionChargeList,
@@ -42,7 +44,20 @@ export class BillingController {
   @Roles("owner", "admin")
   createCharge(@CurrentTenantDb() db: TenantDb, @Body() body: unknown): Promise<SubscriptionChargeDto> {
     const input = parseOrThrow(createSubscriptionChargeRequestSchema, body);
-    return this.subscriptions.createCharge(db, input.plan, input.period);
+    return this.subscriptions.createCharge(db, input.plan, input.period, input.couponCode);
+  }
+
+  /**
+   * POST /billing/subscription/quote — price preview for `{ plan, period, couponCode? }` (ADR
+   * 0017). Same server-side computation as charge creation; an unusable coupon is reported in
+   * `couponError` instead of failing.
+   */
+  @Post("subscription/quote")
+  @HttpCode(200)
+  @Roles("owner", "admin")
+  quote(@CurrentTenantDb() db: TenantDb, @Body() body: unknown): Promise<SubscriptionQuote> {
+    const input = parseOrThrow(subscriptionQuoteRequestSchema, body);
+    return this.subscriptions.quote(db, input.plan, input.period, input.couponCode);
   }
 
   /** GET /billing/subscription/charges — latest 50 charges of the tenant. */

@@ -174,6 +174,7 @@ export async function settleSubscriptionEvent(deps: SubscriptionBillingDeps, dat
       payAmount: charge.payAmount,
       plan: charge.plan,
       periodDays: charge.periodDays,
+      discountAmount: charge.discountAmount,
     };
     const decision = decideSettlement(local, {
       paymentId: report.paymentId,
