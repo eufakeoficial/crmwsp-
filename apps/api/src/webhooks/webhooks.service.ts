@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import type { InboundWebhookResult, WhatsAppProvider } from "@crmwsp/whatsapp";
+import { BSP_HEADER, type InboundWebhookResult, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import type { Queue } from "bullmq";
-import type { InboundEventStore } from "./inbound-event-store.js";
+import type { BspProvider, InboundEventStore } from "./inbound-event-store.js";
 import {
   INBOUND_EVENT_STORE,
   INBOUND_QUEUE,
@@ -33,8 +33,13 @@ export class WebhooksService {
     @Inject(WHATSAPP_PROVIDER) private readonly provider: WhatsAppProvider,
   ) {}
 
-  async handleGupshup(token: string, body: unknown): Promise<WebhookOutcome> {
-    const results = this.provider.parseWebhook(body, {});
+  handleGupshup(token: string, body: unknown): Promise<WebhookOutcome> {
+    return this.handle("gupshup", token, body);
+  }
+
+  /** Shared ingestion: dedupe key = message/status id; tenant is resolved from the per-connection URL token. */
+  async handle(bsp: BspProvider, token: string, body: unknown): Promise<WebhookOutcome> {
+    const results = this.provider.parseWebhook(body, { [BSP_HEADER]: bsp });
     const actionable = results.filter(
       (r): r is Exclude<InboundWebhookResult, { kind: "ignored" }> => r.kind !== "ignored",
     );
@@ -46,16 +51,16 @@ export class WebhooksService {
       const hash = createHash("sha256")
         .update(JSON.stringify(body ?? null))
         .digest("hex");
-      const res = await this.store.ingest(token, `ignored:${hash}`, body ?? null, false);
+      const res = await this.store.ingest(token, `ignored:${hash}`, body ?? null, false, bsp);
       // TODO: audit rows keep processed_at = NULL; a worker sweeper should close them.
-      if (!res) return this.unknownToken(token);
+      if (!res) return this.unknownToken(bsp, token);
       return "accepted";
     }
 
     for (const result of actionable) {
-      // Gupshup sends no signature; authenticity comes from the URL token, so signature_valid=false.
-      const res = await this.store.ingest(token, result.dedupeKey, body, false);
-      if (!res) return this.unknownToken(token);
+      // Neither Gupshup nor 360dialog signs callbacks; authenticity comes from the URL token, so signature_valid=false.
+      const res = await this.store.ingest(token, result.dedupeKey, body, false, bsp);
+      if (!res) return this.unknownToken(bsp, token);
       if (!res.eventId) continue;
       const data: InboundJobData = { eventId: res.eventId, tenantId: res.tenantId };
       // Enqueue also when the event already existed (inserted=false): if a previous enqueue failed
@@ -68,8 +73,8 @@ export class WebhooksService {
     return "accepted";
   }
 
-  private unknownToken(token: string): WebhookOutcome {
-    this.logger.warn(`gupshup webhook with unknown token ${tokenPrefix(token)}`);
+  private unknownToken(bsp: BspProvider, token: string): WebhookOutcome {
+    this.logger.warn(`${bsp} webhook with unknown token ${tokenPrefix(token)}`);
     return "unknown-token";
   }
 }

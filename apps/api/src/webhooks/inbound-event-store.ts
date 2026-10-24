@@ -1,5 +1,8 @@
 import type { DbHandle } from "@crmwsp/db";
 
+/** BSPs whose callbacks land in inbound_events (enum channel_provider). */
+export type BspProvider = "gupshup" | "360dialog";
+
 export interface IngestResult {
   /** Null when the dedupe key already belongs to another connection's event (nothing revealed). */
   eventId: string | null;
@@ -10,7 +13,7 @@ export interface IngestResult {
 /** Port over `ingest_inbound_event` so the controller can be tested with a fake. */
 export interface InboundEventStore {
   /** Returns null when the token does not match an enabled connection. */
-  ingest(token: string, dedupeKey: string, payload: unknown, signatureValid: boolean): Promise<IngestResult | null>;
+  ingest(token: string, dedupeKey: string, payload: unknown, signatureValid: boolean, provider?: BspProvider): Promise<IngestResult | null>;
 }
 
 interface IngestRow {
@@ -30,11 +33,17 @@ interface IngestRow {
 export class PgInboundEventStore implements InboundEventStore {
   constructor(private readonly sql: DbHandle["sql"]) {}
 
-  async ingest(token: string, dedupeKey: string, payload: unknown, signatureValid: boolean): Promise<IngestResult | null> {
+  async ingest(
+    token: string,
+    dedupeKey: string,
+    payload: unknown,
+    signatureValid: boolean,
+    provider: BspProvider = "gupshup",
+  ): Promise<IngestResult | null> {
     const rows = await this.sql<IngestRow[]>`
       select event_id, tenant_id, inserted
       from public.ingest_inbound_event(
-        'gupshup'::public.channel_provider, ${token}, ${dedupeKey}, ${JSON.stringify(payload ?? null)}::jsonb, ${signatureValid}
+        ${provider}::public.channel_provider, ${token}, ${dedupeKey}, ${JSON.stringify(payload ?? null)}::jsonb, ${signatureValid}
       )`;
     const row = rows[0];
     if (!row) return null;

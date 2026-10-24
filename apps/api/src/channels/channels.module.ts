@@ -1,7 +1,7 @@
 import { Logger, Module } from "@nestjs/common";
 import { createCipherBox, loadMasterKeysFromEnv, type CipherBox } from "@crmwsp/crypto";
 import { AuthModule } from "../auth/auth.module.js";
-import { GupshupProvider, type WhatsAppProvider } from "@crmwsp/whatsapp";
+import { createDefaultWhatsAppProvider, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CHANNEL_PROVIDER, CIPHER_BOX } from "./channels.constants.js";
 import { ChannelsController } from "./channels.controller.js";
 
@@ -26,7 +26,7 @@ function cipherFromEnv(): CipherBox | null {
   controllers: [ChannelsController],
   providers: [
     { provide: CIPHER_BOX, useFactory: cipherFromEnv },
-    { provide: CHANNEL_PROVIDER, useFactory: (): WhatsAppProvider => new GupshupProvider() },
+    { provide: CHANNEL_PROVIDER, useFactory: (): WhatsAppProvider => createDefaultWhatsAppProvider() },
   ],
   // Shared with AiModule (same crypto box, other AAD purpose).
   exports: [CIPHER_BOX],
