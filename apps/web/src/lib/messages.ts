@@ -19,7 +19,7 @@ export function errorMessage(err: unknown, context: "login" | "signup" | "generi
     case "SETUP_REQUIRED":
       return "Conecta tu WhatsApp para empezar tu prueba.";
     case "PLAN_LIMIT_EXCEEDED":
-      return "Tu plan no permite esta acción (límite alcanzado o suscripción vencida). Revisa Plan y uso.";
+      return planLimitMessage(err);
     default:
       return "Ocurrió un error en el servidor. Inténtalo más tarde.";
   }
@@ -38,4 +38,28 @@ export function channelErrorMessage(err: unknown): string {
 /** 503 ENCRYPTION_NOT_CONFIGURED; the bare 503 status is kept as a fallback (non-JSON proxy answer). */
 export function isEncryptionNotConfigured(err: unknown): err is ApiError {
   return err instanceof ApiError && (err.code === "ENCRYPTION_NOT_CONFIGURED" || err.status === 503);
+}
+
+/** Reason of a 402 PLAN_LIMIT_EXCEEDED (`details.reason`), when the API sent one. */
+export function planLimitReason(err: unknown): string | null {
+  if (!(err instanceof ApiError) || err.code !== "PLAN_LIMIT_EXCEEDED") return null;
+  const d = err.details;
+  return d && typeof d === "object" && typeof (d as { reason?: unknown }).reason === "string" ? (d as { reason: string }).reason : null;
+}
+
+/** True for a 402 that only a payment fixes (lapsed subscription or a number that used its trial). */
+export function isSubscriptionBlocked(err: unknown): boolean {
+  const r = planLimitReason(err);
+  return r === "subscription_restricted" || r === "trial_already_used";
+}
+
+function planLimitMessage(err: ApiError): string {
+  switch (planLimitReason(err)) {
+    case "subscription_restricted":
+      return "Tu suscripción venció y la cuenta está en modo solo lectura. Renueva tu plan en Plan y uso para volver a crear y editar.";
+    case "trial_already_used":
+      return "Este número de WhatsApp ya usó su prueba gratis. Activa un plan en Plan y uso para continuar.";
+    default:
+      return "Tu plan no permite esta acción (límite alcanzado o suscripción vencida). Revisa Plan y uso.";
+  }
 }

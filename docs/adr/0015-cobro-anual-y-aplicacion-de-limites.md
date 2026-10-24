@@ -93,6 +93,15 @@ Hasta ahora un tenant que nunca pagó (`paid_until` nulo, `unbilled`) nunca qued
 ### Consecuencias
 - Los tests e2e que dan de alta un tenant por la API y luego crean presupuestos/pedidos sin conectar
   un canal recibirán `SETUP_REQUIRED`; deben conectar un canal o marcar el tenant como heredado.
+- **Escrituras con la suscripción vencida (fix-prelanzamiento F3)**: `ActivationGuard` ya no solo
+  bloquea el setup. Las escrituras que protege (presupuestos, pedidos, reservas, contactos manuales,
+  difusiones y plantillas) exigen un acceso `trial`, `active`, `grace` o `unbilled` (heredados con
+  `setup_ends_at` nulo que nunca pagaron: siguen igual). `restricted` responde 402
+  `PLAN_LIMIT_EXCEEDED` con `reason: subscription_restricted` y `payment_required` con
+  `reason: trial_already_used`. Siguen permitidos: lecturas, facturación y pago, ajustes, auth,
+  exportaciones, y las escrituras marcadas `@AllowLapsedWrite()` (vista previa de audiencia y
+  cancelar una difusión), que solo comprueban el setup. La web muestra el motivo en español
+  ("Tu suscripción venció…", "Este número ya usó su prueba gratis…").
 
 ## Antiabuso de la prueba: una prueba por número para siempre (T7)
 
