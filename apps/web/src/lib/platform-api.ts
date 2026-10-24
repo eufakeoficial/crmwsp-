@@ -32,6 +32,7 @@ import {
   platformCouponSchema,
   platformCouponRedemptionListSchema,
   type PlatformCouponSaveRequest,
+  platformFinanceSchema,
 } from "@crmwsp/contracts";
 import { ApiError, request } from "./api";
 
@@ -60,6 +61,7 @@ export const platformApi = {
   channels: (q: PlatformChannelListQuery = {}) => request("/platform/channels", { query: { status: q.status }, schema: platformChannelListSchema }),
   plans: () => request("/platform/plans", { schema: platformPlansSchema }),
   coupons: () => request("/platform/coupons", { schema: platformCouponListSchema }),
+  finance: (refresh = false) => request("/platform/finance", { query: { refresh: refresh ? "1" : undefined }, schema: platformFinanceSchema }),
   createCoupon: (body: PlatformCouponSaveRequest) => request("/platform/coupons", { method: "POST", body, schema: platformCouponSchema }),
   updateCoupon: (id: string, body: PlatformCouponSaveRequest) =>
     request(`/platform/coupons/${encodeURIComponent(id)}`, { method: "PUT", body, schema: platformCouponSchema }),

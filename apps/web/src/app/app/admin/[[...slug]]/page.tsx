@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AuditPage } from "@/components/platform/AuditPage";
 import { CouponsPage } from "@/components/platform/CouponsPage";
+import { FinancePage } from "@/components/platform/FinancePage";
 import { ChannelsPage } from "@/components/platform/ChannelsPage";
 import { PaymentsPage } from "@/components/platform/PaymentsPage";
 import { PlansPage } from "@/components/platform/PlansPage";
@@ -19,6 +20,7 @@ const SECTIONS: Record<string, () => React.JSX.Element> = {
   approvals: () => <TenantsList mode="approvals" />,
   users: () => <UsersPage />,
   channels: () => <ChannelsPage />,
+  finance: () => <FinancePage />,
   payments: () => <PaymentsPage />,
   plans: () => <PlansPage />,
   coupons: () => <CouponsPage />,

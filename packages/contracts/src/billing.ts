@@ -227,3 +227,35 @@ export const referralSummarySchema = z.object({
   rewardPercent: z.number().int(),
 });
 export type ReferralSummary = z.infer<typeof referralSummarySchema>;
+
+// ---------- Platform finance (ADR 0018, read-only) ----------
+
+const revenueRowSchema = z.object({ key: z.string(), usd: z.string(), count: z.number().int() });
+export const platformFinanceSchema = z.object({
+  revenue: z.object({
+    today: revenueRowSchema,
+    month: revenueRowSchema,
+    byPlan: z.array(revenueRowSchema),
+    byPeriod: z.array(revenueRowSchema),
+    couponGrants: z.number().int(),
+  }),
+  balance: z.union([
+    z.object({ configured: z.literal(false) }),
+    z.object({
+      configured: z.literal(true),
+      ok: z.literal(true),
+      fetchedAt: z.string(),
+      items: z.array(z.object({ currency: z.string(), amount: z.string(), pendingAmount: z.string() })),
+    }),
+    z.object({ configured: z.literal(true), ok: z.literal(false), error: z.enum(["auth_failed", "unavailable"]), fetchedAt: z.string() }),
+  ]),
+  /**
+   * Per pay currency: crypto received by our paid charges vs the live balance. A balance below
+   * the received sum usually means withdrawals or fees; it is a hint, not an accounting result.
+   */
+  reconciliation: z.array(
+    z.object({ currency: z.string(), paidCrypto: z.string(), paidUsd: z.string(), balance: z.string().nullable(), difference: z.string().nullable() }),
+  ),
+});
+export type PlatformFinance = z.infer<typeof platformFinanceSchema>;
+export const platformFinanceQuerySchema = z.object({ refresh: z.enum(["0", "1"]).optional() });
