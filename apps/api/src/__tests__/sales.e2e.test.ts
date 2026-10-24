@@ -33,6 +33,7 @@ import {
   quoteItems,
   quotes,
   stockMovements,
+  tenantPlans,
   tenants,
   users,
   and,
@@ -190,6 +191,9 @@ describe.skipIf(!hasEnv)("pipeline, tasks, catalog, quotes and orders (e2e, real
       .insert(channelConnections)
       .values({ tenantId: s.tenantB, provider: "gupshup", phoneE164: "+34600000002", webhookToken: `tok-${randomUUID()}`, status: "active" })
       .returning({ id: channelConnections.id });
+    // Channels are seeded directly (no connect flow, so no trial start): mark both tenants as
+    // grandfathered so the ActivationGuard (ADR 0015) does not answer SETUP_REQUIRED.
+    await migrator.db.update(tenantPlans).set({ setupEndsAt: null }).where(inArray(tenantPlans.tenantId, [s.tenantA, s.tenantB]));
     const inn = await seedContact(s.tenantA, chA!.id, "+34611111111", new Date());
     const out = await seedContact(s.tenantA, chA!.id, "+34622222222", new Date(Date.now() - 3 * 24 * 3600 * 1000));
     const bb = await seedContact(s.tenantB, chB!.id, "+34633333333", new Date());
