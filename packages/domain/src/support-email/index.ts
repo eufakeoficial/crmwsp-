@@ -109,7 +109,7 @@ const DROP_WITH_CONTENT = ["script", "style", "iframe", "object", "embed", "nosc
 const DROP_TAG = ["link", "meta", "base", "form", "input", "button", "textarea", "select", "option", "html", "body", "!doctype"];
 
 function safeUrl(url: string, kind: "href" | "src"): string | null {
-  const v = url.replace(/&#(x?)([0-9a-f]+);?/gi, (_, hex: string, n: string) => String.fromCharCode(parseInt(n, hex ? 16 : 10))).replace(/[\u0000- ]+/g, "");
+  const v = url.replace(/&#(x?)([0-9a-f]+);?/gi, (_, hex: string, n: string) => String.fromCharCode(parseInt(n, hex ? 16 : 10))).split("").filter((c) => c.charCodeAt(0) > 32).join("");
   if (kind === "src") return /^(cid:|data:image\/(png|gif|jpe?g|webp);base64,)/i.test(v) ? url : null;
   return /^(https?:|mailto:)/i.test(v) ? url : null;
 }
@@ -130,7 +130,7 @@ export function sanitizeEmailHtml(html: string, maxLength = 500_000): string {
   for (const tag of DROP_TAG) s = s.replace(new RegExp(`<\\/?${tag.replace("!", "!")}\\b[^>]*>`, "gi"), "");
   s = s.replace(/<([a-z][a-z0-9-]*)\b([^>]*)>/gi, (_m, tag: string, attrs: string) => {
     const kept: string[] = [];
-    for (const a of attrs.matchAll(/([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)) {
+    for (const a of attrs.matchAll(/([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)) {
       const name = a[1]!.toLowerCase();
       const value = a[2] ?? a[3] ?? a[4] ?? "";
       if (name.startsWith("on") || name === "srcset" || name === "formaction" || name === "background" || name === "xmlns" || name.includes(":")) continue;
