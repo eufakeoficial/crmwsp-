@@ -19,7 +19,7 @@ describe.skipIf(!hasDb)("subscription refund re-stacks later periods (0064)", ()
     withTenant(app.db, tenantId, async (tx) => {
       const [r] = await tx.execute<{ id: string }>(sql`select public.subscription_charge_create('pro', ${price}::numeric, 'usd', 'usdtbsc', null, ${days}::integer) as id`);
       const id = r?.id ?? "";
-      await tx.execute(sql`select public.subscription_charge_attach(${id}::uuid, ${randomUUID()}, '0xabc', 49.31, 'usdtbsc', 'waiting')`);
+      await tx.execute(sql`select public.subscription_charge_attach(${id}::uuid, ${String(Date.now()) + String(Math.floor(Math.random() * 1e6))}, '0xabc', 49.31, 'usdtbsc', 'waiting')`);
       return id;
     });
 
