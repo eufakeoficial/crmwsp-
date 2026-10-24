@@ -16,8 +16,11 @@ import {
   type ChannelListResponse,
   type Dialog360Config,
   type MessageTemplateDto,
+  type MessageTemplateListResponse,
+  type SyncTemplatesResponse,
 } from "@crmwsp/contracts";
-import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, type ChannelConnection, type Transaction } from "@crmwsp/db";
+import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, type ChannelConnection, type MessageTemplate, type Transaction } from "@crmwsp/db";
+import { planTemplateSync } from "../templates/sync-plan.js";
 import { generateWebhookToken, type Dialog360PartnerClient, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -38,7 +41,23 @@ function redactedHint(row: ChannelConnection, cipher: CipherBox): string | null 
   }
 }
 
-const ADMIN_ROLES = new Set(["owner", "admin"]);
+function toTemplateDto(row: MessageTemplate): MessageTemplateDto {
+  return {
+    id: row.id,
+    channelConnectionId: row.channelConnectionId,
+    name: row.name,
+    language: row.language,
+    category: row.category,
+    status: row.status,
+    body: row.body,
+    externalId: row.externalId,
+    syncedAt: row.syncedAt ? row.syncedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+const ADMIN_ROLES =new Set(["owner", "admin"]);
 
 /** The part of PlanLimitsService the channels need (stubbed in unit tests). */
 export type ChannelPlanLimits = Pick<PlanLimitsService, "assert" | "lock" | "startTrialIfEligible">;
@@ -396,6 +415,88 @@ export class ChannelsController {
       if (pgCode(err) === PG_UNIQUE_VIOLATION) throw new ConflictError("A template with this name and language already exists on this channel");
       throw err;
     }
+  }
+
+  /** Every template of the channel, any status. Read-only: all roles may list. */
+  @Get(":id/templates")
+  async listTemplates(@CurrentTenantDb() db: TenantDb, @Param("id") id: string): Promise<MessageTemplateListResponse> {
+    if (!isUuid(id)) throw new NotFoundError();
+    const items = await db.run(async (tx) => {
+      const [ch] = await tx.select({ id: channelConnections.id }).from(channelConnections).where(eq(channelConnections.id, id));
+      if (!ch) throw new NotFoundError();
+      const rows = await tx.select().from(messageTemplates).where(eq(messageTemplates.channelConnectionId, id)).orderBy(asc(messageTemplates.name), asc(messageTemplates.language));
+      return rows.map(toTemplateDto);
+    });
+    return { items };
+  }
+
+  /** On-demand reconciliation with the BSP listing (the worker does the same periodically). */
+  @Post(":id/templates/sync")
+  @HttpCode(200)
+  @Roles("owner", "admin")
+  async syncTemplates(@CurrentTenantDb() db: TenantDb, @Param("id") id: string): Promise<SyncTemplatesResponse> {
+    if (!isUuid(id)) throw new NotFoundError();
+    if (!this.cipher) throw new EncryptionNotConfiguredError();
+    const channel = await db.run(async (tx) => {
+      const [ch] = await tx
+        .select({
+          provider: channelConnections.provider,
+          status: channelConnections.status,
+          phoneE164: channelConnections.phoneE164,
+          appName: channelConnections.externalAppId,
+          credentials: channelConnections.credentialsEncrypted,
+          partnerAppId: channelConnections.gupshupAppId,
+          partnerToken: channelConnections.partnerTokenEncrypted,
+        })
+        .from(channelConnections)
+        .where(eq(channelConnections.id, id));
+      if (!ch) throw new NotFoundError();
+      return ch;
+    });
+    if (channel.provider !== "gupshup" && channel.provider !== "360dialog") throw new ValidationError("template sync is not supported for this channel");
+    if (!channel.credentials || !channel.appName) throw new ValidationError("channel has no credentials");
+    if (channel.provider === "gupshup" && (!channel.partnerAppId || !channel.partnerToken)) {
+      throw new ValidationError("channel has no Gupshup partner credentials (app id and token); set them with PUT /channels/:id/partner-credentials");
+    }
+    const apiKey = this.cipher.decrypt(channel.credentials, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
+    const partnerToken = channel.partnerToken ? this.cipher.decrypt(channel.partnerToken, { tenantId: db.tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE }) : undefined;
+    // BSP call outside any transaction.
+    const remote = await this.provider.listTemplates({
+      provider: channel.provider,
+      apiKey,
+      appName: channel.appName,
+      sourcePhone: channel.phoneE164,
+      ...(channel.partnerAppId ? { partnerAppId: channel.partnerAppId } : {}),
+      ...(partnerToken ? { partnerToken } : {}),
+    });
+    return db.run(async (tx) => {
+      const now = new Date();
+      const local = await tx.select().from(messageTemplates).where(eq(messageTemplates.channelConnectionId, id));
+      const plan = planTemplateSync(local, remote);
+      for (const u of plan.updates) {
+        await tx.update(messageTemplates).set({ status: u.status, externalId: u.externalId, syncedAt: now, updatedAt: now }).where(eq(messageTemplates.id, u.id));
+      }
+      if (plan.inserts.length > 0) {
+        await tx
+          .insert(messageTemplates)
+          .values(
+            plan.inserts.map((r) => ({
+              tenantId: db.tenantId,
+              channelConnectionId: id,
+              name: r.name,
+              language: r.language,
+              category: r.category,
+              status: r.status,
+              body: r.body,
+              externalId: r.externalId,
+              syncedAt: now,
+            })),
+          )
+          .onConflictDoNothing();
+      }
+      const rows = await tx.select().from(messageTemplates).where(eq(messageTemplates.channelConnectionId, id)).orderBy(asc(messageTemplates.name), asc(messageTemplates.language));
+      return { updated: plan.updates.length, imported: plan.inserts.length, rejections: plan.rejections, items: rows.map(toTemplateDto) };
+    });
   }
 
   @Patch(":id")
