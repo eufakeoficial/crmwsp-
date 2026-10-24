@@ -107,8 +107,9 @@ Funciones principales que comparten los CRM líderes de ecommerce/marketing (Wat
 
 ## Fase 5 — Escala 1: SaaS automático 🟡
 
-- 🟡 Stripe Billing: planes Business/Growth, límites por plan, suspensión segura, bolsa de mensajes y exceso. Falta el cobro de suscripción.
-- 🟡 Onboarding self-service completo: incompleto. 🟡 Segundo BSP (360dialog) tras el adaptador: solo existe el valor del enum, sin adaptador.
+- ✅ Suscripción SaaS con NOWPayments (cripto, ADR 0013/0015): planes Start y Pro, pago mensual (30 días) o anual (365 días), sin cobros automáticos, 3 días de gracia y luego solo lectura. Límites por plan aplicados a IA, difusiones, usuarios, contactos (importación) y números de WhatsApp.
+- 🟡 Bolsa de mensajes y exceso de consumo: pendiente.
+- 🟡 Onboarding self-service completo: incompleto. ✅ Segundo BSP (360dialog Coexistence, ADR 0014).
 - ⬜ Observabilidad completa (OTel, Sentry, alertas), runbooks, backups probados, pruebas de carga.
 - ⬜ Exportación/borrado RGPD, DPA, retención configurable.
 - 🟡 Hardening: tests de RLS sí; faltan pentest básico y rotación de secretos.

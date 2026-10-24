@@ -1,6 +1,7 @@
 /**
- * Plans and usage limits (pure domain, no I/O). Plan definitions mirror the landing pricing
- * section (apps/web/src/components/landing/PricingSection.tsx): keep both in sync.
+ * Plans and usage limits (pure domain, no I/O). Plan definitions are the source of truth for
+ * prices and limits; the public pricing copy (packages/contracts/src/site-content.ts and the
+ * landing sections) must be kept in sync by hand.
  *
  * Subscription charging lives in ./subscription.ts (NOWPayments, ADR 0013). The plan of a
  * tenant is set by the platform (system/migrator role, never the app role) in `tenant_plans`
