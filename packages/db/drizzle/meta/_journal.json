@@ -525,6 +525,13 @@
       "when": 1792900000000,
       "tag": "0090_channel_connect_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1792910000000,
+      "tag": "0091_email_lifecycle_candidates_keyset",
+      "breakpoints": true
     }
   ]
 }

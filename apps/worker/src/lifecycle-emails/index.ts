@@ -156,11 +156,25 @@ export function lifecycleMessage(to: string, row: Pick<CandidateRow, "tenant_nam
   }
 }
 
-export async function runTenantLifecycleEmails(deps: LifecycleEmailDeps): Promise<number> {
+/** Candidates per page and max pages per tick (keyset over tenant id; F2: no tenant starves). */
+export const LIFECYCLE_PAGE_SIZE = 500;
+export const LIFECYCLE_MAX_PAGES = 20;
+
+/** Every lifecycle candidate, paging with a keyset cursor until a short page (bounded per tick). */
+export async function* lifecycleCandidates(db: Database, pageSize = LIFECYCLE_PAGE_SIZE, maxPages = LIFECYCLE_MAX_PAGES): AsyncGenerator<CandidateRow> {
+  let after: string | null = null;
+  for (let page = 0; page < maxPages; page++) {
+    const rows: CandidateRow[] = [...(await db.execute<CandidateRow>(sql`select * from public.email_lifecycle_candidates_page(${after}::uuid, ${pageSize})`))];
+    for (const r of rows) yield r;
+    if (rows.length < pageSize) return;
+    after = rows[rows.length - 1]!.tenant_id;
+  }
+}
+
+export async function runTenantLifecycleEmails(deps: LifecycleEmailDeps, pageSize = LIFECYCLE_PAGE_SIZE): Promise<number> {
   const now = (deps.now ?? (() => new Date()))();
-  const rows = await deps.db.execute<CandidateRow>(sql`select * from public.email_lifecycle_candidates(500)`);
   let sent = 0;
-  for (const r of rows) {
+  for await (const r of lifecycleCandidates(deps.db, pageSize)) {
     if (!r.owner_email) continue;
     const to = r.owner_email;
     const due = dueLifecycleEmails(

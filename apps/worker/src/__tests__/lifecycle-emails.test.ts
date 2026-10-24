@@ -1,7 +1,7 @@
 import type { Database } from "@crmwsp/db";
 import type { MailMessage } from "@crmwsp/mailer";
 import { describe, expect, it } from "vitest";
-import { formatAmount, formatDay, lifecycleMessage, runPaidChargeEmails, runSupportReplyEmails } from "../lifecycle-emails/index.js";
+import { formatAmount, formatDay, lifecycleMessage, runPaidChargeEmails, runSupportReplyEmails, runTenantLifecycleEmails } from "../lifecycle-emails/index.js";
 
 const ctx = { siteUrl: "https://www.vendemas.chat", assetsUrl: "https://www.vendemas.chat/brand" };
 const clean = (m: MailMessage) => {
@@ -123,5 +123,40 @@ describe("runSupportReplyEmails", () => {
     expect(await runSupportReplyEmails({ db, ctx, send: async (m: MailMessage) => void sent.push(m) })).toBe(1);
     expect(sent[0]?.text).toContain("…");
     expect(sent[0]?.text).not.toContain("x".repeat(601));
+  });
+});
+
+describe("runTenantLifecycleEmails (F2: keyset paging)", () => {
+  const now = new Date("2026-11-02T12:00:00Z");
+  const tenant = (i: number) => ({
+    tenant_id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, tenant_name: `T${i}`, owner_email: `o${i}@x.test`, owner_name: null,
+    plan: "start", paid_until: null, setup_ends_at: null, trial_started_at: "2026-11-01T10:00:00Z", trial_ends_at: "2026-11-08T10:00:00Z", trial_denied_at: null,
+  });
+
+  it("reaches every candidate beyond the page size, paging by tenant id", async () => {
+    const all = Array.from({ length: 7 }, (_, i) => tenant(i + 1));
+    const cursors: Array<string | null> = [];
+    const claimed = new Set<string>();
+    const db = {
+      execute: async (q: { queryChunks: unknown[] }) => {
+        const text = JSON.stringify(q.queryChunks);
+        if (text.includes("email_dispatch_claim")) {
+          const key = q.queryChunks.find((c): c is string => typeof c === "string" && /^[a-z-]+:/.test(c)) ?? "";
+          const ok = !claimed.has(key);
+          claimed.add(key);
+          return [{ ok }];
+        }
+        const params = q.queryChunks.filter((c) => typeof c !== "object" || c === null) as Array<string | number | null>;
+        const after = (params[0] ?? null) as string | null;
+        const limit = Number(params[1]);
+        cursors.push(after);
+        return all.filter((t) => after === null || t.tenant_id > after).slice(0, limit);
+      },
+    } as unknown as Database;
+    const sent: MailMessage[] = [];
+    const n = await runTenantLifecycleEmails({ db, send: async (m) => sent.push(m), ctx, now: () => now }, 3);
+    expect(cursors).toEqual([null, all[2]!.tenant_id, all[5]!.tenant_id]);
+    expect(new Set(sent.map((m) => m.to))).toEqual(new Set(all.map((t) => t.owner_email)));
+    expect(n).toBeGreaterThanOrEqual(7);
   });
 });
