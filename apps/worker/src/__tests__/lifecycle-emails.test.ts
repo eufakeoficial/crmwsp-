@@ -91,6 +91,18 @@ describe("lifecycleMessage", () => {
     clean(m);
   });
 
+  it("renewal of an annual tenant quotes the annual list price (F4)", () => {
+    const m = lifecycleMessage("o@x.test", { ...row, last_period_days: 365 }, { template: "pago-por-vencer", dedupeKey: "k", dueDate: "2026-11-30", daysLeft: 3 }, ctx);
+    expect(m.text).toContain("490,00 USD al año");
+    expect(m.text).not.toContain("al mes");
+  });
+
+  it("renewal due today says vence hoy", () => {
+    const m = lifecycleMessage("o@x.test", row, { template: "pago-por-vencer", dedupeKey: "k", dueDate: "2026-11-30", daysLeft: 0 }, ctx);
+    expect(m.subject).toBe("Tu plan Start vence hoy");
+    clean(m);
+  });
+
   it("renewal uses the real Start price", () => {
     const m = lifecycleMessage("o@x.test", row, { template: "pago-por-vencer", dedupeKey: "k", dueDate: "2026-11-30", daysLeft: 3 }, ctx);
     expect(m.text).toContain("49,00 USD al mes");
