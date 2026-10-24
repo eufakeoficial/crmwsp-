@@ -93,6 +93,16 @@ Hasta ahora un tenant que nunca pagó (`paid_until` nulo, `unbilled`) nunca qued
 ### Consecuencias
 - Los tests e2e que dan de alta un tenant por la API y luego crean presupuestos/pedidos sin conectar
   un canal recibirán `SETUP_REQUIRED`; deben conectar un canal o marcar el tenant como heredado.
+- **Argumentos de funciones SECURITY DEFINER (fix-prelanzamiento F8, 0094)**: el precio de lista de
+  todo cargo de 30/365 días se verifica en SQL (trigger `subscription_charges_list_price_check` con
+  `subscription_plan_list_price`, espejo de `PLANS`; cambiar un precio exige migración).
+  `tenant_referral_record` y `tenant_signup_signals_record` solo actúan si `app.tenant_id` es ese
+  tenant (la API las llama con `withTenant` tras el alta). Funciones cross-tenant solo del worker
+  (`trial_claims_pending_channels`, `tenant_setup_reminders_claim`, `email_lifecycle_candidates*`,
+  `email_recent_*`, `email_dispatch_claim`): revisado que ninguna ruta de `apps/api` las llama. No
+  existe un rol de base de datos separado para el worker (API y worker usan `crmwsp_app`), así que
+  el `EXECUTE` no se movió; queda como riesgo residual aceptado. Si se endurece, seguir el patrón
+  `app.worker_scope` de ADR 0021 o crear un rol `crmwsp_worker`.
 - **Escrituras con la suscripción vencida (fix-prelanzamiento F3)**: `ActivationGuard` ya no solo
   bloquea el setup. Las escrituras que protege (presupuestos, pedidos, reservas, contactos manuales,
   difusiones y plantillas) exigen un acceso `trial`, `active`, `grace` o `unbilled` (heredados con

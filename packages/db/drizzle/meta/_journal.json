@@ -546,6 +546,13 @@
       "when": 1792930000000,
       "tag": "0093_coupon_over_cap_review",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1792940000000,
+      "tag": "0094_security_definer_arg_checks",
+      "breakpoints": true
     }
   ]
 }
