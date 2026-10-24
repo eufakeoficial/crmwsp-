@@ -109,6 +109,8 @@ describe.skipIf(!hasEnv)("channels, inbox, outbound and SSE (e2e, real Postgres 
   async function signup(acc: ReturnType<typeof mk>): Promise<{ cookie: string; tenant: string }> {
     const res = await inject({ method: "POST", url: "/auth/signup", payload: acc });
     expect(res.statusCode).toBe(201);
+    // Channel connection requires a verified owner email (0095).
+    await migrator.db.update(users).set({ emailVerifiedAt: new Date() }).where(eq(users.email, acc.email));
     return { cookie: sessionCookieOf(res), tenant: (res.json() as { tenants: { id: string }[] }).tenants[0]!.id };
   }
 

@@ -27,6 +27,8 @@ export function errorMessage(err: unknown, context: "login" | "signup" | "generi
       return `${SETUP_REQUIRED_TEXT} Ve a Canales para conectarlo.`;
     case "PLAN_LIMIT_EXCEEDED":
       return planLimitMessage(err);
+    case "EMAIL_NOT_VERIFIED":
+      return `${EMAIL_NOT_VERIFIED_TEXT}. Revisa tu bandeja de entrada.`;
     default:
       return "Ocurrió un error en el servidor. Inténtalo más tarde.";
   }
@@ -35,6 +37,13 @@ export function errorMessage(err: unknown, context: "login" | "signup" | "generi
 export const ENCRYPTION_KEYS_MISSING = "El servidor no tiene configuradas las claves de cifrado";
 
 /** Errors of the channels and inbox screens. */
+/** 403 EMAIL_NOT_VERIFIED: the tenant owner must confirm their email before connecting WhatsApp. */
+export const EMAIL_NOT_VERIFIED_TEXT = "Confirma tu correo para conectar WhatsApp";
+
+export function isEmailNotVerified(err: unknown): err is ApiError {
+  return err instanceof ApiError && err.code === "EMAIL_NOT_VERIFIED";
+}
+
 export function channelErrorMessage(err: unknown): string {
   if (isEncryptionNotConfigured(err)) return `${ENCRYPTION_KEYS_MISSING}. Avisa a quien administre el servidor.`;
   if (err instanceof ApiError && err.status === 409) return "Ya existe un canal con ese teléfono.";

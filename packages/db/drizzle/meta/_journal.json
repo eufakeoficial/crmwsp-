@@ -553,6 +553,13 @@
       "when": 1792940000000,
       "tag": "0094_security_definer_arg_checks",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1792950000000,
+      "tag": "0095_email_verification",
+      "breakpoints": true
     }
   ]
 }

@@ -30,6 +30,7 @@ import { planTemplateSync } from "../templates/sync-plan.js";
 import { generateWebhookToken, type Dialog360PartnerClient, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
+import { EmailVerifiedGuard } from "../auth/email-verified.guard.js";
 import type { HttpRequest, RequestTenant } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
@@ -130,6 +131,7 @@ export class ChannelsController {
 
   @Post("gupshup")
   @Roles("owner", "admin")
+  @UseGuards(EmailVerifiedGuard)
   async createGupshup(@CurrentTenantDb() db: TenantDb, @Body() body: unknown, @Req() req: HttpRequest): Promise<Channel> {
     const input = parseOrThrow(createGupshupChannelRequestSchema, body);
     if (!this.cipher) throw new EncryptionNotConfiguredError();
@@ -186,6 +188,7 @@ export class ChannelsController {
    */
   @Post("360dialog/connect-state")
   @Roles("owner", "admin")
+  @UseGuards(EmailVerifiedGuard)
   @HttpCode(200)
   async dialog360ConnectState(@CurrentTenantDb() db: TenantDb): Promise<Dialog360ConnectState> {
     if (!this.partner) throw new EncryptionNotConfiguredError("360dialog partner credentials are not configured");
@@ -208,6 +211,7 @@ export class ChannelsController {
    */
   @Post("360dialog/connect")
   @Roles("owner", "admin")
+  @UseGuards(EmailVerifiedGuard)
   @HttpCode(200)
   async connect360dialog(@CurrentTenantDb() db: TenantDb, @Body() body: unknown, @Req() req: HttpRequest): Promise<ChannelListResponse> {
     const input = parseOrThrow(connect360dialogRequestSchema, body);
