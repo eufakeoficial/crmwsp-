@@ -17,6 +17,7 @@ import {
   type TenantPlanChangeRequest,
   type TenantLifecycleExtendRequest,
   tenantLifecycleExtendResponseSchema,
+  tenantTrialGrantResponseSchema,
   type TenantStatus,
   type TenantStatusChangeRequest,
   platformDashboardSchema,
@@ -41,6 +42,8 @@ export const platformApi = {
     request(`/platform/tenants/${encodeURIComponent(id)}/status`, { method: "POST", body, schema: platformTenantSchema }),
   changePlan: (id: string, body: TenantPlanChangeRequest) =>
     request(`/platform/tenants/${encodeURIComponent(id)}/plan`, { method: "PUT", body, schema: platformTenantSchema }),
+  grantTrial: (id: string) =>
+    request(`/platform/tenants/${encodeURIComponent(id)}/trial/grant`, { method: "POST", body: {}, schema: tenantTrialGrantResponseSchema }),
   extendLifecycle: (id: string, body: TenantLifecycleExtendRequest) =>
     request(`/platform/tenants/${encodeURIComponent(id)}/lifecycle`, { method: "POST", body, schema: tenantLifecycleExtendResponseSchema }),
   payments: (q: SubscriptionPaymentListQuery = {}) =>

@@ -6,6 +6,7 @@ const snapshot: PlanUsageSnapshot & Record<string, unknown> = {
   setupEndsAt: null,
   trialStartedAt: null,
   trialEndsAt: null,
+  trialDeniedAt: null,
   plan: null,
   limitsOverride: null,
   period: "2026-10",
@@ -22,7 +23,7 @@ vi.mock("@crmwsp/db", () => ({
   sql: () => ({}),
 }));
 
-const { PlanLimitsService } = await import("./plan-limits.service.js");
+const { PlanLimitsService, trialIdentitiesOf } = await import("./plan-limits.service.js");
 const svc = new PlanLimitsService({} as DbHandle);
 let paidUntil: string | null = null;
 const tx = { execute: vi.fn(async () => [{ d: paidUntil }]) } as unknown as Transaction;
@@ -120,5 +121,28 @@ describe("PlanLimitsService", () => {
     expect(r.billingProvider).toBe("none");
     expect(r.subscription).toMatchObject({ access: "unbilled", paidUntil: null });
     expect(r.usage.find((u) => u.key === "ai_messages")).toMatchObject({ monthly: true, limit: 2_000, used: 1_999 });
+  });
+});
+
+describe("trial anti-abuse (ADR 0015)", () => {
+  it("hashes the channel phone into a phone:<hmac> identity, and claims nothing without the secret", () => {
+    const [id] = trialIdentitiesOf("+591 70000001", "x".repeat(32));
+    expect(id).toMatch(/^phone:[0-9a-f]{64}$/);
+    expect(trialIdentitiesOf("+59170000001", "x".repeat(32))).toEqual([id]);
+    expect(trialIdentitiesOf("+59170000001", "")).toEqual([]);
+  });
+
+  it("a tenant whose number already used the trial is payment_required: outbound refused with trial_already_used", async () => {
+    snapshot.setupEndsAt = new Date(Date.now() + 86_400_000);
+    snapshot.trialDeniedAt = new Date();
+    try {
+      const err = await svc.assertSubscriptionActive(T, tx).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PlanLimitExceededError);
+      expect((err as PlanLimitExceededError).details).toMatchObject({ reason: "trial_already_used" });
+      await expect(svc.assert(T, "ai_messages", 1, tx)).rejects.toBeInstanceOf(PlanLimitExceededError);
+    } finally {
+      snapshot.setupEndsAt = null;
+      snapshot.trialDeniedAt = null;
+    }
   });
 });

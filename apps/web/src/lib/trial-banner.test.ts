@@ -8,6 +8,9 @@ describe("trialBannerText", () => {
     expect(trialBannerText({ ...base, access: "setup", daysLeft: 5 })).toBe("Conecta tu WhatsApp para empezar tu prueba: te quedan 5 días para conectar.");
     expect(trialBannerText({ ...base, access: "trial", daysLeft: 1 })).toBe("Prueba gratuita: te quedan 1 día de prueba.");
   });
+  it("tells a tenant whose number already used the trial to activate a plan", () => {
+    expect(trialBannerText({ ...base, access: "payment_required" })).toBe("Este número ya usó su prueba gratuita. Activa un plan para continuar.");
+  });
   it("shows nothing for active or grandfathered tenants", () => {
     expect(trialBannerText({ ...base, access: "active" })).toBeNull();
     expect(trialBannerText({ ...base, access: "unbilled" })).toBeNull();

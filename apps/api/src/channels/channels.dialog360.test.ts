@@ -41,7 +41,7 @@ function fakeDb(selects: unknown[][]) {
 function limitsStub(free = 10) {
   return {
     lock: vi.fn(async () => undefined),
-    startTrialIfEligible: vi.fn(async () => true),
+    startTrialIfEligible: vi.fn(async () => "started" as const),
     assert: vi.fn(async (_t: string, key: string, amount = 1) => {
       if (amount > free) throw new PlanLimitExceededError(`Plan Start: ${key} limit_reached`, { details: { key, reason: "limit_reached" } });
     }),

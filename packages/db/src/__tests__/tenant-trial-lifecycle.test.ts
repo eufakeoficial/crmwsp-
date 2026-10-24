@@ -24,11 +24,18 @@ describe.skipIf(!hasDb)("tenant trial lifecycle (0068)", () => {
       const [r] = await tx.select().from(tenantPlans).where(eq(tenantPlans.tenantId, tenantId));
       return r;
     });
-  const startTrial = (tenantId: string) =>
-    withTenant(app.db, tenantId, async (tx) => {
-      const [r] = await tx.execute<{ started: boolean }>(sql`select public.tenant_trial_start() as started`);
-      return r?.started;
+  const channelOf = (tenantId: string) =>
+    dangerouslyWithoutTenant(migrator.db, async (tx) => {
+      const [c] = await tx.select({ id: channelConnections.id }).from(channelConnections).where(eq(channelConnections.tenantId, tenantId)).limit(1);
+      return c?.id ?? randomUUID();
     });
+  const startTrial = async (tenantId: string) => {
+    const channelId = await channelOf(tenantId);
+    return withTenant(app.db, tenantId, async (tx) => {
+      const [r] = await tx.execute<{ outcome: string }>(sql`select public.tenant_trial_start(${channelId}::uuid, ARRAY[]::text[]) as outcome`);
+      return r?.outcome === "started";
+    });
+  };
 
   beforeAll(async () => {
     await runMigrations(MIGRATOR_URL as string);

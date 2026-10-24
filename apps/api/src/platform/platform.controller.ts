@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Put, Query
 import {
   type PlatformAuditPage,
   type TenantLifecycleExtendResponse,
+  type TenantTrialGrantResponse,
   tenantLifecycleExtendRequestSchema,
   type PlatformChannelList,
   type PlatformPlans,
@@ -87,6 +88,13 @@ export class PlatformController {
   @HttpCode(200)
   lifecycle(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("id") id: string, @Body() body: unknown): Promise<TenantLifecycleExtendResponse> {
     return this.platform.extendLifecycle(actorOf(user, req), parseOrThrow(uuidSchema, id), parseOrThrow(tenantLifecycleExtendRequestSchema, body));
+  }
+
+  /** Grant a 7-day trial anyway (number already used one, or setup expired); audited `tenant.trial_granted`. */
+  @Post("tenants/:id/trial/grant")
+  @HttpCode(200)
+  grantTrial(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("id") id: string): Promise<TenantTrialGrantResponse> {
+    return this.platform.grantTrial(actorOf(user, req), parseOrThrow(uuidSchema, id));
   }
 
   @Get("payments")

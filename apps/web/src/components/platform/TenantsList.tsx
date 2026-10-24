@@ -124,6 +124,11 @@ export function TenantsList({ mode = "all" }: { mode?: "all" | "approvals" }) {
                 <td className={td}>
                   {t.paidUntil ? formatDate(`${t.paidUntil}T00:00:00Z`) : "—"}
                   {t.overdue ? <span className="ml-1.5 rounded-full bg-danger-soft px-1.5 py-0.5 text-[11px] font-bold text-danger">Atrasado</span> : null}
+                  {t.multiAccountSuspect ? (
+                    <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800" title="Misma IP o mismo correo normalizado en más de 2 empresas en 30 días">
+                      Posible multicuenta
+                    </span>
+                  ) : null}
                 </td>
                 <td className={td}>{t.lastActivityAt ? formatDate(t.lastActivityAt) : "—"}</td>
               </tr>

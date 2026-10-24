@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { isDisposableEmail, normalizeSignupEmail } from "@crmwsp/domain";
 import {
   ConflictError,
+  ValidationError,
   type LoginRequest,
   type MeResponse,
   RateLimitedError,
@@ -69,6 +71,8 @@ export class AuthService implements OnModuleInit {
       await this.ipLimiter.consume(`ip:${client.ip ?? "-"}`);
       await this.limiter.consume(`signup:${client.ip ?? "-"}:${input.email}`);
     });
+    // Trial anti-abuse (ADR 0015): throwaway inboxes cannot open accounts (new signups only).
+    if (isDisposableEmail(input.email)) throw new ValidationError("Disposable email addresses are not allowed");
     const passwordHash = await hashPassword(input.password);
     let userId: string;
     let tenantId: string;
@@ -86,6 +90,10 @@ export class AuthService implements OnModuleInit {
       throw err;
     }
     this.logger.log({ event: "auth.signup", userId, tenantId, ip: client.ip });
+    // Multi-account signal for the platform backoffice: a flag only, never a block. Best effort.
+    await this.repo.recordSignupSignals(tenantId, client.ip, normalizeSignupEmail(input.email)).catch((err: unknown) => {
+      this.logger.warn(`signup signals not recorded (${err instanceof Error ? err.name : "unknown"})`);
+    });
     await this.audit([tenantId], "auth.signup", userId, { ua: ua(client) }, client);
     return { token: await this.openSession(userId, client), userId };
   }

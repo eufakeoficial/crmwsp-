@@ -1,4 +1,5 @@
 import { decideSettlement, tenantAccess, type LocalCharge } from "@crmwsp/billing";
+import { trialIdentityHash } from "@crmwsp/billing/trial-identity";
 import { SETTLE_SUBSCRIPTION_EVENT_JOB, SUBSCRIPTION_BILLING_QUEUE_NAME } from "@crmwsp/contracts";
 import { eq, isUuid, sql, subscriptionCharges, withTenant, type Database, type Transaction } from "@crmwsp/db";
 import { PaymentProviderError, parseNowPaymentsPayment, type NowPaymentsPayment, type NowPaymentsProvider } from "@crmwsp/payments";
@@ -25,6 +26,8 @@ export interface SubscriptionBillingDeps {
   /** Null when NOWPAYMENTS_API_KEY is unset: IPN settlement still works, reconciliation is off. */
   provider: Pick<NowPaymentsProvider, "getPayment"> | null;
   logger?: Logger;
+  /** HMAC key of trial_claims (TRIAL_IDENTITY_SECRET); omitted = claims backfill off. */
+  trialIdentitySecret?: string;
   /** Sends the day-5 setup reminder (ADR 0015); omitted = reminders off. */
   sendSetupReminder?: (r: SetupReminder) => Promise<void>;
 }
@@ -59,6 +62,32 @@ export async function runSetupReminders(deps: Pick<SubscriptionBillingDeps, "db"
   return sent;
 }
 
+/**
+ * Backfill of trial_claims (ADR 0015, T7): every active channel whose number was never claimed
+ * (grandfathered tenants, or channels connected while the secret was unset) is recorded under
+ * its tenant, so the number can never start another free trial. Never changes a tenant's state.
+ */
+export async function runTrialClaimsBackfill(deps: Pick<SubscriptionBillingDeps, "db" | "logger" | "trialIdentitySecret">, limit = 200): Promise<number> {
+  const secret = deps.trialIdentitySecret;
+  if (!secret) return 0;
+  const rows = await deps.db.execute<{ channel_id: string; phone_e164: string }>(
+    sql`select channel_id, phone_e164 from public.trial_claims_pending_channels(${limit})`,
+  );
+  let n = 0;
+  for (const r of rows) {
+    let identity: string;
+    try {
+      identity = `phone:${trialIdentityHash(secret, "phone", r.phone_e164)}`;
+    } catch {
+      continue; // malformed stored phone: skip, never block the tick
+    }
+    const [res] = await deps.db.execute<{ ok: boolean }>(sql`select public.trial_claims_record(${r.channel_id}::uuid, ARRAY[${identity}]::text[]) as ok`);
+    if (res?.ok) n++;
+  }
+  if (n > 0) (deps.logger ?? silent).info(`trial claims backfill: ${n} channel(s) recorded`);
+  return n;
+}
+
 export type SettleOutcome =
   | "paid"
   | "pending"
@@ -81,11 +110,14 @@ const asDate = (v: unknown): Date | null => (v instanceof Date ? v : typeof v ==
  */
 export async function isSubscriptionRestricted(tx: Transaction, now: Date = new Date()): Promise<boolean> {
   const [row] = await tx.execute<{ d: string | null }>(sql`select public.tenant_subscription_paid_until()::text as d`);
-  const [lc] = await tx.execute<{ setup_ends_at?: unknown; trial_started_at?: unknown; trial_ends_at?: unknown }>(
-    sql`select setup_ends_at, trial_started_at, trial_ends_at from tenant_plans limit 1`,
+  const [lc] = await tx.execute<{ setup_ends_at?: unknown; trial_started_at?: unknown; trial_ends_at?: unknown; trial_denied_at?: unknown }>(
+    sql`select setup_ends_at, trial_started_at, trial_ends_at, trial_denied_at from tenant_plans limit 1`,
   );
-  const lifecycle = lc ? { setupEndsAt: asDate(lc.setup_ends_at), trialStartedAt: asDate(lc.trial_started_at), trialEndsAt: asDate(lc.trial_ends_at) } : null;
-  return tenantAccess(row?.d ?? null, lifecycle, now) === "restricted";
+  const lifecycle = lc
+    ? { setupEndsAt: asDate(lc.setup_ends_at), trialStartedAt: asDate(lc.trial_started_at), trialEndsAt: asDate(lc.trial_ends_at), trialDeniedAt: asDate(lc.trial_denied_at) }
+    : null;
+  const access = tenantAccess(row?.d ?? null, lifecycle, now);
+  return access === "restricted" || access === "payment_required";
 }
 
 function toPayload(p: NowPaymentsPayment): Record<string, unknown> {
@@ -232,6 +264,7 @@ export function createSubscriptionBillingWorker(opts: SubscriptionBillingWorkerO
         const res = await runSubscriptionReconcileTick(deps);
         await runSubscriptionPlanSync(deps);
         await runSetupReminders(deps);
+        await runTrialClaimsBackfill(deps);
         return res;
       }
       throw new UnrecoverableError("unknown job name");

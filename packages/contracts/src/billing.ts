@@ -43,7 +43,8 @@ export const billingPlanResponseSchema = z.object({
   billingProvider: z.enum(["none", "nowpayments"]),
   subscription: z.object({
     /** `unbilled` = never paid through the platform (not restricted). */
-    access: z.enum(["unbilled", "active", "grace", "restricted", "setup", "trial"]),
+    /** `payment_required`: the WhatsApp number already used its free trial (ADR 0015). */
+    access: z.enum(["unbilled", "active", "grace", "restricted", "setup", "trial", "payment_required"]),
     /** Last paid day (`YYYY-MM-DD`, UTC), `null` when never paid. */
     paidUntil: z.string().nullable(),
     graceDays: z.number().int(),

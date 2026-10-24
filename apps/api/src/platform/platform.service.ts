@@ -27,6 +27,8 @@ import {
   type SubscriptionPaymentListQuery,
   type TenantPlanChangeRequest,
   type TenantLifecycleExtendRequest,
+  type TenantTrialGrantResponse,
+  MULTIACCOUNT_THRESHOLD,
   type TenantLifecycleExtendResponse,
   type TenantStatusChangeRequest,
   ValidationError,
@@ -88,14 +90,24 @@ export class PlatformService {
     return this.repo.isAdmin(userId);
   }
 
-  listTenants(actor: PlatformActor, q: PlatformTenantListQuery): Promise<PlatformTenant[]> {
-    return guarded(() => this.repo.listTenants(actor.userId, q));
+  async listTenants(actor: PlatformActor, q: PlatformTenantListQuery): Promise<PlatformTenant[]> {
+    const [rows, suspects] = await guarded(() =>
+      Promise.all([this.repo.listTenants(actor.userId, q), this.repo.multiAccountSuspects(actor.userId, MULTIACCOUNT_THRESHOLD)]),
+    );
+    return rows.map((t) => ({ ...t, multiAccountSuspect: suspects.has(t.id) }));
+  }
+
+  async grantTrial(actor: PlatformActor, tenantId: string): Promise<TenantTrialGrantResponse> {
+    const endsAt = await guarded(() => this.repo.grantTrial(actor.userId, tenantId, actor.ip));
+    return { trialEndsAt: endsAt.toISOString() };
   }
 
   async tenantDetail(actor: PlatformActor, tenantId: string): Promise<PlatformTenantDetail> {
     return guarded(async () => {
-      const [tenant] = await this.repo.listTenants(actor.userId, { tenantId });
-      if (!tenant) throw new NotFoundError();
+      const [found] = await this.repo.listTenants(actor.userId, { tenantId });
+      if (!found) throw new NotFoundError();
+      const suspects = await this.repo.multiAccountSuspects(actor.userId, MULTIACCOUNT_THRESHOLD);
+      const tenant = { ...found, multiAccountSuspect: suspects.has(found.id) };
       const [members, channels, payments, audit] = await Promise.all([
         this.repo.members(actor.userId, tenantId),
         this.repo.channels(actor.userId, tenantId),

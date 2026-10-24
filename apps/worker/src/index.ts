@@ -105,6 +105,7 @@ function main(): void {
     db: db.db,
     provider: nowPaymentsOptions ? new NowPaymentsProvider(nowPaymentsOptions) : null,
     logger,
+    ...(process.env.TRIAL_IDENTITY_SECRET ? { trialIdentitySecret: process.env.TRIAL_IDENTITY_SECRET } : {}),
     sendSetupReminder: async (r) => {
       const days = Math.max(1, Math.ceil((r.setupEndsAt.getTime() - Date.now()) / 86_400_000));
       const title = `Conecta tu WhatsApp: te quedan ${days} ${days === 1 ? "día" : "días"} para empezar tu prueba`;

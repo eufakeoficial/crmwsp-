@@ -104,6 +104,18 @@ function LifecycleEditor({ tenantId }: { tenantId: string }) {
       setBusy(false);
     }
   };
+  const grant = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await platformApi.grantTrial(tenantId);
+      setMsg(`Prueba concedida hasta ${formatDateTime(r.trialEndsAt)}.`);
+    } catch (err) {
+      setMsg(platformErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="flex flex-wrap items-end gap-2">
       <label className="flex flex-col gap-1 text-[12px] font-bold">
@@ -118,6 +130,7 @@ function LifecycleEditor({ tenantId }: { tenantId: string }) {
         <input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} className={fieldClass} />
       </label>
       <Button size="sm" disabled={busy} onClick={() => void save()}>Extender</Button>
+      <Button size="sm" variant="outline" disabled={busy} onClick={() => void grant()}>Conceder prueba de 7 días</Button>
       {msg ? <span className="text-[12px] text-muted" role="status">{msg}</span> : null}
     </div>
   );
@@ -142,6 +155,7 @@ export function TenantDetail({ id }: { id: string }) {
                   <StatusPill status={t.status} />
                   {t.statusReason ? <span className="text-[13px] text-muted">Motivo: {t.statusReason}</span> : null}
                   {t.overdue ? <span className="rounded-full bg-danger-soft px-2 py-0.5 text-[11px] font-bold text-danger">Pago atrasado</span> : null}
+                  {t.multiAccountSuspect ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800">Posible multicuenta</span> : null}
                 </div>
                 <p className="mt-2 mb-2 text-[13px]">Propietario: {t.ownerName ? `${t.ownerName} · ` : ""}{t.ownerEmail ?? "—"}</p>
                 <div className="flex flex-wrap gap-1.5">

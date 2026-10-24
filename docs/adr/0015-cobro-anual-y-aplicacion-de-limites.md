@@ -93,3 +93,45 @@ Hasta ahora un tenant que nunca pagó (`paid_until` nulo, `unbilled`) nunca qued
 ### Consecuencias
 - Los tests e2e que dan de alta un tenant por la API y luego crean presupuestos/pedidos sin conectar
   un canal recibirán `SETUP_REQUIRED`; deben conectar un canal o marcar el tenant como heredado.
+
+## Antiabuso de la prueba: una prueba por número para siempre (T7)
+
+### Reclamos de identidad
+- Tabla **de plataforma** `trial_claims` (migración 0069): `identity_type` (`phone` | `waba`),
+  `identity_hash`, `first_tenant_id`, `claimed_at`, única por `(identity_type, identity_hash)`.
+- **Excepción de RLS**, igual que `platform_admins` y `subscription_payments` (0052): no tiene
+  `tenant_id` porque una identidad pertenece a todos los tenants a la vez. RLS forzada sin políticas
+  y sin privilegios de tabla para `crmwsp_app`; solo la tocan funciones `SECURITY DEFINER`
+  (`tenant_trial_start`, `trial_claims_record`). Un tenant no puede leerla ni escribirla (test).
+- Solo se guarda `HMAC-SHA256(TRIAL_IDENTITY_SECRET, "tipo:valor")` en hex; nunca el teléfono ni
+  el WABA en claro. El teléfono se normaliza a E.164 (`+` y dígitos) antes de calcular el hash.
+- WABA: ninguno de los adaptadores (Gupshup, 360dialog) expone hoy el id de WABA, así que solo se
+  reclama el teléfono; el tipo `waba` queda listo para cuando el proveedor lo entregue.
+
+### Inicio de la prueba
+- Cuando un canal queda activo, `tenant_trial_start(canal, identidades)` reclama sus identidades
+  (gana el primero, `ON CONFLICT DO NOTHING` bajo advisory lock por identidad en orden fijo: sin
+  carreras ni interbloqueos) y, si el tenant está en setup:
+  - alguna identidad ya era de **otro** tenant → **sin prueba**: `trial_denied_at`, estado
+    `payment_required` ("Este número ya usó su prueba gratuita. Activa un plan para continuar.").
+    La conexión del canal **sí** se permite; el tenant queda restringido hasta pagar.
+  - si no → empieza la prueba de 7 días.
+- Sin `TRIAL_IDENTITY_SECRET` no se reclama nada (aviso en logs) y la prueba empieza sin
+  comprobación; el backfill reclama esos números cuando se configure el secreto.
+- **Tenants existentes**: el tick del worker reclama los números de todos los canales activos
+  todavía no reclamados (`trial_claims_pending_channels` / `trial_claims_record`) a nombre de su
+  tenant, sin cambiar su estado. Así esos números no pueden abrir una prueba nueva.
+- Rotar el secreto invalida todos los reclamos: no se rota sin re-hashear.
+
+### Alta de cuenta y señales
+- Correos desechables (lista estática pequeña en `@crmwsp/domain`, sin dependencias): el alta se
+  rechaza. Las cuentas existentes no se tocan.
+- Se guarda en `tenant_signup_signals` (plataforma, sin acceso de tenants) la IP del alta (la IP de
+  cliente firmada por el proxy) y el correo normalizado (minúsculas, sin `+etiqueta`, sin puntos en
+  gmail/googlemail). El correo de login no cambia.
+- En la lista de empresas del backoffice: **"Posible multicuenta"** cuando la misma IP o el mismo
+  correo normalizado crearon más de 2 tenants en 30 días. Solo es una marca; nunca bloquea.
+
+### Excepción manual
+- `POST /platform/tenants/:id/trial/grant` concede 7 días de prueba igualmente (borra
+  `trial_denied_at`); auditado como `tenant.trial_granted`.

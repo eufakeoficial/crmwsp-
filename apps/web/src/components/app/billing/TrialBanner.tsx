@@ -22,7 +22,7 @@ export function TrialBanner() {
   const text = sub ? trialBannerText(sub) : null;
   if (!text || !sub) return null;
   const href = sub.access === "setup" ? "/app/channels" : "/app/settings/billing";
-  const tone = sub.access === "restricted" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-800";
+  const tone = sub.access === "restricted" || sub.access === "payment_required" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-800";
   return (
     <div role="status" className={`mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${tone}`}>
       <span>{text}</span>

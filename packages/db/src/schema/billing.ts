@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, char, check, date, index, integer, jsonb, numeric, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { bigint, char, check, date, index, inet, integer, jsonb, numeric, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 
 /** Keep in sync with `PLAN_IDS` in @crmwsp/billing. */
@@ -26,6 +26,8 @@ export const tenantPlans = pgTable(
     trialStartedAt: timestamp("trial_started_at", { withTimezone: true }),
     trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
     setupReminderSentAt: timestamp("setup_reminder_sent_at", { withTimezone: true }),
+    /** First channel's number already used a free trial elsewhere (0069): payment required. */
+    trialDeniedAt: timestamp("trial_denied_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -119,3 +121,30 @@ export const subscriptionCharges = pgTable(
 );
 
 export type SubscriptionCharge = typeof subscriptionCharges.$inferSelect;
+
+/**
+ * One free trial per phone number / WABA for life (0069, ADR 0015). PLATFORM-LEVEL table: no
+ * tenant_id scoping, RLS forced with no policy and no app-role privilege; only SECURITY DEFINER
+ * functions read or write it. `identityHash` = HMAC-SHA256 hex with TRIAL_IDENTITY_SECRET.
+ */
+export const trialClaims = pgTable(
+  "trial_claims",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    identityType: text("identity_type", { enum: ["phone", "waba"] }).notNull(),
+    identityHash: text("identity_hash").notNull(),
+    firstTenantId: uuid("first_tenant_id").references(() => tenants.id, { onDelete: "set null" }),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("trial_claims_identity_unique").on(t.identityType, t.identityHash)],
+);
+
+/** Signup signals for the platform "posible multicuenta" flag (0069). Platform-level like trial_claims. */
+export const tenantSignupSignals = pgTable("tenant_signup_signals", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  signupIp: inet("signup_ip"),
+  emailNormalized: text("email_normalized"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

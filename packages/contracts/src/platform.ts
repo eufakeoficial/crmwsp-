@@ -45,7 +45,13 @@ export const platformTenantSchema = z.object({
   lastActivityAt: isoDateTimeSchema.nullable(),
   paidUntil: isoDateSchema.nullable(),
   overdue: z.boolean(),
+  /**
+   * "Posible multicuenta" (ADR 0015): same signup IP or normalized email created more than
+   * MULTIACCOUNT_THRESHOLD tenants in 30 days. A flag only, never a block.
+   */
+  multiAccountSuspect: z.boolean(),
 });
+export const MULTIACCOUNT_THRESHOLD = 2;
 export type PlatformTenant = z.infer<typeof platformTenantSchema>;
 
 export const platformTenantListQuerySchema = z.object({
@@ -122,6 +128,10 @@ export const tenantLifecycleExtendRequestSchema = z.object({ kind: z.enum(["setu
 export type TenantLifecycleExtendRequest = z.infer<typeof tenantLifecycleExtendRequestSchema>;
 export const tenantLifecycleExtendResponseSchema = z.object({ kind: z.enum(["setup", "trial"]), endsAt: z.string() });
 export type TenantLifecycleExtendResponse = z.infer<typeof tenantLifecycleExtendResponseSchema>;
+
+/** `POST /platform/tenants/:id/trial/grant`: grant a 7-day trial anyway (audited, ADR 0015). */
+export const tenantTrialGrantResponseSchema = z.object({ trialEndsAt: z.string() });
+export type TenantTrialGrantResponse = z.infer<typeof tenantTrialGrantResponseSchema>;
 
 export const recordSubscriptionPaymentRequestSchema = z
   .object({

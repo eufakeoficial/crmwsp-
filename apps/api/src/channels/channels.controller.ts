@@ -108,7 +108,7 @@ export class ChannelsController {
           })
           .returning();
         if (!created) throw new Error("insert returned no row");
-        await this.limits.startTrialIfEligible(tx);
+        await this.limits.startTrialIfEligible(tx, created);
         await writeAudit(tx, {
           tenantId: db.tenantId,
           userId: db.userId,
@@ -187,7 +187,7 @@ export class ChannelsController {
             })
             .returning();
           if (!created) throw new Error("insert returned no row");
-          await this.limits.startTrialIfEligible(tx);
+          await this.limits.startTrialIfEligible(tx, created);
           await writeAudit(tx, {
             tenantId: db.tenantId,
             userId: db.userId,
@@ -423,7 +423,7 @@ export class ChannelsController {
         .where(eq(channelConnections.id, id))
         .returning();
       if (!updated) throw new NotFoundError();
-      if (updated.status === "active") await this.limits.startTrialIfEligible(tx);
+      if (updated.status === "active") await this.limits.startTrialIfEligible(tx, updated);
       await writeAudit(tx, {
         tenantId: db.tenantId,
         userId: db.userId,

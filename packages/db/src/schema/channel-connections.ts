@@ -28,6 +28,8 @@ export const channelConnections = pgTable(
     partnerTokenEncrypted: bytea("partner_token_encrypted"),
     webhookToken: text("webhook_token").notNull().unique("channel_connections_webhook_token_unique"),
     status: channelConnectionStatus("status").notNull().default("pending"),
+    /** When this channel's phone/WABA was recorded in trial_claims (0069). */
+    trialIdentityClaimedAt: timestamp("trial_identity_claimed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

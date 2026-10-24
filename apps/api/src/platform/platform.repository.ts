@@ -82,6 +82,19 @@ export class PlatformRepository {
     await this.sql`select public.platform_set_tenant_plan(${actor}, ${tenantId}, ${plan}, ${json}::jsonb, ${ip}::inet)`;
   }
 
+  /** Tenant ids flagged "posible multicuenta" (`platform_multiaccount_suspects`, 0069). */
+  async multiAccountSuspects(actor: string, threshold: number): Promise<Set<string>> {
+    const rows = await this.sql<{ tenant_id: string }[]>`select tenant_id from public.platform_multiaccount_suspects(${actor}, ${threshold}::integer)`;
+    return new Set(rows.map((r) => r.tenant_id));
+  }
+
+  /** Grants a 7-day trial anyway (`platform_grant_trial`, 0069); audited. */
+  async grantTrial(actor: string, tenantId: string, ip: string | null): Promise<Date> {
+    const [r] = await this.sql<{ ends_at: Date }[]>`select public.platform_grant_trial(${actor}, ${tenantId}, ${ip}::inet) as ends_at`;
+    if (!r) throw new Error("platform_grant_trial returned no row");
+    return new Date(r.ends_at);
+  }
+
   /** Extends setup or trial (`platform_extend_lifecycle`, 0068); returns the new end. */
   async extendLifecycle(actor: string, tenantId: string, kind: "setup" | "trial", days: number, ip: string | null): Promise<Date> {
     const [r] = await this.sql<{ ends_at: Date }[]>`
@@ -412,5 +425,6 @@ function toTenant(r: TenantRow): PlatformTenant {
     lastActivityAt: r.last_activity_at ? iso(r.last_activity_at) : null,
     paidUntil: r.paid_until,
     overdue: r.overdue === true,
+    multiAccountSuspect: false,
   };
 }

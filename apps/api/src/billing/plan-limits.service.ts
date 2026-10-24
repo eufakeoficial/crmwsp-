@@ -1,4 +1,5 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { trialIdentityHash } from "@crmwsp/billing/trial-identity";
 import {
   SUBSCRIPTION_GRACE_DAYS,
   applyTenantAccess,
@@ -25,7 +26,12 @@ export async function readPaidUntil(tx: Transaction): Promise<string | null> {
 }
 
 function lifecycleOf(s: PlanUsageSnapshot): TrialLifecycle {
-  return { setupEndsAt: s.setupEndsAt ?? null, trialStartedAt: s.trialStartedAt ?? null, trialEndsAt: s.trialEndsAt ?? null };
+  return {
+    setupEndsAt: s.setupEndsAt ?? null,
+    trialStartedAt: s.trialStartedAt ?? null,
+    trialEndsAt: s.trialEndsAt ?? null,
+    trialDeniedAt: s.trialDeniedAt ?? null,
+  };
 }
 
 /** Access of the tenant: subscription rules plus the trial lifecycle of new tenants (ADR 0015). */
@@ -36,6 +42,18 @@ function accessOf(s: PlanUsageSnapshot, paidUntil: string | null): TenantAccess 
 /** Plan + admin overrides, then capped by the access state (setup caps AI, restricted = nothing). */
 function effectivePlan(s: PlanUsageSnapshot, paidUntil: string | null): PlanDefinition {
   return applyTenantAccess(resolveEffectivePlan(s.plan, s.limitsOverride), accessOf(s, paidUntil));
+}
+
+export type TrialStartOutcome = "started" | "denied" | "ineligible";
+
+/**
+ * `type:hash` identities of a channel for `trial_claims` (phone only: neither BSP adapter exposes
+ * a WABA id today). Empty when TRIAL_IDENTITY_SECRET is unset. Hashes are hex, so they are safe
+ * to inline in the array literal.
+ */
+export function trialIdentitiesOf(phoneE164: string, secret = process.env["TRIAL_IDENTITY_SECRET"] ?? ""): string[] {
+  if (!secret) return [];
+  return [`phone:${trialIdentityHash(secret, "phone", phoneE164)}`];
 }
 
 /** Limits that cannot be used while the tenant is in setup (no WhatsApp channel yet). */
@@ -62,6 +80,8 @@ function usedByKey(s: PlanUsageSnapshot): Record<LimitKey, number> {
  */
 @Injectable()
 export class PlanLimitsService {
+  private readonly logger = new Logger(PlanLimitsService.name);
+
   constructor(@Inject(DB_HANDLE) private readonly handle: DbHandle) {}
 
   private run<T>(tenantId: string, tx: Transaction | undefined, fn: (tx: Transaction) => Promise<T>): Promise<T> {
@@ -119,6 +139,11 @@ export class PlanLimitsService {
     const { snapshot, paidUntil } = await this.run(tenantId, tx, async (t) => ({ snapshot: await readPlanUsage(t), paidUntil: await readPaidUntil(t) }));
     const access = accessOf(snapshot, paidUntil);
     if (access === "setup") throw setupRequired();
+    if (access === "payment_required") {
+      throw new PlanLimitExceededError("This WhatsApp number already used its free trial: activate a plan to continue", {
+        details: { key: "subscription", reason: "trial_already_used" },
+      });
+    }
     if (access === "restricted") {
       throw new PlanLimitExceededError("Subscription expired: outbound messages are disabled until it is renewed", {
         details: { key: "subscription", reason: "subscription_restricted", paidUntil },
@@ -133,12 +158,19 @@ export class PlanLimitsService {
   }
 
   /**
-   * Called inside the transaction that made a channel active: starts the 7-day trial when the
-   * tenant is in setup (`tenant_trial_start`, migration 0068). Idempotent.
+   * Called inside the transaction that made a channel active (ADR 0015): records the channel's
+   * phone in `trial_claims` (HMAC, one free trial per number for life) and, when the tenant is in
+   * setup, starts the 7-day trial, or denies it when another tenant already claimed the number.
+   * Without TRIAL_IDENTITY_SECRET no identity is claimed (logged): the trial starts unchecked and
+   * the worker backfill claims the number once the secret is configured.
    */
-  async startTrialIfEligible(tx: Transaction): Promise<boolean> {
-    const [row] = await tx.execute<{ started: boolean }>(sql`select public.tenant_trial_start() as started`);
-    return row?.started === true;
+  async startTrialIfEligible(tx: Transaction, channel: { id: string; phoneE164: string }): Promise<TrialStartOutcome> {
+    const identities = trialIdentitiesOf(channel.phoneE164);
+    if (identities.length === 0) this.logger.warn("TRIAL_IDENTITY_SECRET is not set: trial started without the one-trial-per-number check");
+    const [row] = await tx.execute<{ outcome: TrialStartOutcome }>(
+      sql`select public.tenant_trial_start(${channel.id}::uuid, ${sql.raw(`ARRAY[${identities.map((i) => `'${i}'`).join(",")}]::text[]`)}) as outcome`,
+    );
+    return row?.outcome ?? "ineligible";
   }
 
   async snapshot(tx: Transaction): Promise<BillingPlanResponse> {

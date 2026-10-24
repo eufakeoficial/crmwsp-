@@ -51,6 +51,11 @@ export class AuthRepository {
     return { userId: r.user_id, tenantId: r.tenant_id };
   }
 
+  /** `tenant_signup_signals_record` (0069): signup IP + normalized email of a new tenant. */
+  async recordSignupSignals(tenantId: string, ip: string | null, emailNormalized: string | null): Promise<void> {
+    await this.handle.sql`select public.tenant_signup_signals_record(${tenantId}::uuid, ${ip}::inet, ${emailNormalized})`;
+  }
+
   async createSession(input: {
     userId: string;
     tokenHash: Buffer;
