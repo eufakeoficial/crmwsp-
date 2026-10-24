@@ -79,8 +79,10 @@ export class ContactBulkController {
    */
   private async assertImportFits(tx: Transaction, tenantId: string, phones: readonly string[]): Promise<void> {
     await this.limits.lock(tx, tenantId, "contacts");
+    // Count each phone once even if the file repeats it (the plan dedupes too; defense in depth).
+    const unique = [...new Set(phones)];
     let fresh = 0;
-    for (const part of chunks(phones, 500)) {
+    for (const part of chunks(unique, 500)) {
       const known = await tx.select({ phoneE164: contacts.phoneE164 }).from(contacts).where(inArray(contacts.phoneE164, [...part]));
       fresh += part.length - known.length;
     }

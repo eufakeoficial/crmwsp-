@@ -10,6 +10,7 @@ import {
   type ContactTagCount,
 } from "@crmwsp/contracts";
 import { useCallback, useEffect, useState } from "react";
+import { SetupRequiredHint, useSetupMode } from "@/components/app/billing/SetupGate";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { Alert, Avatar, Badge, Button, CheckBox, Input, Modal, SearchInput } from "@/components/ui";
 import { contactBookApi } from "@/lib/contacts-api";
@@ -36,6 +37,7 @@ const tagFilter = (tag: string): ContactFilter => ({
 
 export function ContactsView() {
   const [draft, setDraft] = useState("");
+  const inSetup = useSetupMode();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ContactFilter>(EMPTY_CONTACT_FILTER);
   const [items, setItems] = useState<ContactBookItem[] | null>(null);
@@ -203,10 +205,11 @@ export function ContactsView() {
             >
               <SearchInput label="Buscar contactos" placeholder="Nombre o teléfono" value={draft} onChange={(e) => setDraft(e.target.value)} />
             </form>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>Importar CSV</Button>
+            <Button variant="outline" disabled={inSetup} title={inSetup ? "Conecta tu WhatsApp para empezar tu prueba" : undefined} onClick={() => setImportOpen(true)}>Importar CSV</Button>
             <Button onClick={() => setNewOpen(true)}>Nuevo contacto</Button>
           </div>
 
+          {inSetup ? <SetupRequiredHint className="mb-3" /> : null}
           <FilterBuilder filter={filter} onChange={setFilter} tags={tags} segments={segments} currency={currency} onSaveSegment={() => setSaveOpen(true)} />
 
           {error ? <div className="mb-3"><Alert>{errorMessage(error)}</Alert></div> : null}

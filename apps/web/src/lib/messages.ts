@@ -1,5 +1,12 @@
 import { ApiError } from "./api";
 
+/** Setup mode (ADR 0015): the tenant has no WhatsApp channel yet. */
+export const SETUP_REQUIRED_TEXT = "Conecta tu WhatsApp para empezar tu prueba.";
+
+export function isSetupRequired(err: unknown): boolean {
+  return err instanceof ApiError && err.code === "SETUP_REQUIRED";
+}
+
 /** Spanish, user-facing text for an error. Never includes request data (e.g. passwords). */
 export function errorMessage(err: unknown, context: "login" | "signup" | "generic" = "generic"): string {
   if (!(err instanceof ApiError)) return "Ocurrió un error inesperado. Inténtalo de nuevo.";
@@ -17,7 +24,7 @@ export function errorMessage(err: unknown, context: "login" | "signup" | "generi
     case "NETWORK_ERROR":
       return "No se pudo conectar con el servidor. Comprueba tu conexión.";
     case "SETUP_REQUIRED":
-      return "Conecta tu WhatsApp para empezar tu prueba.";
+      return `${SETUP_REQUIRED_TEXT} Ve a Canales para conectarlo.`;
     case "PLAN_LIMIT_EXCEEDED":
       return planLimitMessage(err);
     default:
@@ -59,7 +66,16 @@ function planLimitMessage(err: ApiError): string {
       return "Tu suscripción venció y la cuenta está en modo solo lectura. Renueva tu plan en Plan y uso para volver a crear y editar.";
     case "trial_already_used":
       return "Este número de WhatsApp ya usó su prueba gratis. Activa un plan en Plan y uso para continuar.";
-    default:
+    default: {
+      const d = (err.details ?? {}) as { key?: unknown; requested?: unknown; remaining?: unknown; limit?: unknown; used?: unknown };
+      const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+      const requested = num(d.requested);
+      const limit = num(d.limit);
+      if (d.key === "contacts" && requested !== null && limit !== null) {
+        const remaining = num(d.remaining) ?? Math.max(0, limit - (num(d.used) ?? 0));
+        return `El archivo agrega ${requested} ${requested === 1 ? "contacto nuevo" : "contactos nuevos"}, pero tu plan permite ${remaining} más (límite ${limit}). No se importó nada.`;
+      }
       return "Tu plan no permite esta acción (límite alcanzado o suscripción vencida). Revisa Plan y uso.";
+    }
   }
 }

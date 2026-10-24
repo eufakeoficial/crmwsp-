@@ -9,6 +9,7 @@ import type {
   BroadcastVariableSource,
 } from "@crmwsp/contracts";
 import { useCallback, useEffect, useState } from "react";
+import { SetupRequiredHint, useSetupMode } from "@/components/app/billing/SetupGate";
 import { PageHeader } from "@/components/app/EmptyState";
 import { Alert, Button, Card, Input } from "@/components/ui";
 import { ApiError } from "@/lib/api";
@@ -243,6 +244,7 @@ export function BroadcastsView() {
   const [items, setItems] = useState<Broadcast[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const inSetup = useSetupMode();
   const [open, setOpen] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -272,9 +274,12 @@ export function BroadcastsView() {
           }}
         />
       ) : (
-        <Button className="mb-6" onClick={() => setCreating(true)}>
-          Nueva campaña
-        </Button>
+        <>
+          {inSetup ? <SetupRequiredHint className="mb-2" /> : null}
+          <Button className="mb-6" disabled={inSetup} onClick={() => setCreating(true)}>
+            Nueva campaña
+          </Button>
+        </>
       )}
       {items.length === 0 ? <p className="text-muted">Aún no hay campañas.</p> : null}
       <ul className="m-0 flex list-none flex-col gap-3 p-0">
