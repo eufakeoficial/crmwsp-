@@ -5,7 +5,7 @@ import type { HttpRequest } from "../common/http.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { ContactCreateController } from "./contact-create.controller.js";
 
-vi.mock("../inbox/audit.js", async (orig) => ({ ...(await orig<typeof import("../inbox/audit.js")>()), writeAudit: vi.fn(async () => undefined) }));
+vi.mock("../inbox/audit.js", async (orig) => ({ ...(await orig<Record<string, unknown>>()), writeAudit: vi.fn(async () => undefined) }));
 
 const TENANT = "00000000-0000-4000-8000-000000000001";
 const req = { ip: "127.0.0.1" } as unknown as HttpRequest;
