@@ -19,6 +19,7 @@ import {
   inArray,
   memberships,
   messages,
+  tenantPlans,
   tenants,
   users,
   type DbHandle,
@@ -128,6 +129,9 @@ describe.skipIf(!hasEnv)("inbox v2 (e2e, real Postgres + Redis)", () => {
       userA: await userId(accounts.a.email),
       userC: await userId(accounts.c.email),
     });
+    // Signup leaves a new tenant in setup (ADR 0015); grandfather the test tenants so writes are not
+    // answered with SETUP_REQUIRED.
+    await migrator.db.update(tenantPlans).set({ setupEndsAt: null }).where(inArray(tenantPlans.tenantId, [s.tenantA, s.tenantB, c.tenant]));
     await migrator.db.insert(memberships).values({ tenantId: s.tenantA, userId: s.userC, role: "agent" });
     const [ch] = await migrator.db
       .insert(channelConnections)

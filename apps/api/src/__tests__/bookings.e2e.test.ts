@@ -10,7 +10,7 @@ import {
   bookingServiceSchema,
   errorResponseSchema,
 } from "@crmwsp/contracts";
-import { auditEvents, contacts, createDb, eq, inArray, memberships, tenants, users, and, type DbHandle } from "@crmwsp/db";
+import { auditEvents, contacts, createDb, eq, inArray, memberships, tenantPlans, tenants, users, and, type DbHandle } from "@crmwsp/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../app.module.js";
 
@@ -77,6 +77,9 @@ describe.skipIf(!hasEnv)("bookings (e2e, real Postgres)", () => {
     const b = await signup(accounts.b);
     const c = await signup(accounts.c);
     Object.assign(s, { cookieA: a.cookie, tenantA: a.tenant, cookieB: b.cookie, tenantB: b.tenant, cookieC: c.cookie });
+    // Signup leaves a new tenant in setup (ADR 0015); grandfather the test tenants so writes are not
+    // answered with SETUP_REQUIRED.
+    await migrator.db.update(tenantPlans).set({ setupEndsAt: null }).where(inArray(tenantPlans.tenantId, [s.tenantA, s.tenantB, c.tenant]));
     await migrator.db.insert(memberships).values({ tenantId: s.tenantA, userId: await userId(accounts.c.email), role: "agent" });
     const [contact] = await migrator.db.insert(contacts).values({ tenantId: s.tenantA, phoneE164: "+51922222222", name: "Paciente" }).returning({ id: contacts.id });
     s.contactA = contact!.id;
