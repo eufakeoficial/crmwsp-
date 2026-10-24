@@ -1,11 +1,12 @@
 import { AssistantCta } from "./Assistant";
 import {
-  ArrowRight, ArrowUpRight, Bot, BookOpenCheck, Check, HandHelping, Inbox, MessageSquareQuote, ReceiptText, ShieldCheck, UsersRound, WalletCards,
+  ArrowUpRight, Bot, BookOpenCheck, Check, HandHelping, Inbox, MessageSquareQuote, ReceiptText, ShieldCheck, UsersRound, WalletCards,
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { buttonClasses } from "@/components/ui";
-import { LOGOS, MEDIA, PRICING_TEASER, TESTIMONIALS, type MediaSpec } from "./media";
+import { LOGOS, MEDIA, TESTIMONIALS, type MediaSpec } from "./media";
+import { MARKET_COLUMNS, MARKET_FOOTNOTE, MARKET_ROWS } from "./pricing-content";
+import { PricingPlans } from "./PricingPlans";
 import { COMPARISON_COLUMNS, COMPARISON_ROWS, DEFINITION, FAQ, INTEGRATIONS, STEPS } from "./content";
 import { MediaSlot } from "./MediaSlot";
 import { ArrowLink, ArrowNudge, Float, Marquee, QuoteSteps, Reveal, Spin, Stagger, StaggerItem, StepNumber, StepsProgress, Tilt } from "./motion";
@@ -406,21 +407,39 @@ export function Proof() {
   );
 }
 
-/** No pricing route exists yet: shows owner copy when filled, otherwise a generic CTA to sign up. */
-export function PricingTeaser() {
-  const published = !PRICING_TEASER.from.includes("[") && !PRICING_TEASER.note.includes("[");
+/** Public pricing (anchor #precios, linked from the nav): plan cards with billing toggle + market comparison. */
+export function Pricing() {
   return (
     <section id="precios" aria-labelledby="precios-title" className={SECTION}>
-      <Reveal spring from="right" className="flex flex-col items-start gap-4 rounded-[32px] border border-line bg-white p-[clamp(20px,5vw,56px)]">
-        <p className="m-0 rounded-full bg-lime px-3 py-1 text-sm font-bold">Precios</p>
-        <h2 id="precios-title" className={`${H2} max-w-[24ch]`}>{published ? PRICING_TEASER.from : "Empieza gratis y elige tu plan cuando lo necesites."}</h2>
-        <p className="m-0 max-w-[60ch] text-lg text-ink-3">
-          {published ? PRICING_TEASER.note : "Crea tu cuenta, conecta tu WhatsApp y revisa los planes dentro de la app. Sin permanencia ni cobros automáticos: cada pago cubre 30 días (o 365 en el plan anual)."}
-        </p>
-        <Link href="/signup" className={buttonClasses("primary", "", "lg")}>
-          Ver planes al crear tu cuenta
-          <ArrowRight aria-hidden className="size-5" />
-        </Link>
+      <Heading id="precios-title" title="Precios claros, sin letra chica." lead="Cada pago cubre 30 días (o 365 en el plan anual). Pagas con criptomonedas, sin tarjeta guardada." />
+      <Reveal>
+        <PricingPlans />
+      </Reveal>
+      <Reveal className="mt-12">
+        <h3 id="mercado-title" className={`${DISPLAY} m-0 mb-4 text-xl font-bold`}>Compáralo con el mercado</h3>
+        <div role="region" aria-labelledby="mercado-title" tabIndex={0} className="overflow-x-auto overscroll-x-contain rounded-[24px] border border-line bg-white focus-visible:outline-2 focus-visible:outline-azure">
+          <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+            <caption className="sr-only">Comparación de Vende+ WSP con el mercado</caption>
+            <thead>
+              <tr>
+                <th scope="col" className="p-4 font-semibold"><span className="sr-only">Concepto</span></th>
+                {MARKET_COLUMNS.map((col, i) => (
+                  <th key={col} scope="col" className={`${DISPLAY} p-4 font-semibold ${i === 1 ? "bg-lime" : ""}`}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {MARKET_ROWS.map(([concept, market, ours]) => (
+                <tr key={concept} className="align-top">
+                  <th scope="row" className="border-t border-line p-4 font-semibold">{concept}</th>
+                  <td className="border-t border-line p-4 text-ink-3">{market}</td>
+                  <td className="border-t border-line bg-lime-soft p-4 font-semibold">{ours}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 mb-0 max-w-[80ch] text-sm text-ink-3"><em>{MARKET_FOOTNOTE}</em></p>
       </Reveal>
     </section>
   );
