@@ -89,15 +89,28 @@ BEGIN
 END
 $fn$;--> statement-breakpoint
 
--- Worker: e-mail addresses of platform admins for critical alerts (policy changes, restrictions).
+-- Worker only: e-mail addresses of platform admins for critical alerts (policy changes, restrictions).
+-- There is no separate worker role, so the caller must open a transaction that sets
+-- app.worker_scope = 'platform_alerts' and carries no tenant/user context. API requests always run
+-- inside withTenant (app.tenant_id / app.user_id set) and never set app.worker_scope, so no API
+-- path can read admin e-mails through this function (ADR 0021).
 CREATE FUNCTION public."platform_alert_recipients"()
 RETURNS TABLE (email text)
-LANGUAGE sql
+LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $fn$
-  SELECT u."email" FROM public."platform_admins" a JOIN public."users" u ON u."id" = a."user_id" ORDER BY a."created_at" LIMIT 20;
+BEGIN
+  IF coalesce(current_setting('app.worker_scope', true), '') <> 'platform_alerts'
+     OR coalesce(current_setting('app.tenant_id', true), '') <> ''
+     OR coalesce(current_setting('app.user_id', true), '') <> '' THEN
+    RAISE EXCEPTION 'platform_alert_recipients is worker-only' USING ERRCODE = '42501';
+  END IF;
+  RETURN QUERY
+    SELECT u."email"::text FROM public."platform_admins" a JOIN public."users" u ON u."id" = a."user_id"
+    ORDER BY a."created_at" LIMIT 20;
+END
 $fn$;--> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public."platform_channel_quality_alerts"(uuid, integer) FROM PUBLIC;--> statement-breakpoint

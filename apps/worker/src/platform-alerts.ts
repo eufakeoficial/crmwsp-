@@ -14,7 +14,11 @@ export async function notifyPlatformAdmins(db: Database, mailer: AlertMailer | u
   if (!mailer) return 0;
   let sent = 0;
   try {
-    const rows = await db.execute<{ email: string }>(sql`select email from public.platform_alert_recipients()`);
+    // The function is worker-only: it requires this transaction-local scope and no tenant context (0078).
+    const rows = await db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.worker_scope', 'platform_alerts', true)`);
+      return tx.execute<{ email: string }>(sql`select email from public.platform_alert_recipients()`);
+    });
     for (const r of rows) {
       try {
         await mailer.send({ to: r.email, subject: subject.slice(0, 200), text: text.slice(0, 20_000) });

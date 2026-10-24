@@ -51,6 +51,11 @@ portafolio, el de otros. La lista de Meta cambia sin aviso, así que las reglas 
   columnas de calidad en `channel_connections`, estado de la plantilla, notificación al dueño
   (`channel_quality`) en advertencia/crítico y e-mail a admins de plataforma en crítico
   (`platform_alert_recipients`). Backoffice: `platform_channel_quality_alerts`.
+- **Correos de admins solo para el worker:** no hay un rol de BD separado para el worker, así que
+  `platform_alert_recipients()` exige `app.worker_scope = 'platform_alerts'` (local a la transacción)
+  y ningún `app.tenant_id`/`app.user_id`; si no, falla con `42501`. Toda petición de la API corre en
+  `withTenant` y ningún código de la API fija ese scope, así que ninguna ruta de la API puede leer
+  esos correos. Un rol `crmwsp_worker` propio queda como mejora futura.
 - **Lagunas:** que el BSP reenvíe estos eventos depende de su suscripción: 360dialog reenvía el
   webhook del canal (eventos de WABA pueden llegar solo al webhook de partner: **no verificado**);
   Gupshup v2 `system-event`/`account-event` sigue ignorado (formato no documentado aquí). Meta no

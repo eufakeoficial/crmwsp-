@@ -11,7 +11,7 @@ function fakeDb(initial: Record<string, Snap> = {}) {
   const text = (q: unknown) => JSON.stringify(q);
   const params = (q: unknown): unknown[] =>
     ((q as { queryChunks: unknown[] }).queryChunks ?? []).filter((c) => typeof c !== "object" || c === null || !("value" in (c as object)));
-  const db = {
+  const db: Database = {
     execute: vi.fn(async (q: unknown) => {
       const s = text(q);
       const p = params(q);
@@ -26,9 +26,11 @@ function fakeDb(initial: Record<string, Snap> = {}) {
         if (had) changes.push(key);
         return [{ id: had ? "chg-1" : null }];
       }
+      if (s.includes("app.worker_scope")) return [];
       if (s.includes("platform_alert_recipients")) return [{ email: "admin@example.test" }];
       throw new Error("unexpected query");
     }),
+    transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)),
   } as unknown as Database;
   return { db, snaps, changes };
 }

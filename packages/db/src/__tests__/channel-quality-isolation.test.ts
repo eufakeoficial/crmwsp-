@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type DbHandle } from "../client.js";
 import { runMigrations } from "../migrate.js";
@@ -89,5 +89,24 @@ describe.skipIf(!hasDb)("channel_quality_events RLS with the app role", () => {
   it("the platform alert list refuses non-admins", async () => {
     const err = await settle(app.sql`select * from public.platform_channel_quality_alerts(${A.tenant}, 30)`);
     expect(err).toBeInstanceOf(Error);
+  });
+
+  it("platform admin e-mails are worker-only", async () => {
+    // Plain app-role call (no worker scope) is refused.
+    expect(await settle(app.sql`select * from public.platform_alert_recipients()`)).toBeInstanceOf(Error);
+    // An API-style tenant transaction is refused even if it forges the scope.
+    const forged = await settle(
+      withTenant(app.db, A.tenant, async (tx) => {
+        await tx.execute(sql`select set_config('app.worker_scope', 'platform_alerts', true)`);
+        return tx.execute(sql`select * from public.platform_alert_recipients()`);
+      }),
+    );
+    expect(forged).toBeInstanceOf(Error);
+    // The worker path (scope set, no tenant) succeeds.
+    const ok = await app.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.worker_scope', 'platform_alerts', true)`);
+      return tx.execute(sql`select * from public.platform_alert_recipients()`);
+    });
+    expect(Array.isArray(ok)).toBe(true);
   });
 });
