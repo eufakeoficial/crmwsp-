@@ -81,6 +81,8 @@ export type InboundWebhookResult =
 
 /** Decrypted per-channel credentials. Never logged nor embedded in errors. */
 export interface WhatsAppConnection {
+  /** BSP of the channel; routers dispatch on it. Absent means "gupshup" (legacy callers). */
+  provider?: "gupshup" | "360dialog";
   apiKey: string;
   appName: string;
   /** Business phone, E.164 (with or without leading "+"). */

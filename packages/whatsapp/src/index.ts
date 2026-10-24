@@ -3,3 +3,8 @@ export * from "./provider.js";
 export * from "./webhook-token.js";
 export { GupshupProvider, GupshupProviderError } from "./gupshup/provider.js";
 export type { GupshupProviderOptions } from "./gupshup/provider.js";
+export { Dialog360Provider, Dialog360ProviderError, templateExternalId, parseTemplateExternalId } from "./dialog360/provider.js";
+export type { Dialog360ProviderOptions } from "./dialog360/provider.js";
+export { RoutingWhatsAppProvider, BSP_HEADER } from "./router.js";
+export type { BspName } from "./router.js";
+export { createDefaultWhatsAppProvider } from "./default.js";

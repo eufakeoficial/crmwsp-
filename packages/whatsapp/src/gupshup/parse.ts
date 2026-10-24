@@ -185,7 +185,8 @@ function parseV2Event(body: unknown): InboundWebhookResult {
   return result;
 }
 
-function parseV3(body: unknown): InboundWebhookResult[] {
+/** Meta Cloud API webhook envelope; also used by the 360dialog adapter, which forwards it unchanged. */
+export function parseV3(body: unknown): InboundWebhookResult[] {
   const env = v3EnvelopeSchema.safeParse(body);
   if (!env.success) return [ignored("invalid v3 envelope")];
   const out: InboundWebhookResult[] = [];
