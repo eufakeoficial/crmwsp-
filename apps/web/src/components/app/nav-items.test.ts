@@ -15,7 +15,7 @@ describe("isActive", () => {
   });
   it("keeps the daily items visible and the rest under Más", () => {
     expect(NAV_MAIN.map((i) => i.label)).toEqual(["Inicio", "Inbox", "Contactos", "Pipeline", "Presupuestos", "Pedidos", "IA"]);
-    expect(NAV_MORE.map((i) => i.label)).toEqual(["Comprobantes", "Rentabilidad", "Campañas", "Productos", "Canales", "Equipo"]);
+    expect(NAV_MORE.map((i) => i.label)).toEqual(["Comprobantes", "Rentabilidad", "Campañas", "Productos", "Canales", "Plantillas de WhatsApp", "Equipo"]);
   });
   it("has unique keys and hrefs across every group", () => {
     const all = [...NAV_MAIN, ...NAV_MORE, ...NAV_SECONDARY];

@@ -1,4 +1,4 @@
-import { AlertCircle, BookOpen, Bot, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, MessageSquareText, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -50,6 +50,7 @@ export const NAV_MORE: readonly NavItem[] = [
   { key: "broadcasts", label: "Campañas", href: "/app/broadcasts", icon: Megaphone },
   { key: "products", label: "Productos", href: "/app/products", icon: Package },
   { key: "channels", label: "Canales", href: "/app/channels", icon: Plug },
+  { key: "wa-templates", label: "Plantillas de WhatsApp", href: "/app/templates", icon: MessageSquareText },
   { key: "team", label: "Equipo", href: "/app/team", icon: Users },
 ];
 
