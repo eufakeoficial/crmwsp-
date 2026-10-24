@@ -20,3 +20,4 @@ export * from "./platform/index.js";
 export * from "./sales-playbook/index.js";
 export * from "./quote-activity/index.js";
 export * from "./bookings/index.js";
+export * from "./support/index.js";
