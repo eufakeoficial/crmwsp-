@@ -36,11 +36,18 @@ export type CreateGupshupChannelRequest = z.infer<typeof createGupshupChannelReq
  * a client id and the connected channel ids. `phoneE164` is only needed when the Hub does not expose it.
  */
 export const connect360dialogRequestSchema = z.object({
-  clientId: z.string().trim().min(1).max(128).optional(),
+  /** Required: every channel id is verified against this client through the Partner API. */
+  clientId: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/),
   channelIds: z.array(z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/)).min(1).max(10),
   phoneE164: e164PhoneSchema.optional(),
+  /** Single-use value issued by POST /channels/360dialog/connect-state before the redirect. */
+  state: z.string().trim().regex(/^[A-Za-z0-9_-]{32,128}$/),
 });
 export type Connect360dialogRequest = z.infer<typeof connect360dialogRequestSchema>;
+
+/** POST /channels/360dialog/connect-state: short-lived, single-use, bound to the tenant + user. */
+export const dialog360ConnectStateSchema = z.object({ state: z.string(), expiresAt: isoDateTimeSchema });
+export type Dialog360ConnectState = z.infer<typeof dialog360ConnectStateSchema>;
 
 /** GET /channels/360dialog/config: lets the web app build the Connect URL without baking the partner id in. */
 export const dialog360ConfigSchema = z.object({ partnerId: z.string().nullable() });

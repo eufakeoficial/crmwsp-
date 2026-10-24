@@ -199,6 +199,8 @@ export const couponRedemptions = pgTable(
       .references(() => subscriptionCharges.id, { onDelete: "cascade" }),
     discountAmount: numeric("discount_amount", { precision: 12, scale: 2 }).notNull().default("0"),
     freeDays: integer("free_days").notNull().default(0),
+    /** Settled after the cap was reached by others (hold expired): recorded, flagged for review (0093). */
+    overCap: boolean("over_cap").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("coupon_redemptions_tenant_idx").on(t.tenantId, t.createdAt)],

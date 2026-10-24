@@ -108,6 +108,7 @@ export class PlatformCouponsService {
         free_days: number;
         price_amount: string;
         created_at: Date;
+        over_cap: boolean | null;
       }[]
     >`select * from public.platform_coupon_redemptions(${actor}, ${couponId}::uuid)`.catch(mapDbError);
     return {
@@ -121,6 +122,7 @@ export class PlatformCouponsService {
         freeDays: r.free_days,
         priceAmount: r.price_amount,
         createdAt: new Date(r.created_at).toISOString(),
+        overCap: r.over_cap === true,
       })),
     };
   }

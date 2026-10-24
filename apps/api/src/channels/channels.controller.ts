@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import type { CipherBox } from "@crmwsp/crypto";
 import { redact } from "@crmwsp/crypto";
@@ -18,11 +19,12 @@ import {
   type Channel,
   type ChannelListResponse,
   type Dialog360Config,
+  type Dialog360ConnectState,
   type MessageTemplateDto,
   type MessageTemplateListResponse,
   type SyncTemplatesResponse,
 } from "@crmwsp/contracts";
-import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, type ChannelConnection, type MessageTemplate, type Transaction } from "@crmwsp/db";
+import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, sql, type ChannelConnection, type MessageTemplate, type Transaction } from "@crmwsp/db";
 import { lintTemplate } from "@crmwsp/domain";
 import { planTemplateSync } from "../templates/sync-plan.js";
 import { generateWebhookToken, type Dialog360PartnerClient, type WhatsAppProvider } from "@crmwsp/whatsapp";
@@ -63,6 +65,14 @@ function toTemplateDto(row: MessageTemplate): MessageTemplateDto {
 }
 
 const ADMIN_ROLES =new Set(["owner", "admin"]);
+
+/** Lifetime of a 360dialog Connect `state` (the user completes Embedded Signup within it). */
+export const CONNECT_STATE_TTL_SECONDS = 900;
+
+/** SHA-256 of the connect state: the raw value never reaches the database. */
+export function hashConnectState(state: string): Buffer {
+  return createHash("sha256").update(state, "utf8").digest();
+}
 
 /** The part of PlanLimitsService the channels need (stubbed in unit tests). */
 export type ChannelPlanLimits = Pick<PlanLimitsService, "assert" | "lock" | "startTrialIfEligible">;
@@ -171,6 +181,26 @@ export class ChannelsController {
   }
 
   /**
+   * Issues the single-use `state` the web app puts in the Connect redirect. Only its SHA-256 is stored,
+   * bound to this tenant + user, valid for CONNECT_STATE_TTL_SECONDS.
+   */
+  @Post("360dialog/connect-state")
+  @Roles("owner", "admin")
+  @HttpCode(200)
+  async dialog360ConnectState(@CurrentTenantDb() db: TenantDb): Promise<Dialog360ConnectState> {
+    if (!this.partner) throw new EncryptionNotConfiguredError("360dialog partner credentials are not configured");
+    const state = randomBytes(32).toString("base64url");
+    const expiresAt = await db.run(async (tx) => {
+      const [r] = await tx.execute<{ e: string | null }>(
+        sql`select public.channel_connect_state_issue('360dialog', ${hashConnectState(state)}, ${CONNECT_STATE_TTL_SECONDS})::text as e`,
+      );
+      return r?.e ?? null;
+    });
+    if (!expiresAt) throw new Error("connect state could not be issued");
+    return { state, expiresAt: new Date(expiresAt).toISOString() };
+  }
+
+  /**
    * 360dialog Connect callback (Embedded Signup, Coexistence): for each connected channel, creates its API
    * key through the Partner API, stores it encrypted, points the channel webhook at our tokenized URL and
    * creates the channel_connections row. Channels already connected for this tenant are returned untouched
@@ -186,6 +216,37 @@ export class ChannelsController {
     const partner = this.partner;
     if (!partner) throw new EncryptionNotConfiguredError("360dialog partner credentials are not configured");
     const channelIds = [...new Set(input.channelIds)];
+    const stateHash = hashConnectState(input.state);
+
+    // 1) The redirect must carry a state this tenant + user was issued (unused, unexpired).
+    const stateOk = await db.run(async (tx) => {
+      const [r] = await tx.execute<{ ok: boolean }>(sql`select public.channel_connect_state_check('360dialog', ${stateHash}) as ok`);
+      return r?.ok === true;
+    });
+    if (!stateOk) throw new ForbiddenError("Invalid or expired 360dialog connect state", { details: { reason: "connect_state_invalid" } });
+
+    // 2) Cross-tenant ownership, before ANY Partner API call: minting a key for a channel connected by
+    // another tenant would revoke its key and hijack its inbound traffic.
+    const ownedElsewhere = await db.run(async (tx) => {
+      const rows = await tx.execute<{ id: string }>(
+        sql`select x as id from public.channel_external_owned_elsewhere('360dialog', ARRAY[${sql.join(channelIds.map((id) => sql`${id}`), sql`, `)}]::text[]) as x`,
+      );
+      return [...rows].map((r) => r.id);
+    });
+    if (ownedElsewhere.length > 0) {
+      await db.run((tx) =>
+        writeAudit(tx, {
+          tenantId: db.tenantId,
+          userId: db.userId,
+          entity: "tenant",
+          entityId: db.tenantId,
+          action: "channel.connect_refused",
+          diff: { provider: "360dialog", reason: "owned_by_another_tenant", channelIds: ownedElsewhere, clientId: input.clientId },
+          ip: req.ip,
+        }),
+      );
+      throw new ConflictError("This 360dialog channel is already connected to another account", { details: { reason: "channel_owned_elsewhere" } });
+    }
 
     const existing = await db.run((tx) =>
       tx
@@ -195,15 +256,43 @@ export class ChannelsController {
     );
     const known = new Set(existing.map((r) => r.externalAppId));
     const items: ChannelConnection[] = [...existing];
-    const toCreate = channelIds.filter((id) => !known.has(id)).length;
+    const pending = channelIds.filter((id) => !known.has(id));
     // Fail before any Partner API call: an API key must not be minted for a channel we cannot store.
-    if (toCreate > 0) await this.assertCategory(db);
-    if (toCreate > 0) await db.run((tx) => this.limits.assert(db.tenantId, "whatsapp_numbers", toCreate, tx));
+    if (pending.length > 0) await this.assertCategory(db);
+    if (pending.length > 0) await db.run((tx) => this.limits.assert(db.tenantId, "whatsapp_numbers", pending.length, tx));
 
-    for (const channelId of channelIds) {
-      if (known.has(channelId)) continue;
-      const phone = (await partner.findChannelPhone(channelId)) ?? (channelIds.length === 1 ? input.phoneE164 : undefined);
+    // 3) Read-only Partner check: every new channel must belong to the client of this redirect.
+    const phones = new Map<string, string>();
+    for (const channelId of pending) {
+      const info = await partner.getChannel(channelId);
+      if (!info || info.clientId !== input.clientId) {
+        await db.run((tx) =>
+          writeAudit(tx, {
+            tenantId: db.tenantId,
+            userId: db.userId,
+            entity: "tenant",
+            entityId: db.tenantId,
+            action: "channel.connect_refused",
+            diff: { provider: "360dialog", reason: "client_mismatch", channelId, clientId: input.clientId },
+            ip: req.ip,
+          }),
+        );
+        throw new ForbiddenError("The 360dialog channel does not belong to this client", { details: { reason: "channel_client_mismatch" } });
+      }
+      const phone = info.phone ?? (channelIds.length === 1 ? input.phoneE164 : undefined);
       if (!phone) throw new ValidationError("phoneE164 is required: the phone number of the channel could not be determined");
+      phones.set(channelId, phone);
+    }
+
+    // 4) Consume the state atomically right before minting keys: a replay cannot mint again.
+    const consumed = await db.run(async (tx) => {
+      const [r] = await tx.execute<{ ok: boolean }>(sql`select public.channel_connect_state_consume('360dialog', ${stateHash}) as ok`);
+      return r?.ok === true;
+    });
+    if (!consumed) throw new ForbiddenError("Invalid or expired 360dialog connect state", { details: { reason: "connect_state_invalid" } });
+
+    for (const channelId of pending) {
+      const phone = phones.get(channelId) as string;
       const apiKey = await partner.createChannelApiKey(channelId);
       const webhookToken = generateWebhookToken();
       await partner.setWebhook(apiKey, webhookUrlFor(webhookToken, "360dialog"));

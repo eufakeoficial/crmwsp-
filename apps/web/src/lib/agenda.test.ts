@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { addDays, dateKeyInTz, formatTimeIn, groupByDay, mondayOf, weekDates, zonedDayRange, zonedInstant, zonedMidnight } from "./agenda";
+import { END_OF_DAY, addDays, dateKeyInTz, endTimeFromInput, endTimeToInput, formatTimeIn, groupByDay, mondayOf, weekDates, zonedDayRange, zonedInstant, zonedMidnight } from "./agenda";
+
+describe("end-of-day times (F10)", () => {
+  it("round-trips 24:00 through the time input without becoming 23:59", () => {
+    expect(endTimeToInput(END_OF_DAY)).toBe("00:00");
+    expect(endTimeFromInput(endTimeToInput(END_OF_DAY))).toBe("24:00");
+    expect(endTimeFromInput(endTimeToInput("23:59"))).toBe("23:59");
+    expect(endTimeFromInput("18:30")).toBe("18:30");
+  });
+  it("24:00 of a day is midnight of the next one", () => {
+    expect(zonedInstant("2026-03-02", END_OF_DAY, "UTC").toISOString()).toBe("2026-03-03T00:00:00.000Z");
+    expect(zonedInstant("2026-03-02", END_OF_DAY, "America/Lima").toISOString()).toBe("2026-03-03T05:00:00.000Z");
+  });
+});
 
 describe("zonedMidnight", () => {
   it("returns local midnight as a UTC instant", () => {

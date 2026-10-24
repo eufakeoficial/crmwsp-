@@ -44,6 +44,9 @@ export const PASSWORD_RESET_TTL_SECONDS = 30 * 60;
 const isUniqueViolation = (err: unknown): boolean => (err as { code?: unknown } | null)?.code === "23505";
 
 /** Pseudonymous email reference for logs/audit: sha256(lowercased email), first 16 hex chars. */
+/** Password reset requests per email (any IP): 3 per hour. */
+export const FORGOT_PASSWORD_EMAIL_RATE_LIMIT = { limit: 3, windowMs: 60 * 60 * 1000 } as const;
+
 export const hashEmail = (email: string): string =>
   createHash("sha256").update(email.trim().toLowerCase(), "utf8").digest("hex").slice(0, 16);
 
@@ -54,6 +57,8 @@ export class AuthService implements OnModuleInit {
   private readonly logger = new Logger("Auth");
   private readonly limiter: StoreRateLimiter;
   private readonly ipLimiter: StoreRateLimiter;
+  /** Per email, independent of IP: caps reset mails a rotating-IP attacker can trigger. */
+  private readonly forgotEmailLimiter: StoreRateLimiter;
   private readonly backoff: AccountBackoff;
   private dummyHash = "";
 
@@ -69,6 +74,7 @@ export class AuthService implements OnModuleInit {
   ) {
     this.limiter = new StoreRateLimiter(rateLimit, store, "auth");
     this.ipLimiter = new StoreRateLimiter(ipRateLimit, store, "auth");
+    this.forgotEmailLimiter = new StoreRateLimiter(FORGOT_PASSWORD_EMAIL_RATE_LIMIT, store, "auth");
     this.backoff = new AccountBackoff(store, backoff);
   }
 
@@ -160,6 +166,12 @@ export class AuthService implements OnModuleInit {
       await this.ipLimiter.consume(`ip:${client.ip ?? "-"}`);
       await this.limiter.consume(`forgot:${client.ip ?? "-"}:${input.email}`);
     });
+    // Over the per-email cap the request is silently dropped (same 200 as always): no 429 that a
+    // third party could use to block the owner's reset, and no mail flood from rotating IPs.
+    if (!(await this.forgotEmailLimiter.hit(`forgot-email:${hashEmail(input.email)}`))) {
+      this.logger.warn({ event: "auth.password_reset_email_limited", email: hashEmail(input.email), ip: client.ip });
+      return;
+    }
     const token = newSessionToken();
     const row = await this.repo.requestPasswordReset(input.email, hashSessionToken(token), PASSWORD_RESET_TTL_SECONDS, client.ip);
     this.logger.log({ event: "auth.password_reset_requested", email: hashEmail(input.email), ip: client.ip, knownUser: Boolean(row) });

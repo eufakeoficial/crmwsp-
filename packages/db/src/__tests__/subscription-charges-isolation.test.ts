@@ -79,6 +79,19 @@ describe.skipIf(!hasDb)("subscription charges (NOWPayments) isolation and settle
     expect(seenByA.map((r) => r.id)).not.toContain(b);
   });
 
+  it("refuses a charge whose list price is not the plan's (0094)", async () => {
+    for (const [plan, price, days] of [["pro", "1.00", 30], ["start", "89.00", 30], ["pro", "89.00", 365]] as const) {
+      const err = await settle(createCharge(tenantA, plan, price, days));
+      expect(pgCode(err)).toBe("22023");
+    }
+    const [row] = await app.db.execute<{ s: string; sa: string; p: string; pa: string }>(
+      sql`select public.subscription_plan_list_price('start', 30)::text as s, public.subscription_plan_list_price('start', 365)::text as sa,
+                 public.subscription_plan_list_price('pro', 30)::text as p, public.subscription_plan_list_price('pro', 365)::text as pa`,
+    );
+    // Mirrors PLANS in @crmwsp/billing (pinned there by plans-sql-sync test).
+    expect(row).toEqual({ s: "49.00", sa: "490.00", p: "89.00", pa: "890.00" });
+  });
+
   it("annual charges are isolated too and the app role cannot rewrite period_days", async () => {
     const a = await createCharge(tenantA, "pro", "890.00", 365);
     const seenByB = await withTenant(app.db, tenantB, (tx) => tx.select({ id: subscriptionCharges.id }).from(subscriptionCharges));

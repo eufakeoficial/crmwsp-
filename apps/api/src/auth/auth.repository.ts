@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { MembershipRole, TenantStatus } from "@crmwsp/contracts";
-import { auditEvents, withTenant } from "@crmwsp/db";
+import { auditEvents, sql, withTenant } from "@crmwsp/db";
 import { DB_HANDLE, type DbHandle } from "../common/http.js";
 
 export interface LoginRow {
@@ -53,12 +53,15 @@ export class AuthRepository {
 
   /** `tenant_signup_signals_record` (0069): signup IP + normalized email of a new tenant. */
   async recordSignupSignals(tenantId: string, ip: string | null, emailNormalized: string | null): Promise<void> {
-    await this.handle.sql`select public.tenant_signup_signals_record(${tenantId}::uuid, ${ip}::inet, ${emailNormalized})`;
+    // 0094: the function only acts for the tenant of the transaction context.
+    await withTenant(this.handle.db, tenantId, (tx) =>
+      tx.execute(sql`select public.tenant_signup_signals_record(${tenantId}::uuid, ${ip}::inet, ${emailNormalized})`),
+    );
   }
 
   /** `tenant_referral_record` (0072): who referred a new tenant; unknown/self codes are ignored. */
   async recordReferral(tenantId: string, code: string): Promise<void> {
-    await this.handle.sql`select public.tenant_referral_record(${tenantId}::uuid, ${code})`;
+    await withTenant(this.handle.db, tenantId, (tx) => tx.execute(sql`select public.tenant_referral_record(${tenantId}::uuid, ${code})`));
   }
 
   /** `password_reset_request` (0074): no row for unknown emails / accounts without a password. */

@@ -40,7 +40,7 @@ export function dueLifecycleEmails(s: LifecycleEmailSnapshot, now: Date): Lifecy
     if (Number.isNaN(end)) return out;
     const daysToEnd = Math.round((end - utcDay(now)) / DAY_MS);
     if (daysToEnd >= 0 && daysToEnd <= RENEWAL_NOTICE_DAYS) {
-      out.push({ template: "pago-por-vencer", dedupeKey: `renewal-due:${s.tenantId}:${s.paidUntil}`, dueDate: s.paidUntil, daysLeft: Math.max(1, daysToEnd) });
+      out.push({ template: "pago-por-vencer", dedupeKey: `renewal-due:${s.tenantId}:${s.paidUntil}`, dueDate: s.paidUntil, daysLeft: daysToEnd });
     }
     // Restricted from the first UTC day after the grace period (subscriptionAccess).
     const since = end + (SUBSCRIPTION_GRACE_DAYS + 1) * DAY_MS;
