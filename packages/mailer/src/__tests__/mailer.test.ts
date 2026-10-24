@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import { describe, expect, it, vi } from "vitest";
-import { MailerError, NoopMailer, SmtpMailer, createMailerFromEnv, escapeHtml, renderEmail } from "../index.js";
+import { MailerError, NoopMailer, SmtpMailer, createMailerFromEnv, escapeHtml, templateMessage } from "../index.js";
 
 describe("SmtpMailer", () => {
   it("sends through a transport and returns the messageId", async () => {
@@ -36,19 +36,8 @@ describe("createMailerFromEnv", () => {
   });
 });
 
-describe("renderEmail", () => {
-  it("escapes HTML and drops non-http CTA urls", () => {
-    const { html, text } = renderEmail({ title: "<b>T</b>", body: "a & <script>", ctaLabel: "Ir", ctaUrl: "javascript:alert(1)" });
-    expect(html).not.toContain("<script>");
-    expect(html).toContain("&lt;b&gt;T&lt;/b&gt;");
-    expect(html).not.toContain("javascript:");
-    expect(text).not.toContain("javascript:");
-  });
-
-  it("renders a CTA with escaped url", () => {
-    const { html, text } = renderEmail({ title: "T", body: "B", ctaLabel: "Ver", ctaUrl: "https://x.test/?a=1&b=\"2\"" });
-    expect(html).toContain("&amp;b=&quot;2&quot;");
-    expect(text).toContain("Ver: https://x.test");
+describe("escapeHtml", () => {
+  it("escapes quotes", () => {
     expect(escapeHtml("'")).toBe("&#39;");
   });
 });
@@ -56,7 +45,9 @@ describe("renderEmail", () => {
 describe.skipIf(!process.env.SMTP_HOST)("Mailpit integration", () => {
   it("delivers a real email", async () => {
     const mailer = createMailerFromEnv();
-    const res = await mailer.send({ to: "dest@crmwsp.test", subject: "Prueba T26", ...renderEmail({ title: "Prueba", body: "Hola desde CRMWSP" }) });
+    const res = await mailer.send(
+      templateMessage("dest@crmwsp.test", "notificacion-generica", { title: "Prueba T26", body: "Hola desde Vende+", appUrl: "https://www.vendemas.chat/app" }, { siteUrl: "https://www.vendemas.chat", assetsUrl: "https://www.vendemas.chat/brand" }),
+    );
     expect(res.messageId).toBeTruthy();
   });
 });

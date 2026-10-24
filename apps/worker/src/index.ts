@@ -15,7 +15,7 @@ import { META_ADS_QUEUE_NAME, createMetaAdsWorker, scheduleMetaAdsTick, type Met
 import { BROADCAST_QUEUE_NAME, createBroadcastWorker, scheduleBroadcastTick } from "./broadcasts/index.js";
 import { TEMPLATE_SYNC_QUEUE_NAME, createTemplateSyncWorker, scheduleTemplateSyncTick } from "./templates/index.js";
 import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
-import { createMailerFromEnv, renderEmail } from "@crmwsp/mailer";
+import { createMailerFromEnv, emailContextFromEnv, siteLink, templateMessage } from "@crmwsp/mailer";
 import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotificationTick } from "./notifications/index.js";
 import { OWNER_MODE_QUEUE_NAME, createOwnerInterpreter, createOwnerModeWorker, createOwnerSender } from "./owner-mode/index.js";
 import { WEBHOOK_QUEUE_NAME, createWebhookSender, createWebhookWorker, scheduleWebhookTick } from "./webhooks/index.js";
@@ -108,13 +108,10 @@ function main(): void {
     ...(process.env.TRIAL_IDENTITY_SECRET ? { trialIdentitySecret: process.env.TRIAL_IDENTITY_SECRET } : {}),
     sendSetupReminder: async (r) => {
       const days = Math.max(1, Math.ceil((r.setupEndsAt.getTime() - Date.now()) / 86_400_000));
-      const title = `Conecta tu WhatsApp: te quedan ${days} ${days === 1 ? "día" : "días"} para empezar tu prueba`;
-      const { text, html } = renderEmail({
-        title,
-        body: `${r.tenantName} todavía no tiene un número de WhatsApp conectado. Conéctalo para empezar tus 7 días de prueba gratuita; si no, la cuenta pasará a solo lectura.`,
-        ...(process.env.PUBLIC_WEB_URL ? { ctaLabel: "Conectar WhatsApp", ctaUrl: `${process.env.PUBLIC_WEB_URL}/app/channels` } : {}),
-      });
-      await createMailerFromEnv().send({ to: r.ownerEmail, subject: title, text, html });
+      const ctx = emailContextFromEnv();
+      await createMailerFromEnv().send(
+        templateMessage(r.ownerEmail, "recordatorio-conecta-whatsapp", { tenantName: r.tenantName, days, connectUrl: siteLink(ctx, "/app/channels") }, ctx),
+      );
     },
   });
   subscriptionWorker.on("failed", (job, err) =>
@@ -232,12 +229,8 @@ function main(): void {
       sendOwnerText: createOwnerSender({ db: db.db, provider: createDefaultWhatsAppProvider(), cipher }),
       sendOwnerEmail: async (msg) => {
         if (!msg.to) return;
-        const { text, html } = renderEmail({
-          title: msg.title,
-          body: msg.body ?? "",
-          ...(process.env.PUBLIC_WEB_URL ? { ctaLabel: "Abrir CRMWSP", ctaUrl: `${process.env.PUBLIC_WEB_URL}/app` } : {}),
-        });
-        await mailer.send({ to: msg.to, subject: msg.title, text, html });
+        const ctx = emailContextFromEnv();
+        await mailer.send(templateMessage(msg.to, "notificacion-generica", { title: msg.title, body: msg.body ?? "", appUrl: siteLink(ctx, "/app") }, ctx));
       },
       logger,
     });

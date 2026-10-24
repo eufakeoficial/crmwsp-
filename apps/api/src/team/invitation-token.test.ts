@@ -13,7 +13,7 @@ describe("invitation token", () => {
     const e = invitationEmail({ tenantName: "Acme", role: "agent", inviterName: "Olga", link: "https://w/invite/x" });
     expect(e.subject).toBe("Invitación para unirte a Acme");
     expect(e.text).toContain("Olga te ha invitado");
-    expect(e.text).toContain("como Agente");
+    expect(e.text).toContain("como agente");
     expect(e.text).toContain("https://w/invite/x");
     expect(e.html).toContain("https://w/invite/x");
   });

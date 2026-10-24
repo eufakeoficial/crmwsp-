@@ -125,28 +125,6 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export interface EmailTemplateInput {
-  title: string;
-  body: string;
-  ctaLabel?: string;
-  ctaUrl?: string;
-}
-
-/** Tiny Spanish transactional template. Only http(s) CTA URLs are rendered. */
-export function renderEmail(input: EmailTemplateInput): { text: string; html: string } {
-  const cta = input.ctaLabel && input.ctaUrl && /^https?:\/\//i.test(input.ctaUrl) ? { label: input.ctaLabel, url: input.ctaUrl } : null;
-  const text = [input.title, "", input.body, ...(cta ? ["", `${cta.label}: ${cta.url}`] : []), "", "— CRMWSP"].join("\n");
-  const paragraphs = input.body
-    .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 12px">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
-    .join("");
-  const button = cta
-    ? `<p style="margin:20px 0"><a href="${escapeHtml(cta.url)}" style="background:#16a34a;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">${escapeHtml(cta.label)}</a></p>`
-    : "";
-  const html = `<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;color:#111;max-width:560px;margin:0 auto;padding:16px"><h2 style="margin:0 0 16px">${escapeHtml(input.title)}</h2>${paragraphs}${button}<p style="color:#666;font-size:12px;margin-top:24px">CRMWSP</p></body></html>`;
-  return { text, html };
-}
-
 /** Public brand assets served by apps/web (apps/web/public/brand). Emails need an absolute https URL. */
 export const DEFAULT_EMAIL_ASSETS_URL = "https://www.vendemas.chat/brand";
 

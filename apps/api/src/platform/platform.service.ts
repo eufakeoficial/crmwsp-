@@ -34,7 +34,7 @@ import {
   ValidationError,
 } from "@crmwsp/contracts";
 import { currentMonthUtc, dayRangeUtc, estimateMrr, microCentsToUsd } from "@crmwsp/domain";
-import { type Mailer, renderEmail } from "@crmwsp/mailer";
+import { type Mailer, emailContextFromEnv, siteLink, templateMessage } from "@crmwsp/mailer";
 import { pgCode } from "../inbox/audit.js";
 import { publicWebUrl } from "../team/invitation-token.js";
 import { PlatformRepository } from "./platform.repository.js";
@@ -259,36 +259,21 @@ export class PlatformService {
 
   /** Best effort: a mail failure never undoes the (already audited) status change. */
   private async notifyOwner(to: string, ownerName: string | null, tenantName: string, action: string, reason: string | null): Promise<void> {
-    const hello = ownerName ? `Hola ${ownerName},` : "Hola,";
-    const copy: Record<string, { subject: string; title: string; body: string; cta?: string }> = {
-      approve: {
-        subject: `Tu cuenta ${tenantName} está aprobada`,
-        title: "Cuenta aprobada",
-        body: `${hello}\n\nHemos revisado y aprobado la cuenta de ${tenantName}. Ya puedes conectar tus canales y usar la IA.`,
-        cta: "Entrar al panel",
-      },
-      reject: {
-        subject: `Tu solicitud para ${tenantName} no fue aprobada`,
-        title: "Solicitud no aprobada",
-        body: `${hello}\n\nTras revisar la cuenta de ${tenantName}, no podemos aprobarla por ahora.${reason ? `\n\nMotivo: ${reason}` : ""}\n\nSi crees que es un error, responde a este correo.`,
-      },
-      suspend: {
-        subject: `La cuenta ${tenantName} está suspendida`,
-        title: "Cuenta suspendida",
-        body: `${hello}\n\nHemos suspendido la cuenta de ${tenantName}. Mientras siga suspendida no se procesan mensajes ni se usa la IA.${reason ? `\n\nMotivo: ${reason}` : ""}\n\nResponde a este correo para regularizarla.`,
-      },
-    };
-    const c = copy[action];
-    if (!c) return;
+    const ctx = emailContextFromEnv();
+    const message =
+      action === "approve"
+        ? templateMessage(to, "cuenta-aprobada", { name: ownerName, tenantName, appUrl: siteLink(ctx, "/app") }, ctx)
+        : action === "reject"
+          ? templateMessage(to, "cuenta-rechazada", { name: ownerName, tenantName, reason }, ctx)
+          : action === "suspend"
+            ? templateMessage(to, "cuenta-suspendida", { name: ownerName, tenantName, reason }, ctx)
+            : null;
+    if (!message) return;
     try {
-      const { text, html } = renderEmail({
-        title: c.title,
-        body: c.body,
-        ...(c.cta ? { ctaLabel: c.cta, ctaUrl: `${publicWebUrl()}/app` } : {}),
-      });
-      await this.mailer.send({ to, subject: c.subject.slice(0, 200), text, html });
+      await this.mailer.send(message);
     } catch (err) {
       this.logger.warn(`platform status mail failed: ${(err as Error).name}`);
     }
   }
+
 }
