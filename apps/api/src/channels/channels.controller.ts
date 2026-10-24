@@ -17,13 +17,14 @@ import {
   type Dialog360Config,
   type MessageTemplateDto,
 } from "@crmwsp/contracts";
-import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, type ChannelConnection } from "@crmwsp/db";
+import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, type ChannelConnection, type Transaction } from "@crmwsp/db";
 import { generateWebhookToken, type Dialog360PartnerClient, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import type { HttpRequest, RequestTenant } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
+import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import { PG_UNIQUE_VIOLATION, pgCode, writeAudit } from "../inbox/audit.js";
 import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_API_KEY_PURPOSE, webhookUrlFor } from "./channels.constants.js";
 
@@ -38,14 +39,24 @@ function redactedHint(row: ChannelConnection, cipher: CipherBox): string | null 
 
 const ADMIN_ROLES = new Set(["owner", "admin"]);
 
+/** The part of PlanLimitsService the channels need (stubbed in unit tests). */
+export type ChannelPlanLimits = Pick<PlanLimitsService, "assert" | "lock">;
+
 @Controller("channels")
 @UseGuards(TenantGuard)
 export class ChannelsController {
   constructor(
     @Inject(CIPHER_BOX) private readonly cipher: CipherBox | null,
     @Inject(CHANNEL_PROVIDER) private readonly provider: WhatsAppProvider,
-    @Inject(DIALOG360_PARTNER) private readonly partner: Dialog360PartnerClient | null = null,
+    @Inject(DIALOG360_PARTNER) private readonly partner: Dialog360PartnerClient | null,
+    @Inject(PlanLimitsService) private readonly limits: ChannelPlanLimits,
   ) {}
+
+  /** Every active (non-disabled) channel uses one `whatsapp_numbers` unit of the plan. */
+  private async assertNumbers(tx: Transaction, tenantId: string, amount: number): Promise<void> {
+    await this.limits.lock(tx, tenantId, "whatsapp_numbers");
+    await this.limits.assert(tenantId, "whatsapp_numbers", amount, tx);
+  }
 
   private apiKeyHint(row: ChannelConnection): string | null {
     if (!this.cipher || !row.credentialsEncrypted) return null;
@@ -81,6 +92,7 @@ export class ChannelsController {
     const partnerToken = input.partnerToken ? this.cipher.encrypt(input.partnerToken, { tenantId: db.tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE }) : null;
     try {
       const row = await db.run(async (tx) => {
+        await this.assertNumbers(tx, db.tenantId, 1);
         const [created] = await tx
           .insert(channelConnections)
           .values({
@@ -145,6 +157,9 @@ export class ChannelsController {
     );
     const known = new Set(existing.map((r) => r.externalAppId));
     const items: ChannelConnection[] = [...existing];
+    const toCreate = channelIds.filter((id) => !known.has(id)).length;
+    // Fail before any Partner API call: an API key must not be minted for a channel we cannot store.
+    if (toCreate > 0) await db.run((tx) => this.limits.assert(db.tenantId, "whatsapp_numbers", toCreate, tx));
 
     for (const channelId of channelIds) {
       if (known.has(channelId)) continue;
@@ -156,6 +171,7 @@ export class ChannelsController {
       const credentials = cipher.encrypt(apiKey, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
       try {
         const row = await db.run(async (tx) => {
+          await this.assertNumbers(tx, db.tenantId, 1);
           const [created] = await tx
             .insert(channelConnections)
             .values({
@@ -395,6 +411,8 @@ export class ChannelsController {
         .where(eq(channelConnections.id, id))
         .for("update");
       if (!before) throw new NotFoundError();
+      // Re-enabling a disabled channel takes a number slot again.
+      if (before.status === "disabled" && input.status !== "disabled") await this.assertNumbers(tx, db.tenantId, 1);
       const [updated] = await tx
         .update(channelConnections)
         .set({ status: input.status, updatedAt: new Date() })

@@ -56,7 +56,7 @@ const channelRow = (o: Record<string, unknown> = {}) => ({
 function make(provider?: Partial<WhatsAppProvider>, cipher: CipherBox | null = { decrypt: vi.fn((_b: Buffer, ctx: { purpose: string }) => (ctx.purpose === "gupshup_partner_token" ? PARTNER : SECRET)), encrypt: vi.fn(() => Buffer.from("cipher")) } as unknown as CipherBox) {
   const submitTemplate = vi.fn(async () => ({ externalId: "tpl-9", status: "pending" as const }));
   const p = { submitTemplate, ...provider } as unknown as WhatsAppProvider;
-  return { controller: new ChannelsController(cipher, p), submitTemplate, cipher };
+  return { controller: new ChannelsController(cipher, p, null, { assert: vi.fn(async () => undefined), lock: vi.fn(async () => undefined) }), submitTemplate, cipher };
 }
 
 const req = { ip: "127.0.0.1" } as unknown as HttpRequest;

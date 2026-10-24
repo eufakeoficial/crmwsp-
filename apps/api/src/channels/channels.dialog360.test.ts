@@ -1,6 +1,6 @@
 import type { CipherBox } from "@crmwsp/crypto";
 import type { Transaction } from "@crmwsp/db";
-import { EncryptionNotConfiguredError, ValidationError } from "@crmwsp/contracts";
+import { EncryptionNotConfiguredError, PlanLimitExceededError, ValidationError } from "@crmwsp/contracts";
 import type { Dialog360PartnerClient, WhatsAppProvider } from "@crmwsp/whatsapp";
 import { describe, expect, it, vi } from "vitest";
 import type { HttpRequest } from "../common/http.js";
@@ -37,11 +37,21 @@ function fakeDb(selects: unknown[][]) {
   return { db, inserts };
 }
 
-function make(partner: Partial<Dialog360PartnerClient> | null, cipher: CipherBox | null = null) {
+/** Plan limit stub: allows up to `free` more numbers. */
+function limitsStub(free = 10) {
+  return {
+    lock: vi.fn(async () => undefined),
+    assert: vi.fn(async (_t: string, key: string, amount = 1) => {
+      if (amount > free) throw new PlanLimitExceededError(`Plan Start: ${key} limit_reached`, { details: { key, reason: "limit_reached" } });
+    }),
+  };
+}
+
+function make(partner: Partial<Dialog360PartnerClient> | null, cipher: CipherBox | null = null, limits = limitsStub()) {
   const c =
     cipher ??
     ({ encrypt: vi.fn(() => Buffer.from("cipher")), decrypt: vi.fn(() => API_KEY) } as unknown as CipherBox);
-  return { controller: new ChannelsController(c, {} as WhatsAppProvider, partner as Dialog360PartnerClient | null), cipher: c };
+  return { controller: new ChannelsController(c, {} as WhatsAppProvider, partner as Dialog360PartnerClient | null, limits), cipher: c, limits };
 }
 
 const req = { ip: "127.0.0.1" } as unknown as HttpRequest;
@@ -112,10 +122,37 @@ describe("POST /channels/360dialog/connect", () => {
     expect(inserts[0]).toMatchObject({ phoneE164: "+5491166667777" });
   });
 
+  it("refuses with 402 before minting any API key when the plan has no free number", async () => {
+    const partner = partnerStub();
+    const { controller } = make(partner as unknown as Dialog360PartnerClient, null, limitsStub(0));
+    const { db, inserts } = fakeDb([[]]);
+    await expect(controller.connect360dialog(db, { channelIds: ["CH1"] }, req)).rejects.toBeInstanceOf(PlanLimitExceededError);
+    expect(partner.createChannelApiKey).not.toHaveBeenCalled();
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("checks the number limit again inside the insert transaction, under the per-tenant lock", async () => {
+    const partner = partnerStub();
+    const { controller, limits } = make(partner as unknown as Dialog360PartnerClient);
+    await controller.connect360dialog(fakeDb([[]]).db, { channelIds: ["CH1"] }, req);
+    expect(limits.lock).toHaveBeenCalledWith(expect.anything(), TENANT, "whatsapp_numbers");
+    expect(limits.assert).toHaveBeenLastCalledWith(TENANT, "whatsapp_numbers", 1, expect.anything());
+  });
+
   it("rejects malformed channel ids and unconfigured partner credentials", async () => {
     const { controller } = make(partnerStub() as unknown as Dialog360PartnerClient);
     await expect(controller.connect360dialog(fakeDb([]).db, { channelIds: ["../x"] }, req)).rejects.toBeInstanceOf(ValidationError);
     const off = make(null);
     await expect(off.controller.connect360dialog(fakeDb([]).db, { channelIds: ["CH1"] }, req)).rejects.toBeInstanceOf(EncryptionNotConfiguredError);
+  });
+});
+
+describe("POST /channels/gupshup plan limit", () => {
+  it("refuses with 402 and inserts nothing when the plan has no free number", async () => {
+    const { controller } = make(null, null, limitsStub(0));
+    const { db, inserts } = fakeDb([]);
+    const body = { phoneE164: "+5491140000001", appName: "app1", apiKey: "gs_secret_key_123456" };
+    await expect(controller.createGupshup(db, body, req)).rejects.toBeInstanceOf(PlanLimitExceededError);
+    expect(inserts).toHaveLength(0);
   });
 });

@@ -49,6 +49,14 @@ export class PlanLimitsService {
     return tx ? fn(tx) : withTenant(this.handle.db, tenantId, fn);
   }
 
+  /**
+   * Serializes check-then-insert of one limit for a tenant inside `tx` (transaction-scoped
+   * advisory lock), so two concurrent requests cannot both pass `assert` at the cap.
+   */
+  async lock(tx: Transaction, tenantId: string, key: LimitKey): Promise<void> {
+    await tx.execute(sql`select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(${`plan-limit:${key}:${tenantId}`}, 0))`);
+  }
+
   /** Throws `PlanLimitExceededError` (402) if `amount` more units would exceed the plan. Consumes nothing. */
   async assert(tenantId: string, key: LimitKey, amount = 1, tx?: Transaction): Promise<void> {
     const { snapshot, paidUntil } = await this.run(tenantId, tx, async (t) => ({ snapshot: await readPlanUsage(t), paidUntil: await readPaidUntil(t) }));
