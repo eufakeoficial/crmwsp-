@@ -19,6 +19,7 @@ import { ContactDrawer } from "./ContactDrawer";
 import { CONSENT_LABELS, formatWhen } from "./contact-meta";
 import { FilterBuilder } from "./FilterBuilder";
 import { ImportCsvDialog } from "./ImportCsvDialog";
+import { NewContactDialog } from "./NewContactDialog";
 
 const PAGE = 25;
 type Selection = { mode: "ids"; ids: Set<string> } | { mode: "all" };
@@ -52,6 +53,7 @@ export function ContactsView() {
   const [bulkDialog, setBulkDialog] = useState<BulkDialog>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
 
   const loadSidebar = useCallback(async () => {
     try {
@@ -202,6 +204,7 @@ export function ContactsView() {
               <SearchInput label="Buscar contactos" placeholder="Nombre o teléfono" value={draft} onChange={(e) => setDraft(e.target.value)} />
             </form>
             <Button variant="outline" onClick={() => setImportOpen(true)}>Importar CSV</Button>
+            <Button onClick={() => setNewOpen(true)}>Nuevo contacto</Button>
           </div>
 
           <FilterBuilder filter={filter} onChange={setFilter} tags={tags} segments={segments} currency={currency} onSaveSegment={() => setSaveOpen(true)} />
@@ -307,6 +310,22 @@ export function ContactsView() {
       ) : null}
       {saveOpen ? (
         <TextPrompt title="Guardar segmento" label="Nombre del segmento" submitLabel="Guardar" onClose={() => setSaveOpen(false)} onSubmit={(name) => void saveSegment(name)} />
+      ) : null}
+      {newOpen ? (
+        <NewContactDialog
+          onClose={() => setNewOpen(false)}
+          onCreated={(id) => {
+            setNewOpen(false);
+            setNotice("Contacto creado.");
+            void load();
+            void loadSidebar();
+            setOpenId(id);
+          }}
+          onOpenExisting={(id) => {
+            setNewOpen(false);
+            setOpenId(id);
+          }}
+        />
       ) : null}
       {importOpen ? (
         <ImportCsvDialog

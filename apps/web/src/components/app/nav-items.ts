@@ -1,4 +1,4 @@
-import { AlertCircle, BookOpen, Bot, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, CalendarDays, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -40,6 +40,7 @@ export const NAV_MAIN: readonly NavItem[] = [
   { key: "pipeline", label: "Pipeline", href: "/app/pipeline", icon: Kanban },
   { key: "quotes", label: "Presupuestos", href: "/app/quotes", icon: FileText },
   { key: "orders", label: "Pedidos", href: "/app/orders", icon: ShoppingBag },
+  { key: "agenda", label: "Agenda", href: "/app/agenda", icon: CalendarDays },
   { key: "ai", label: "IA", href: "/app/ai", icon: Sparkles, children: AI_CHILDREN },
 ];
 

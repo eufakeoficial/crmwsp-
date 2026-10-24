@@ -12,6 +12,16 @@ export function canManageChannels(role: MembershipRole | undefined): boolean {
   return role === "owner" || role === "admin";
 }
 
+/** Owner and admin configure the agenda (resources, services, hours); the API enforces the same. */
+export function canManageAgenda(role: MembershipRole | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
+/** Owner, admin and agent create, move and cancel bookings; viewers only look. */
+export function canBook(role: MembershipRole | undefined): boolean {
+  return role === "owner" || role === "admin" || role === "agent";
+}
+
 /** Owner and admin edit AI settings, knowledge and approvals. */
 export function canManageAi(role: MembershipRole | undefined): boolean {
   return role === "owner" || role === "admin";
