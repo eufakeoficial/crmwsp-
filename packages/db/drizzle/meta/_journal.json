@@ -483,6 +483,13 @@
       "when": 1792740000000,
       "tag": "0074_email_dispatches_password_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1792770000000,
+      "tag": "0077_business_categories",
+      "breakpoints": true
     }
   ]
 }

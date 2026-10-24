@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, char, check, date, index, inet, jsonb, pgTable, smallint, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, char, check, date, index, inet, integer, jsonb, pgTable, smallint, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
@@ -83,6 +83,18 @@ export const subscriptionPayments = pgTable(
     ),
   ],
 );
+
+/** Business category rules (0077, ADR 0021). Seeded from the Meta policy research; admin-edited. */
+export const businessCategories = pgTable("business_categories", {
+  key: text("key").primaryKey(),
+  label: text("label").notNull(),
+  action: text("action", { enum: ["block", "review", "warn", "allow"] }).notNull(),
+  guidance: text("guidance"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export type PlatformAuditEvent = typeof platformAuditEvents.$inferSelect;
 export type SubscriptionPayment = typeof subscriptionPayments.$inferSelect;

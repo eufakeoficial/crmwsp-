@@ -21,3 +21,4 @@ export * from "./sales-playbook/index.js";
 export * from "./quote-activity/index.js";
 export * from "./bookings/index.js";
 export * from "./signup/index.js";
+export * from "./policies/index.js";

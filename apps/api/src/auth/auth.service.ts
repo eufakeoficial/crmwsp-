@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from "@nestjs/common";
 import { isDisposableEmail, normalizeSignupEmail } from "@crmwsp/domain";
 import {
   ConflictError,
@@ -16,6 +16,7 @@ import {
 import { emailContextFromEnv, siteLink, templateMessage, type MailMessage, type Mailer } from "@crmwsp/mailer";
 import type { RequestUser } from "../common/http.js";
 import { RATE_LIMIT_STORE, type CounterStore } from "../common/rate-limit-store.js";
+import { BusinessCategoryService } from "../settings/business-category.service.js";
 import { AuthRepository, type UserTenantRow } from "./auth.repository.js";
 import { SESSION_TTL_SECONDS } from "./auth.config.js";
 import { hashPassword, verifyPassword } from "./password.js";
@@ -64,6 +65,7 @@ export class AuthService implements OnModuleInit {
     @Inject(RATE_LIMIT_STORE) store: CounterStore,
     @Inject(ACCOUNT_BACKOFF) backoff: BackoffOptions,
     @Inject(AUTH_MAILER) private readonly mailer: Mailer,
+    @Optional() @Inject(BusinessCategoryService) private readonly categories?: BusinessCategoryService,
   ) {
     this.limiter = new StoreRateLimiter(rateLimit, store, "auth");
     this.ipLimiter = new StoreRateLimiter(ipRateLimit, store, "auth");
@@ -82,6 +84,11 @@ export class AuthService implements OnModuleInit {
     });
     // Trial anti-abuse (ADR 0015): throwaway inboxes cannot open accounts (new signups only).
     if (isDisposableEmail(input.email)) throw new ValidationError("Disposable email addresses are not allowed");
+    // Business category (ADR 0021): a blocked rubro never gets an account; checked before creating it.
+    if (input.businessCategory && this.categories) {
+      const decision = await this.categories.decide(input.businessCategory);
+      if (decision.outcome === "refused") throw new ValidationError(decision.message);
+    }
     const passwordHash = await hashPassword(input.password);
     let userId: string;
     let tenantId: string;
@@ -99,6 +106,12 @@ export class AuthService implements OnModuleInit {
       throw err;
     }
     this.logger.log({ event: "auth.signup", userId, tenantId, ip: client.ip });
+    if (input.businessCategory && this.categories) {
+      // Already validated above; a failure here leaves the category unset (the panel asks again).
+      await this.categories.setForNewTenant(tenantId, input.businessCategory, input.businessCategoryDetail ?? null).catch((err: unknown) => {
+        this.logger.warn(`business category not recorded (${err instanceof Error ? err.name : "unknown"})`);
+      });
+    }
     // Multi-account signal for the platform backoffice: a flag only, never a block. Best effort.
     await this.repo.recordSignupSignals(tenantId, client.ip, normalizeSignupEmail(input.email)).catch((err: unknown) => {
       this.logger.warn(`signup signals not recorded (${err instanceof Error ? err.name : "unknown"})`);

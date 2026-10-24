@@ -6,17 +6,19 @@ import { PlatformController, PlatformMeController } from "./platform.controller.
 import { PlatformCouponsController, PlatformCouponsService } from "./platform-coupons.js";
 import { NOWPAYMENTS_BALANCE_CLIENT, PlatformFinanceController, PlatformFinanceService, balanceClientFromEnv } from "./platform-finance.js";
 import { PlatformRepository } from "./platform.repository.js";
+import { PlatformPoliciesController, PlatformPoliciesService } from "./platform-policies.js";
 import { PLATFORM_MAILER, PlatformService } from "./platform.service.js";
 
 @Module({
   imports: [AuthModule],
   // PlatformMeController first: `GET /platform/me` must not hit the admin guard.
-  controllers: [PlatformMeController, PlatformController, PlatformCouponsController, PlatformFinanceController],
+  controllers: [PlatformMeController, PlatformController, PlatformCouponsController, PlatformFinanceController, PlatformPoliciesController],
   providers: [
     PlatformRepository,
     PlatformService,
     PlatformCouponsService,
     PlatformFinanceService,
+    PlatformPoliciesService,
     { provide: NOWPAYMENTS_BALANCE_CLIENT, useFactory: balanceClientFromEnv },
     PlatformAdminGuard,
     { provide: PLATFORM_MAILER, useFactory: () => createMailerFromEnv() },
