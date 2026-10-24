@@ -4,6 +4,7 @@ import {
   platformBusinessCategoryListSchema,
   platformCategoryReviewListSchema,
   platformQualityAlertListSchema,
+  platformPolicyChangeListSchema,
   templateLintResponseSchema,
   type TemplateLintRequest,
   type CategoryReviewDecisionRequest,
@@ -28,6 +29,9 @@ export const policiesPlatformApi = {
   categories: () => request("/platform/business-categories", { schema: platformBusinessCategoryListSchema }),
   upsertCategory: (key: string, body: UpsertBusinessCategoryRequest) =>
     request(`/platform/business-categories/${encodeURIComponent(key)}`, { method: "PUT", body }),
+  policyChanges: (status?: string) => request("/platform/policy-changes", { query: { status }, schema: platformPolicyChangeListSchema }),
+  reviewPolicyChange: (id: string, notes?: string) =>
+    request(`/platform/policy-changes/${encodeURIComponent(id)}/review`, { method: "POST", body: notes ? { notes } : {} }),
   qualityAlerts: (days = 30) => request("/platform/channel-quality-alerts", { query: { days: String(days) }, schema: platformQualityAlertListSchema }),
   reviews: (status?: string) => request("/platform/category-reviews", { query: { status }, schema: platformCategoryReviewListSchema }),
   decide: (tenantId: string, body: CategoryReviewDecisionRequest) =>

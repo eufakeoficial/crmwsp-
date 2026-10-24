@@ -511,6 +511,13 @@
       "when": 1792780000000,
       "tag": "0078_channel_quality_events",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792790000000,
+      "tag": "0079_policy_monitor",
+      "breakpoints": true
     }
   ]
 }

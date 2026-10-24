@@ -24,7 +24,7 @@ aplicar automáticamente cambios de reglas. Sin secretos en logs.
 - [x] T2 — Salvaguardas: opt-in/opt-out (ya existía `consents`; se amplían palabras y se confirma
   una vez), linter de plantillas (TDD), eventos de calidad/estado de Meta (v3) guardados y
   alertados, reglas del agente acotadas al negocio (test).
-- [ ] T3 — Monitor diario de políticas: worker con fetch acotado (timeout, reintentos, tope de
+- [x] T3 — Monitor diario de políticas: worker con fetch acotado (timeout, reintentos, tope de
   tamaño), normalización + SHA-256 + diff (TDD), snapshots y cambios en el backoffice, revisión
   manual por admin.
 
@@ -39,3 +39,6 @@ aplicar automáticamente cambios de reglas. Sin secretos en logs.
 ## Progreso / evidencia
 - T1: tests de dominio 7/7 verdes (escritos junto a la implementación, sin RED aislado); api 195 pass / 173 skip; web 152 pass; typecheck y lint OK. Test de BD `business-categories.test.ts` se salta sin BD local.
 - T2: RED observado (CANCELAR, prompt acotado), GREEN; dominio 289, whatsapp 94, ai 149, worker 130/93 skip, api 196/173 skip, web 152. Ruta inline.
+- Merge de origin/feat/integracion (0075/0076, plantillas): linter enganchado al TemplateFormDialog vía API.
+- T3: TDD normalización/diff (6), worker monitor (5); total: domain 322, api 220/183 skip, worker 139/93 skip, web 179, db 1/312 skip; lint y typecheck OK; falla conocida knowledge parseCsvCatalog.
+- Mirror Engram: pendiente (herramienta no cargada en este agente).

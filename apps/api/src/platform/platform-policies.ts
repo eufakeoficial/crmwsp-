@@ -7,6 +7,10 @@ import {
   categoryReviewDecisionRequestSchema,
   platformCategoryReviewQuerySchema,
   platformQualityAlertQuerySchema,
+  platformPolicyChangeQuerySchema,
+  reviewPolicyChangeRequestSchema,
+  type PlatformPolicyChange,
+  type PlatformPolicyChangeList,
   type PlatformQualityAlert,
   type PlatformQualityAlertList,
   upsertBusinessCategoryRequestSchema,
@@ -94,6 +98,33 @@ export class PlatformPoliciesService {
     };
   }
 
+  async policyChanges(actor: string, status: string | undefined): Promise<PlatformPolicyChangeList> {
+    type Row = {
+      id: string; source_key: string; url: string; diff_summary: string; added_lines: number; removed_lines: number;
+      status: PlatformPolicyChange["status"]; reviewed_by_email: string | null; reviewed_at: Date | null; review_notes: string | null; created_at: Date;
+    };
+    const rows = await this.handle.sql<Row[]>`select * from public.platform_policy_change_list(${actor}, ${status ?? null})`.catch(mapPlatformError);
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        sourceKey: r.source_key,
+        url: r.url,
+        diffSummary: r.diff_summary,
+        addedLines: Number(r.added_lines),
+        removedLines: Number(r.removed_lines),
+        status: r.status,
+        reviewedByEmail: r.reviewed_by_email,
+        reviewedAt: iso(r.reviewed_at),
+        reviewNotes: r.review_notes,
+        createdAt: new Date(r.created_at).toISOString(),
+      })),
+    };
+  }
+
+  async reviewPolicyChange(actor: string, ip: string | null, id: string, notes: string | undefined): Promise<void> {
+    await this.handle.sql`select public.platform_policy_change_review(${actor}, ${id}, ${notes ?? null}, ${ip}::inet)`.catch(mapPlatformError);
+  }
+
   async qualityAlerts(actor: string, days: number | undefined): Promise<PlatformQualityAlertList> {
     type Row = {
       event_id: string; tenant_id: string; tenant_name: string; channel_id: string; provider: string; phone_last4: string; field: string;
@@ -141,6 +172,19 @@ export class PlatformPoliciesController {
   @HttpCode(204)
   upsert(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("key") key: string, @Body() body: unknown): Promise<void> {
     return this.svc.upsertCategory(user.id, req.ip || null, key, body);
+  }
+
+  @Get("policy-changes")
+  policyChanges(@CurrentUser() user: RequestUser, @Query() query: unknown): Promise<PlatformPolicyChangeList> {
+    return this.svc.policyChanges(user.id, parseOrThrow(platformPolicyChangeQuerySchema, query).status);
+  }
+
+  /** Marks a detected change reviewed. Updating category rules is a separate, explicit action. */
+  @Post("policy-changes/:id/review")
+  @HttpCode(204)
+  reviewPolicyChange(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("id") id: string, @Body() body: unknown): Promise<void> {
+    const input = parseOrThrow(reviewPolicyChangeRequestSchema, body ?? {});
+    return this.svc.reviewPolicyChange(user.id, req.ip || null, parseOrThrow(uuidSchema, id), input.notes);
   }
 
   @Get("channel-quality-alerts")

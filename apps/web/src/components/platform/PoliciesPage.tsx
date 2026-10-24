@@ -59,6 +59,46 @@ function CategoryReviews() {
   );
 }
 
+/** Changes detected by the daily policy monitor. Reviewing never changes any rule by itself. */
+function PolicyChanges() {
+  const [status, setStatus] = useState("pending");
+  const state = useAsync(() => policiesPlatformApi.policyChanges(status), [status]);
+  const [error, setError] = useState<string>();
+  const review = (id: string) => {
+    const notes = (window.prompt("Notas de la revisión (opcional):") ?? "").trim();
+    setError(undefined);
+    policiesPlatformApi.reviewPolicyChange(id, notes || undefined).then(state.reload, (err: unknown) => setError(platformErrorMessage(err)));
+  };
+  return (
+    <section className="mb-6">
+      <div className="mb-2 flex items-center gap-2">
+        <h2 className="text-[15px] font-extrabold">Cambios en políticas de Meta</h2>
+        <select aria-label="Estado" className={fieldClass} value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="pending">Pendientes</option>
+          <option value="reviewed">Revisados</option>
+        </select>
+      </div>
+      <p className="mb-2 text-[12px] text-muted">Monitor diario de las fuentes oficiales. Si un cambio afecta a un rubro, actualiza la regla abajo: nada se aplica solo.</p>
+      {error ? <Alert>{error}</Alert> : null}
+      <Loading state={state}>
+        <div className="flex flex-col gap-3">
+          {(state.data?.items ?? []).length === 0 ? <p className="text-[13px] text-muted">Sin cambios.</p> : null}
+          {(state.data?.items ?? []).map((c) => (
+            <article key={c.id} className="rounded-[16px] bg-white p-4 text-[13px]">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <a href={c.url} target="_blank" rel="noreferrer" className="font-bold underline">{c.sourceKey}</a>
+                <span className="text-muted">{formatDate(c.createdAt)} · +{c.addedLines} / -{c.removedLines}</span>
+                {c.status === "pending" ? <Button size="sm" onClick={() => review(c.id)}>Marcar revisado</Button> : <span className="text-muted">Revisado por {c.reviewedByEmail ?? "—"}{c.reviewNotes ? ` · ${c.reviewNotes}` : ""}</span>}
+              </div>
+              <pre className="max-h-64 overflow-auto rounded-xl bg-paper p-2 text-[12px] whitespace-pre-wrap">{c.diffSummary || "(sin diferencias de texto)"}</pre>
+            </article>
+          ))}
+        </div>
+      </Loading>
+    </section>
+  );
+}
+
 /** Warning/critical Meta events on tenant numbers (quality drops, restrictions, paused templates). */
 function QualityAlerts() {
   const state = useAsync(() => policiesPlatformApi.qualityAlerts(30), []);
@@ -138,6 +178,7 @@ export function PoliciesPage() {
     <div>
       <PageHeader title="Políticas de WhatsApp" />
       <CategoryReviews />
+      <PolicyChanges />
       <QualityAlerts />
       <CategoryRules />
     </div>

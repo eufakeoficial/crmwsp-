@@ -8,6 +8,7 @@ import { Queue } from "bullmq";
 import { createAiWorker, createBspMediaLoader } from "./ai/index.js";
 import { AI_QUEUE_NAME, OUTBOUND_QUEUE_NAME, createRedis } from "./queue.js";
 import { createInboundWorker } from "./worker.js";
+import { POLICY_MONITOR_QUEUE_NAME, createPolicyMonitorWorker, schedulePolicyMonitorTick } from "./policy-monitor/index.js";
 import { createOutboundWorker } from "./outbound.js";
 import { FOLLOW_UP_QUEUE_NAME, createFollowUpWorker, scheduleFollowUpTick } from "./followups/index.js";
 import { CAPI_QUEUE_NAME, createCapiWorker, scheduleCapiTick, type FetchLike } from "./meta-capi/index.js";
@@ -47,6 +48,7 @@ export * from "./subscription-billing/index.js";
 export * from "./support-email/index.js";
 export * from "./channel-quality.js";
 export * from "./platform-alerts.js";
+export * from "./policy-monitor/index.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -130,6 +132,14 @@ function main(): void {
     publisher,
     logger,
   });
+  // Daily Meta/WhatsApp policy monitor (ADR 0021): opt-out with POLICY_MONITOR_DISABLED=1.
+  const policyMonitorQueue = new Queue(POLICY_MONITOR_QUEUE_NAME, { connection: createRedis(redisUrl) });
+  const policyMonitorWorker = createPolicyMonitorWorker({ connection: createRedis(redisUrl), db: db.db, mailer: createMailerFromEnv(), logger });
+  if (process.env["POLICY_MONITOR_DISABLED"] !== "1") {
+    void schedulePolicyMonitorTick(policyMonitorQueue).catch((err: unknown) =>
+      logger.warn(`policy monitor scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
+  }
   supportEmailWorker.on("failed", (job, err) =>
     logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
   );
@@ -313,7 +323,7 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), subscriptionWorker.close(), supportEmailWorker.close(), subscriptionQueue.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), templateSyncWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
+    void Promise.allSettled([worker.close(), subscriptionWorker.close(), supportEmailWorker.close(), policyMonitorWorker.close(), policyMonitorQueue.close(), subscriptionQueue.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), templateSyncWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
       .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), metaAdsQueue?.close(), templateSyncQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close(), orderExtractionQueue.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));

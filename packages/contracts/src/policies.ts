@@ -40,6 +40,28 @@ export type PlatformQualityAlert = z.infer<typeof platformQualityAlertSchema>;
 export const platformQualityAlertListSchema = z.object({ items: z.array(platformQualityAlertSchema) });
 export type PlatformQualityAlertList = z.infer<typeof platformQualityAlertListSchema>;
 
+// ---------- T3: policy monitor (backoffice) ----------
+
+export const platformPolicyChangeQuerySchema = z.object({ status: z.enum(["pending", "reviewed"]).optional() });
+export const platformPolicyChangeSchema = z.object({
+  id: uuidSchema,
+  sourceKey: z.string(),
+  url: z.string(),
+  diffSummary: z.string(),
+  addedLines: z.number().int(),
+  removedLines: z.number().int(),
+  status: z.enum(["pending", "reviewed"]),
+  reviewedByEmail: z.string().nullable(),
+  reviewedAt: isoDateTimeSchema.nullable(),
+  reviewNotes: z.string().nullable(),
+  createdAt: isoDateTimeSchema,
+});
+export type PlatformPolicyChange = z.infer<typeof platformPolicyChangeSchema>;
+export const platformPolicyChangeListSchema = z.object({ items: z.array(platformPolicyChangeSchema) });
+export type PlatformPolicyChangeList = z.infer<typeof platformPolicyChangeListSchema>;
+export const reviewPolicyChangeRequestSchema = z.object({ notes: z.string().trim().max(2000).optional() });
+export type ReviewPolicyChangeRequest = z.infer<typeof reviewPolicyChangeRequestSchema>;
+
 // ---------- T1: business category ("rubro") ----------
 
 export const businessCategoryKeySchema = z.string().trim().regex(/^[a-z0-9_]{2,64}$/, "invalid category");
