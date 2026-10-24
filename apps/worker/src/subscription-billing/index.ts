@@ -4,6 +4,7 @@ import { SETTLE_SUBSCRIPTION_EVENT_JOB, SUBSCRIPTION_BILLING_QUEUE_NAME } from "
 import { eq, isUuid, sql, subscriptionCharges, withTenant, type Database, type Transaction } from "@crmwsp/db";
 import { PaymentProviderError, parseNowPaymentsPayment, type NowPaymentsPayment, type NowPaymentsProvider } from "@crmwsp/payments";
 import { UnrecoverableError, Worker, type ConnectionOptions, type Job, type Queue } from "bullmq";
+import { runLifecycleEmails, type LifecycleEmailDeps } from "../lifecycle-emails/index.js";
 import type { Logger } from "../processors.js";
 
 /**
@@ -30,6 +31,8 @@ export interface SubscriptionBillingDeps {
   trialIdentitySecret?: string;
   /** Sends the day-5 setup reminder (ADR 0015); omitted = reminders off. */
   sendSetupReminder?: (r: SetupReminder) => Promise<void>;
+  /** Billing/lifecycle emails (0074), sent after settlement committed; omitted = off. */
+  lifecycleEmails?: Omit<LifecycleEmailDeps, "db" | "logger">;
 }
 
 export interface SetupReminder {
@@ -266,6 +269,9 @@ export function createSubscriptionBillingWorker(opts: SubscriptionBillingWorkerO
         await runSubscriptionPlanSync(deps);
         await runSetupReminders(deps);
         await runTrialClaimsBackfill(deps);
+        if (deps.lifecycleEmails) {
+          await runLifecycleEmails({ ...deps.lifecycleEmails, db: deps.db, ...(deps.logger ? { logger: deps.logger } : {}) });
+        }
         return res;
       }
       throw new UnrecoverableError("unknown job name");

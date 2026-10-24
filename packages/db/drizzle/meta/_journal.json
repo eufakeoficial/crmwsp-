@@ -476,6 +476,13 @@
       "when": 1792730000000,
       "tag": "0073_platform_finance",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792740000000,
+      "tag": "0074_email_dispatches_password_reset",
+      "breakpoints": true
     }
   ]
 }

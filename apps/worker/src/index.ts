@@ -106,6 +106,7 @@ function main(): void {
     provider: nowPaymentsOptions ? new NowPaymentsProvider(nowPaymentsOptions) : null,
     logger,
     ...(process.env.TRIAL_IDENTITY_SECRET ? { trialIdentitySecret: process.env.TRIAL_IDENTITY_SECRET } : {}),
+    lifecycleEmails: { send: (m) => createMailerFromEnv().send(m), ctx: emailContextFromEnv() },
     sendSetupReminder: async (r) => {
       const days = Math.max(1, Math.ceil((r.setupEndsAt.getTime() - Date.now()) / 86_400_000));
       const ctx = emailContextFromEnv();
