@@ -1,8 +1,9 @@
 "use client";
 
-import type { MessageTemplateDto, TemplateCategory } from "@crmwsp/contracts";
+import type { MessageTemplateDto, TemplateCategory, TemplateLintResponse } from "@crmwsp/contracts";
 import { Info } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { lintTemplateRemote } from "@/lib/policies-api";
 import { Alert, Banner, Button, Input, Label, Modal, Spinner, Textarea } from "@/components/ui";
 import { templateErrorMessage, waTemplatesApi } from "@/lib/wa-templates-api";
 import {
@@ -32,11 +33,21 @@ export function TemplateFormDialog({ channelId, onClose, onCreated }: { channelI
   const vars = useMemo(() => extractVariables(body), [body]);
   const validation = useMemo(() => validateTemplateDraft({ name, language, category, body, samples }), [name, language, category, body, samples]);
   const errors = touched ? validation.errors : {};
+  const [lint, setLint] = useState<TemplateLintResponse | null>(null);
+  useEffect(() => {
+    if (!body.trim()) return setLint(null);
+    // Debounced; a failed lint call never blocks (the API re-checks on submit).
+    const t = setTimeout(() => {
+      lintTemplateRemote({ category, body }).then(setLint, () => setLint(null));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [body, category]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setTouched(true);
     if (!validation.request) return;
+    if (lint && !lint.ok) return;
     setBusy(true);
     setApiError(undefined);
     try {
@@ -115,6 +126,16 @@ export function TemplateFormDialog({ channelId, onClose, onCreated }: { channelI
             <TemplatePreview body={body} samples={samples} />
           </div>
           <p className="m-0 text-xs text-muted">Por ahora solo se admite texto en el cuerpo del mensaje (sin encabezado, pie ni botones).</p>
+          {lint && lint.issues.length > 0 ? (
+            <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs" data-testid="template-lint">
+              {lint.issues.map((i) => (
+                <li key={i.code} className={i.level === "error" ? "font-bold text-danger" : "text-amber-800"}>
+                  {i.level === "error" ? "Error: " : "Aviso: "}
+                  {i.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <Alert>{apiError}</Alert>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>Cancelar</Button>

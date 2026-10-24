@@ -4,6 +4,8 @@ import {
   platformBusinessCategoryListSchema,
   platformCategoryReviewListSchema,
   platformQualityAlertListSchema,
+  templateLintResponseSchema,
+  type TemplateLintRequest,
   type CategoryReviewDecisionRequest,
   type SetBusinessCategoryRequest,
   type UpsertBusinessCategoryRequest,
@@ -16,6 +18,10 @@ export const categoriesApi = {
   state: () => request("/settings/business-category", { schema: businessCategoryStateSchema }),
   set: (body: SetBusinessCategoryRequest) => request("/settings/business-category", { method: "PUT", body, schema: businessCategoryStateSchema }),
 };
+
+/** Pre-submit policy linter (ADR 0021): errors block the submission, warnings are advice. */
+export const lintTemplateRemote = (body: TemplateLintRequest) =>
+  request("/channels/templates/lint", { method: "POST", body, schema: templateLintResponseSchema });
 
 /** Policy backoffice (ADR 0021). Non-admins get 404. */
 export const policiesPlatformApi = {
