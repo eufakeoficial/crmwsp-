@@ -15,9 +15,9 @@ describe.skipIf(!hasDb)("subscription refund re-stacks later periods (0064)", ()
   let app: DbHandle;
   let tenantId = "";
 
-  const createCharge = () =>
+  const createCharge = (price = "89.00", days = 30) =>
     withTenant(app.db, tenantId, async (tx) => {
-      const [r] = await tx.execute<{ id: string }>(sql`select public.subscription_charge_create('pro', 89.00::numeric, 'usd', 'usdtbsc', null) as id`);
+      const [r] = await tx.execute<{ id: string }>(sql`select public.subscription_charge_create('pro', ${price}::numeric, 'usd', 'usdtbsc', null, ${days}::integer) as id`);
       const id = r?.id ?? "";
       await tx.execute(sql`select public.subscription_charge_attach(${id}::uuid, ${randomUUID()}, '0xabc', 49.31, 'usdtbsc', 'waiting')`);
       return id;
@@ -85,6 +85,21 @@ describe.skipIf(!hasDb)("subscription refund re-stacks later periods (0064)", ()
     expect(byId.get(third)).toMatchObject({ start: plusDays(today(), 30), end: plusDays(today(), 60) });
     expect(rows.payments.map((p) => p.chargeId).sort()).toEqual([second, third].sort());
     for (const p of rows.payments) expect({ start: p.start, end: p.end }).toEqual({ start: byId.get(p.chargeId ?? "")?.start, end: byId.get(p.chargeId ?? "")?.end });
+  });
+
+  it("an annual charge grants 365 days and re-stacks with its own length after a refund", async () => {
+    const before = (await paidUntil()) ?? today();
+    const monthly = await createCharge();
+    const annual = await createCharge("890.00", 365);
+    await apply(monthly, "paid");
+    expect((await apply(annual, "paid"))?.period_end).toBe(plusDays(before, 30 + 365));
+    await apply(monthly, "refunded");
+    expect(await paidUntil()).toBe(plusDays(before, 365));
+    await apply(annual, "refunded");
+  });
+
+  it("rejects period lengths other than 30 or 365 days", async () => {
+    await expect(createCharge("89.00", 31)).rejects.toThrow();
   });
 
   it("refunding the last period moves nothing else", async () => {

@@ -54,14 +54,23 @@ export type BillingPlanResponse = z.infer<typeof billingPlanResponseSchema>;
 export const subscriptionChargeStatusSchema = z.enum(["pending", "paid", "failed", "expired", "refunded"]);
 export type SubscriptionChargeStatus = z.infer<typeof subscriptionChargeStatusSchema>;
 
-/** `POST /billing/subscription/charges`: pay one 30-day period of `plan` in crypto. */
-export const createSubscriptionChargeRequestSchema = z.object({ plan: z.enum(["start", "pro"]) }).strict();
+export const billingPeriodSchema = z.enum(["monthly", "annual"]);
+export type BillingPeriodDto = z.infer<typeof billingPeriodSchema>;
+
+/**
+ * `POST /billing/subscription/charges`: pay one period of `plan` in crypto: `monthly` (30 days,
+ * default) or `annual` (365 days at the annual price, ADR 0015).
+ */
+export const createSubscriptionChargeRequestSchema = z
+  .object({ plan: z.enum(["start", "pro"]), period: billingPeriodSchema.default("monthly") })
+  .strict();
 export type CreateSubscriptionChargeRequest = z.infer<typeof createSubscriptionChargeRequestSchema>;
 
 /** A NOWPayments invoice as shown to the tenant (address/amount to pay, QR payload, status). */
 export const subscriptionChargeSchema = z.object({
   id: z.string().uuid(),
   plan: z.enum(["start", "pro"]),
+  period: billingPeriodSchema,
   status: subscriptionChargeStatusSchema,
   /** Provider status (`waiting`, `confirming`, `partially_paid`, ...), informational. */
   providerStatus: z.string().nullable(),

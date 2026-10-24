@@ -25,10 +25,10 @@ describe.skipIf(!hasDb)("subscription charges (NOWPayments) isolation and settle
   let tenantA = "";
   let tenantB = "";
 
-  const createCharge = (tenantId: string, plan: "start" | "pro", price: string) =>
+  const createCharge = (tenantId: string, plan: "start" | "pro", price: string, days = 30) =>
     withTenant(app.db, tenantId, async (tx) => {
       const [r] = await tx.execute<{ id: string }>(
-        sql`select public.subscription_charge_create(${plan}, ${price}::numeric, 'usd', 'usdtbsc', null) as id`,
+        sql`select public.subscription_charge_create(${plan}, ${price}::numeric,       'usd', 'usdtbsc', null, ${days}::integer) as id`,
       );
       const id = r?.id ?? "";
       const providerId = String(Math.floor(Math.random() * 1e12));
@@ -77,6 +77,14 @@ describe.skipIf(!hasDb)("subscription charges (NOWPayments) isolation and settle
     const seenByA = await withTenant(app.db, tenantA, (tx) => tx.select({ id: subscriptionCharges.id }).from(subscriptionCharges));
     expect(seenByA.map((r) => r.id)).toContain(a);
     expect(seenByA.map((r) => r.id)).not.toContain(b);
+  });
+
+  it("annual charges are isolated too and the app role cannot rewrite period_days", async () => {
+    const a = await createCharge(tenantA, "pro", "890.00", 365);
+    const seenByB = await withTenant(app.db, tenantB, (tx) => tx.select({ id: subscriptionCharges.id }).from(subscriptionCharges));
+    expect(seenByB.map((r) => r.id)).not.toContain(a);
+    const upd = await settle(withTenant(app.db, tenantA, (tx) => tx.update(subscriptionCharges).set({ periodDays: 30 })));
+    expect(pgCode(upd)).toBe("42501");
   });
 
   it("the app role cannot write charges directly", async () => {

@@ -33,15 +33,16 @@ export class BillingController {
   }
 
   /**
-   * POST /billing/subscription/charges — NOWPayments crypto invoice for one 30-day period of a
-   * plan (ADR 0013). Returns the deposit address, amount and QR data; the charge becomes `paid`
+   * POST /billing/subscription/charges — NOWPayments crypto invoice for one period of a plan
+   * (ADR 0013): `period` monthly (30 days, default) or annual (365 days, ADR 0015). Returns the deposit address, amount and QR data; the charge becomes `paid`
    * only after a verified IPN or reconciliation.
    */
   @Post("subscription/charges")
   @HttpCode(201)
   @Roles("owner", "admin")
   createCharge(@CurrentTenantDb() db: TenantDb, @Body() body: unknown): Promise<SubscriptionChargeDto> {
-    return this.subscriptions.createCharge(db, parseOrThrow(createSubscriptionChargeRequestSchema, body).plan);
+    const input = parseOrThrow(createSubscriptionChargeRequestSchema, body);
+    return this.subscriptions.createCharge(db, input.plan, input.period);
   }
 
   /** GET /billing/subscription/charges — latest 50 charges of the tenant. */

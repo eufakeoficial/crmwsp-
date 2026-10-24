@@ -434,6 +434,13 @@
       "when": 1792590000000,
       "tag": "0066_bookings",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792680000000,
+      "tag": "0067_subscription_annual_period",
+      "breakpoints": true
     }
   ]
 }

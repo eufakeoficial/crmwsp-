@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
-import { getPlan, periodPriceUsd, type PlanId } from "@crmwsp/billing";
+import { billingPeriodDays, billingPeriodFromDays, getPlan, periodPriceUsd, type BillingPeriod, type PlanId } from "@crmwsp/billing";
 import {
   ExternalProviderError,
   NotFoundError,
@@ -17,6 +17,7 @@ export function toChargeDto(c: SubscriptionCharge): SubscriptionChargeDto {
   return {
     id: c.id,
     plan: c.plan,
+    period: billingPeriodFromDays(c.periodDays) ?? "monthly",
     status: c.status,
     providerStatus: c.providerStatus,
     priceAmount: c.priceAmount,
@@ -67,14 +68,16 @@ export class SubscriptionService {
   ) {}
 
   /**
-   * Creates (or reuses a fresh pending) NOWPayments invoice for one 30-day period of `planId`.
+   * Creates (or reuses a fresh pending) NOWPayments invoice for one period of `planId`:
+   * monthly = 30 days at `priceMonthlyUsd`, annual = 365 days at `priceAnnualUsd` (ADR 0015).
    * Order: local pending row first, then the provider call, then the provider id is attached.
    */
-  async createCharge(db: TenantDb, planId: PlanId): Promise<SubscriptionChargeDto> {
+  async createCharge(db: TenantDb, planId: PlanId, period: BillingPeriod = "monthly"): Promise<SubscriptionChargeDto> {
     const provider = this.provider;
     if (!provider) throw new ExternalProviderError("nowpayments", "Subscription payments are not configured");
     const plan = getPlan(planId);
-    const price = periodPriceUsd(plan);
+    const price = periodPriceUsd(plan, period);
+    const days = billingPeriodDays(period);
 
     const reusable = await db.run(async (tx) => {
       const rows = await tx
@@ -84,14 +87,14 @@ export class SubscriptionService {
         .orderBy(desc(subscriptionCharges.createdAt))
         .limit(5);
       return rows.find(
-        (c) => c.plan === plan.id && c.providerPaymentId !== null && Date.now() - c.createdAt.getTime() < REUSE_PENDING_CHARGE_MS,
+        (c) => c.plan === plan.id && c.periodDays === days && c.providerPaymentId !== null && Date.now() - c.createdAt.getTime() < REUSE_PENDING_CHARGE_MS,
       );
     });
     if (reusable) return toChargeDto(reusable);
 
     const chargeId = await db.run(async (tx) => {
       const [r] = await tx.execute<{ id: string }>(
-        sql`select public.subscription_charge_create(${plan.id}, ${price}::numeric, 'usd', ${provider.payCurrency}, ${db.userId}::uuid) as id`,
+        sql`select public.subscription_charge_create(${plan.id}, ${price}::numeric, 'usd', ${provider.payCurrency}, ${db.userId}::uuid, ${days}::integer) as id`,
       );
       if (!r?.id) throw new Error("subscription_charge_create returned no id");
       return r.id;
@@ -102,7 +105,7 @@ export class SubscriptionService {
       priceAmount: price,
       priceCurrency: "usd",
       ipnCallbackUrl: nowPaymentsIpnUrl(),
-      description: `CRMWSP ${plan.name} (30 días)`,
+      description: `CRMWSP ${plan.name} (${days} días)`,
     });
 
     return db.run(async (tx) => {

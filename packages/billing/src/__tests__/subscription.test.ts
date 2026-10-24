@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   PLANS,
   applySubscriptionAccess,
+  billingPeriodDays,
+  billingPeriodFromDays,
   compareDecimal,
   decideSettlement,
   isFullyPaid,
@@ -76,6 +78,8 @@ describe("decideSettlement", () => {
     priceAmount: "49.00",
     priceCurrency: "usd",
     payAmount: "49.31",
+    plan: "start",
+    periodDays: 30,
   };
   const report = (o: Partial<ProviderPaymentReport> = {}): ProviderPaymentReport => ({
     paymentId: "5077125051",
@@ -116,6 +120,16 @@ describe("decideSettlement", () => {
     const refunded = { ...charge, status: "refunded" as const };
     expect(decideSettlement(refunded, report())).toEqual({ kind: "ignore", reason: "terminal" });
   });
+  it("settles an annual charge only at the annual price of its plan", () => {
+    const annual: LocalCharge = { ...charge, priceAmount: "490.00", payAmount: "491", periodDays: 365 };
+    const r = report({ priceAmount: "490", payAmount: "491", actuallyPaid: "491" });
+    expect(decideSettlement(annual, r)).toMatchObject({ kind: "apply", status: "paid" });
+    // A monthly price stored on an annual charge (or vice versa) is never settled.
+    expect(decideSettlement({ ...annual, priceAmount: "49.00" }, report({ priceAmount: "49" }))).toEqual({ kind: "ignore", reason: "mismatch" });
+    expect(decideSettlement({ ...charge, priceAmount: "490.00" }, r)).toEqual({ kind: "ignore", reason: "mismatch" });
+    expect(decideSettlement({ ...annual, plan: "pro" }, r)).toEqual({ kind: "ignore", reason: "mismatch" });
+    expect(decideSettlement({ ...annual, periodDays: 90 }, r)).toEqual({ kind: "ignore", reason: "mismatch" });
+  });
   it("a late full payment settles an expired charge", () => {
     expect(decideSettlement({ ...charge, status: "expired" }, report())).toMatchObject({ status: "paid" });
   });
@@ -126,6 +140,10 @@ describe("periods and access", () => {
   it("nextPeriod starts today when nothing is paid or the period lapsed", () => {
     expect(nextPeriod(null, now)).toEqual({ start: "2026-10-23", end: "2026-11-22" });
     expect(nextPeriod("2026-09-01", now)).toEqual({ start: "2026-10-23", end: "2026-11-22" });
+  });
+  it("nextPeriod grants 365 days for an annual charge, stacking too", () => {
+    expect(nextPeriod(null, now, 365)).toEqual({ start: "2026-10-23", end: "2027-10-23" });
+    expect(nextPeriod("2026-11-05", now, billingPeriodDays("annual"))).toEqual({ start: "2026-11-05", end: "2027-11-05" });
   });
   it("nextPeriod stacks on an active period", () => {
     expect(nextPeriod("2026-11-05", now)).toEqual({ start: "2026-11-05", end: "2026-12-05" });
@@ -149,5 +167,15 @@ describe("periods and access", () => {
   it("period price comes from the plan definition", () => {
     expect(periodPriceUsd(PLANS.start)).toBe("49.00");
     expect(periodPriceUsd(PLANS.pro)).toBe("89.00");
+    expect(periodPriceUsd(PLANS.start, "annual")).toBe("490.00");
+    expect(periodPriceUsd(PLANS.pro, "annual")).toBe("890.00");
+    expect(periodPriceUsd(PLANS.pro, "monthly")).toBe("89.00");
+  });
+  it("maps billing periods to days and back", () => {
+    expect(billingPeriodDays("monthly")).toBe(30);
+    expect(billingPeriodDays("annual")).toBe(365);
+    expect(billingPeriodFromDays(30)).toBe("monthly");
+    expect(billingPeriodFromDays(365)).toBe("annual");
+    expect(billingPeriodFromDays(31)).toBeNull();
   });
 });

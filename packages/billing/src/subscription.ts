@@ -1,11 +1,29 @@
 /**
  * SaaS subscription charging rules (tenants pay CRMWSP, ADR 0013). Pure domain, no I/O.
- * Provider: NOWPayments one-off crypto invoices; each settled payment grants one 30-day period.
- * There is no provider-side recurring billing: renewing means paying again.
+ * Provider: NOWPayments one-off crypto invoices; each settled payment grants one period: 30 days
+ * (monthly) or 365 days (annual, ADR 0015). There is no provider-side recurring billing: renewing
+ * means paying again.
  */
-import type { PlanDefinition, PlanId } from "./index.js";
+import { getPlan, type PlanDefinition, type PlanId } from "./index.js";
 
+/** Days granted by a monthly charge. */
 export const SUBSCRIPTION_PERIOD_DAYS = 30;
+/** Days granted by an annual charge (ADR 0015). */
+export const SUBSCRIPTION_ANNUAL_DAYS = 365;
+
+export const BILLING_PERIODS = ["monthly", "annual"] as const;
+export type BillingPeriod = (typeof BILLING_PERIODS)[number];
+
+export function billingPeriodDays(period: BillingPeriod): number {
+  return period === "annual" ? SUBSCRIPTION_ANNUAL_DAYS : SUBSCRIPTION_PERIOD_DAYS;
+}
+
+/** Inverse of {@link billingPeriodDays}; `null` for any other length (never settled). */
+export function billingPeriodFromDays(days: number): BillingPeriod | null {
+  if (days === SUBSCRIPTION_PERIOD_DAYS) return "monthly";
+  if (days === SUBSCRIPTION_ANNUAL_DAYS) return "annual";
+  return null;
+}
 /** Days after the paid period ends before the tenant is restricted (never deleted). */
 export const SUBSCRIPTION_GRACE_DAYS = 3;
 
@@ -99,6 +117,9 @@ export interface LocalCharge {
   priceAmount: string;
   priceCurrency: string;
   payAmount: string | null;
+  plan: PlanId;
+  /** Days the charge grants (`subscription_charges.period_days`): 30 or 365. */
+  periodDays: number;
 }
 
 export type SettlementDecision =
@@ -108,10 +129,17 @@ export type SettlementDecision =
 /**
  * Decides what a provider report does to a local charge. `paid` requires a finished/confirmed
  * status AND `actually_paid >= pay_amount`, matching order id, price currency
- * (case-insensitive) and exact price amount. Paid/refunded charges only move paid → refunded.
+ * (case-insensitive) and exact price amount. The stored price must also be the exact price of
+ * the charge's plan for its period (49/89 monthly, 490/890 annual), so a charge can never grant
+ * 365 days for a monthly price. Paid/refunded charges only move paid → refunded.
  */
 export function decideSettlement(charge: LocalCharge, report: ProviderPaymentReport): SettlementDecision {
   if (report.orderId !== charge.id) return { kind: "ignore", reason: "mismatch" };
+  const period = billingPeriodFromDays(charge.periodDays);
+  const stored = parseDecimal(charge.priceAmount);
+  if (period === null || stored === null || compareDecimal(stored, periodPriceUsd(getPlan(charge.plan), period)) !== 0) {
+    return { kind: "ignore", reason: "mismatch" };
+  }
   if (charge.providerPaymentId !== null && charge.providerPaymentId !== report.paymentId) return { kind: "ignore", reason: "mismatch" };
   const reportedPrice = parseDecimal(report.priceAmount);
   if (
@@ -147,14 +175,14 @@ export function isoDate(ms: number): string {
 
 /**
  * Period granted by one settled payment: starts at max(today, current paid end) and lasts
- * {@link SUBSCRIPTION_PERIOD_DAYS} days, so paying early stacks instead of losing days.
- * Dates are UTC calendar days (`YYYY-MM-DD`); same rule as `subscription_charge_apply` (0061).
+ * `days` (30 monthly, 365 annual), so paying early stacks instead of losing days.
+ * Dates are UTC calendar days (`YYYY-MM-DD`); same rule as `subscription_charge_apply` (0067).
  */
-export function nextPeriod(currentPaidUntil: string | null, now: Date): { start: string; end: string } {
+export function nextPeriod(currentPaidUntil: string | null, now: Date, days = SUBSCRIPTION_PERIOD_DAYS): { start: string; end: string } {
   const today = utcDay(now);
   const current = currentPaidUntil ? Date.parse(`${currentPaidUntil}T00:00:00Z`) : Number.NaN;
   const start = Number.isNaN(current) ? today : Math.max(today, current);
-  return { start: isoDate(start), end: isoDate(start + SUBSCRIPTION_PERIOD_DAYS * DAY_MS) };
+  return { start: isoDate(start), end: isoDate(start + days * DAY_MS) };
 }
 
 export type SubscriptionAccess = "unbilled" | "active" | "grace" | "restricted";
@@ -185,9 +213,9 @@ export function applySubscriptionAccess(plan: PlanDefinition, access: Subscripti
   };
 }
 
-/** Price (major units, 2 decimals) charged for one 30-day period of a plan. */
-export function periodPriceUsd(plan: PlanDefinition): string {
-  return plan.priceMonthlyUsd.toFixed(2);
+/** Price (major units, 2 decimals) charged for one period of a plan: monthly (30 days) or annual (365). */
+export function periodPriceUsd(plan: PlanDefinition, period: BillingPeriod = "monthly"): string {
+  return (period === "annual" ? plan.priceAnnualUsd : plan.priceMonthlyUsd).toFixed(2);
 }
 
 /** One settled (paid, not refunded) charge period; dates are ISO `YYYY-MM-DD`, end exclusive. */

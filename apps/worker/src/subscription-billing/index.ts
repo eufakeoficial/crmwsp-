@@ -99,6 +99,8 @@ export async function settleSubscriptionEvent(deps: SubscriptionBillingDeps, dat
       priceAmount: charge.priceAmount,
       priceCurrency: charge.priceCurrency,
       payAmount: charge.payAmount,
+      plan: charge.plan,
+      periodDays: charge.periodDays,
     };
     const decision = decideSettlement(local, {
       paymentId: report.paymentId,

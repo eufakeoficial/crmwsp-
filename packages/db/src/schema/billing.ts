@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, char, check, date, index, jsonb, numeric, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { bigint, char, check, date, index, integer, jsonb, numeric, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { tenants } from "./tenants.js";
 
 /** Keep in sync with `PLAN_IDS` in @crmwsp/billing. */
@@ -88,6 +88,8 @@ export const subscriptionCharges = pgTable(
     paidAt: timestamp("paid_at", { withTimezone: true }),
     periodStart: date("period_start", { mode: "string" }),
     periodEnd: date("period_end", { mode: "string" }),
+    /** Days granted when settled: 30 (monthly) or 365 (annual, migration 0067). */
+    periodDays: integer("period_days").notNull().default(30),
     createdBy: uuid("created_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -101,6 +103,7 @@ export const subscriptionCharges = pgTable(
     check("subscription_charges_plan_check", sql`${t.plan} IN ('start', 'pro')`),
     check("subscription_charges_provider_check", sql`${t.provider} IN ('nowpayments')`),
     check("subscription_charges_price_check", sql`${t.priceAmount} > 0`),
+    check("subscription_charges_period_days_check", sql`${t.periodDays} IN (30, 365)`),
     check("subscription_charges_status_check", sql`${t.status} IN ('pending', 'paid', 'failed', 'expired', 'refunded')`),
     check("subscription_charges_verified_by_check", sql`${t.verifiedBy} IS NULL OR ${t.verifiedBy} IN ('webhook', 'reconciliation')`),
     check(

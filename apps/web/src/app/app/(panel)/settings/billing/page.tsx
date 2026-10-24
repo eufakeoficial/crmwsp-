@@ -5,6 +5,7 @@ import {
   billingPlanResponseSchema,
   subscriptionChargeListSchema,
   subscriptionChargeSchema,
+  type BillingPeriodDto,
   type BillingPlanResponse,
   type SubscriptionChargeDto,
 } from "@crmwsp/contracts";
@@ -22,10 +23,13 @@ const api = {
   plan: () => request("/billing/plan", { schema: billingPlanResponseSchema }),
   charges: () => request("/billing/subscription/charges", { schema: subscriptionChargeListSchema }),
   charge: (id: string) => request(`/billing/subscription/charges/${id}`, { schema: subscriptionChargeSchema }),
-  create: (plan: "start" | "pro") => request("/billing/subscription/charges", { method: "POST", body: { plan }, schema: subscriptionChargeSchema }),
+  create: (plan: "start" | "pro", period: BillingPeriodDto) =>
+    request("/billing/subscription/charges", { method: "POST", body: { plan, period }, schema: subscriptionChargeSchema }),
 };
 
 const POLL_MS = 10_000;
+
+const PERIOD_DAYS: Record<BillingPeriodDto, number> = { monthly: 30, annual: 365 };
 
 const STATUS_LABEL: Record<SubscriptionChargeDto["status"], string> = {
   pending: "Esperando el pago",
@@ -54,7 +58,7 @@ function PendingCharge({ charge }: { charge: SubscriptionChargeDto }) {
         {charge.payAmount ?? "—"} {charge.payCurrency.toUpperCase()}
       </p>
       <p className="m-0 text-sm text-ink-3">
-        Equivale a US${charge.priceAmount} por 30 días del plan {charge.plan === "pro" ? "Pro" : "Start"}. Envía el monto exacto o más; un pago menor queda pendiente.
+        Equivale a US${charge.priceAmount} por {PERIOD_DAYS[charge.period]} días del plan {charge.plan === "pro" ? "Pro" : "Start"}. Envía el monto exacto o más; un pago menor queda pendiente.
       </p>
       {charge.payAddress ? (
         <div className="mt-3 flex flex-col gap-2">
@@ -82,6 +86,7 @@ function Body() {
   const [charges, setCharges] = useState<SubscriptionChargeDto[]>([]);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [period, setPeriod] = useState<BillingPeriodDto>("monthly");
 
   const load = useCallback(() => {
     Promise.all([api.plan(), api.charges()]).then(
@@ -113,7 +118,7 @@ function Body() {
   const pay = (p: "start" | "pro") => {
     setBusy(true);
     setError(undefined);
-    api.create(p).then(
+    api.create(p, period).then(
       (c) => setCharges((cs) => [c, ...cs.filter((x) => x.id !== c.id)]),
       (err: unknown) => setError(errorMessage(err)),
     ).finally(() => setBusy(false));
@@ -131,14 +136,27 @@ function Body() {
             {plan.subscription.paidUntil ? `Pagado hasta el ${plan.subscription.paidUntil}` : "Sin períodos pagados"} · {plan.subscription.graceDays} días de gracia
           </p>
           {plan.billingProvider === "nowpayments" ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button disabled={busy} onClick={() => pay("start")}>Pagar 30 días Start</Button>
-              <Button disabled={busy} variant="accent" onClick={() => pay("pro")}>Pagar 30 días Pro</Button>
-            </div>
+            <>
+              <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label="Período de pago">
+                {(["monthly", "annual"] as const).map((p) => (
+                  <Button key={p} size="sm" role="radio" aria-checked={period === p} variant={period === p ? "outline" : "ghost"} onClick={() => setPeriod(p)}>
+                    {p === "monthly" ? "Mensual (30 días)" : "Anual (365 días, 2 meses gratis)"}
+                  </Button>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button disabled={busy} onClick={() => pay("start")}>
+                  Pagar {PERIOD_DAYS[period]} días Start · US${period === "annual" ? 490 : 49}
+                </Button>
+                <Button disabled={busy} variant="accent" onClick={() => pay("pro")}>
+                  Pagar {PERIOD_DAYS[period]} días Pro · US${period === "annual" ? 890 : 89}
+                </Button>
+              </div>
+            </>
           ) : (
             <p className="m-0 mt-2 text-sm text-ink-3">El pago en línea de la suscripción no está habilitado. Contacta con soporte.</p>
           )}
-          <p className="m-0 mt-2 text-[13px] text-ink-3">Cada pago suma 30 días desde el final del período actual. No hay cobros automáticos: para renovar, paga otra vez.</p>
+          <p className="m-0 mt-2 text-[13px] text-ink-3">Cada pago suma 30 días (o 365 si es anual) desde el final del período actual. No hay cobros automáticos: para renovar, paga otra vez.</p>
         </Card>
       ) : null}
       {pending ? <PendingCharge charge={pending} /> : null}
@@ -149,7 +167,7 @@ function Body() {
             {charges.map((c) => (
               <li key={c.id} className="flex justify-between gap-3">
                 <span>
-                  {new Date(c.createdAt).toLocaleDateString("es")} · {c.plan === "pro" ? "Pro" : "Start"} · US${c.priceAmount}
+                  {new Date(c.createdAt).toLocaleDateString("es")} · {c.plan === "pro" ? "Pro" : "Start"} · {c.period === "annual" ? "anual" : "mensual"} · US${c.priceAmount}
                 </span>
                 <span className="text-ink-3">
                   {STATUS_LABEL[c.status]}
