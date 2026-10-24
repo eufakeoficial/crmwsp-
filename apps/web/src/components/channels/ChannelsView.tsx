@@ -8,6 +8,7 @@ import { useSession } from "@/components/app/SessionProvider";
 import { Alert, Banner, Button, Modal, Toast } from "@/components/ui";
 import { canManageChannels } from "@/components/app/roles";
 import { useToast } from "@/lib/hooks/use-toast";
+import { buildDialog360ConnectUrl } from "@/lib/dialog360";
 import { channelsApi } from "@/lib/inbox-api";
 import { channelErrorMessage, isEncryptionNotConfigured } from "@/lib/messages";
 import { ChannelCard } from "./ChannelCard";
@@ -23,6 +24,7 @@ export function ChannelsView() {
   const [confirmRotate, setConfirmRotate] = useState<Channel | null>(null);
   const [partnerFor, setPartnerFor] = useState<Channel | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [d360PartnerId, setD360PartnerId] = useState<string | null>(null);
   const { message, show } = useToast();
 
   const load = useCallback(async () => {
@@ -36,6 +38,11 @@ export function ChannelsView() {
   useEffect(() => {
     void load();
   }, [load]);
+  // Hidden unless the server has 360dialog partner credentials configured.
+  useEffect(() => {
+    if (!canManage) return;
+    channelsApi.dialog360Config().then((c) => setD360PartnerId(c.partnerId), () => setD360PartnerId(null));
+  }, [canManage]);
 
   const replace = (c: Channel) => setChannels((list) => (list ?? []).map((x) => (x.id === c.id ? c : x)));
 
@@ -57,9 +64,16 @@ export function ChannelsView() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader title="Canales" subtitle="Conecta y administra los números de WhatsApp con los que atiendes a tus clientes." />
         {canManage ? (
-          <Button variant="whatsapp" onClick={() => setConnecting(true)}>
-            <Plug aria-hidden className="size-5" />Conectar WhatsApp (Gupshup)
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {d360PartnerId ? (
+              <Button variant="whatsapp" onClick={() => window.location.assign(buildDialog360ConnectUrl(d360PartnerId, window.location.origin))}>
+                <Plug aria-hidden className="size-5" />Conectar con 360dialog (mantén tu WhatsApp Business)
+              </Button>
+            ) : null}
+            <Button variant={d360PartnerId ? "outline" : "whatsapp"} onClick={() => setConnecting(true)}>
+              <Plug aria-hidden className="size-5" />Conectar WhatsApp (Gupshup)
+            </Button>
+          </div>
         ) : null}
       </div>
       {noKeys ? (

@@ -1,5 +1,6 @@
 import {
   type ConversationStatus,
+  type Connect360dialogRequest,
   type CreateGupshupChannelRequest,
   type SetPartnerCredentialsRequest,
   type ReactionEmoji,
@@ -9,6 +10,7 @@ import {
   channelSchema,
   contactListResponseSchema,
   contactSchema,
+  dialog360ConfigSchema,
   conversationListResponseSchema,
   conversationSchema,
   messageListResponseSchema,
@@ -34,6 +36,9 @@ export const channelsApi = {
   list: () => request("/channels", { schema: channelListResponseSchema }),
   createGupshup: (input: CreateGupshupChannelRequest) =>
     request("/channels/gupshup", { method: "POST", body: input, schema: channelSchema }),
+  dialog360Config: () => request("/channels/360dialog/config", { schema: dialog360ConfigSchema }),
+  connect360dialog: (input: Connect360dialogRequest) =>
+    request("/channels/360dialog/connect", { method: "POST", body: input, schema: channelListResponseSchema }),
   setPartnerCredentials: (id: string, input: SetPartnerCredentialsRequest) =>
     request(`/channels/${id}/partner-credentials`, { method: "PUT", body: input, schema: channelSchema }),
   rotateWebhookToken: (id: string) =>

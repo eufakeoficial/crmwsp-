@@ -52,7 +52,7 @@ export function ChannelCard({
           <StatusChip label={channel.partnerConfigured ? "configurado" : "sin configurar"} tone={channel.partnerConfigured ? "success" : "warning"} />
         </p>
       ) : null}
-      {canManage && channel.webhookUrl ? (
+      {canManage && channel.webhookUrl && channel.provider === "gupshup" ? (
         <div className="flex flex-col gap-1">
           <span className="text-xs font-extrabold text-muted">URL de webhook (Gupshup → Callback URL)</span>
           <WebhookUrlBox url={channel.webhookUrl} />
@@ -60,9 +60,12 @@ export function ChannelCard({
       ) : null}
       {canManage ? (
         <div className="flex flex-wrap gap-2 border-t border-line pt-3">
-          <Button size="sm" variant="outline" disabled={busy} onClick={onRotate}>
-            <RefreshCw aria-hidden className="size-4" />Rotar token
-          </Button>
+          {/* 360dialog registers the webhook itself at connect time; rotating would silently break it. */}
+          {channel.provider === "gupshup" ? (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onRotate}>
+              <RefreshCw aria-hidden className="size-4" />Rotar token
+            </Button>
+          ) : null}
           {channel.provider === "gupshup" ? (
             <Button size="sm" variant="outline" disabled={busy} onClick={onPartner}>
               <FileText aria-hidden className="size-4" />{channel.partnerConfigured ? "Cambiar credenciales de plantillas" : "Configurar plantillas"}
