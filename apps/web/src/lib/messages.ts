@@ -16,6 +16,10 @@ export function errorMessage(err: unknown, context: "login" | "signup" | "generi
       return "No tienes permiso para realizar esta acción.";
     case "NETWORK_ERROR":
       return "No se pudo conectar con el servidor. Comprueba tu conexión.";
+    case "SETUP_REQUIRED":
+      return "Conecta tu WhatsApp para empezar tu prueba.";
+    case "PLAN_LIMIT_EXCEEDED":
+      return "Tu plan no permite esta acción (límite alcanzado o suscripción vencida). Revisa Plan y uso.";
     default:
       return "Ocurrió un error en el servidor. Inténtalo más tarde.";
   }

@@ -1,8 +1,11 @@
-import { PlanLimitExceededError } from "@crmwsp/contracts";
+import { PlanLimitExceededError, SetupRequiredError } from "@crmwsp/contracts";
 import type { DbHandle, PlanUsageSnapshot, Transaction } from "@crmwsp/db";
 import { describe, expect, it, vi } from "vitest";
 
-const snapshot: PlanUsageSnapshot = {
+const snapshot: PlanUsageSnapshot & Record<string, unknown> = {
+  setupEndsAt: null,
+  trialStartedAt: null,
+  trialEndsAt: null,
   plan: null,
   limitsOverride: null,
   period: "2026-10",
@@ -37,6 +40,28 @@ describe("PlanLimitsService", () => {
     expect((err as PlanLimitExceededError).httpStatus).toBe(402);
     expect((err as PlanLimitExceededError).details).toMatchObject({ reason: "subscription_restricted" });
     paidUntil = null;
+  });
+
+  it("setup (new tenant, no channel yet) blocks contacts/seats/broadcasts and outbound with SETUP_REQUIRED, but not numbers", async () => {
+    snapshot.setupEndsAt = new Date(Date.now() + 86_400_000);
+    try {
+      for (const key of ["contacts", "seats", "broadcast_sends"] as const) {
+        await expect(svc.assert(T, key, 0, tx)).rejects.toBeInstanceOf(SetupRequiredError);
+      }
+      await expect(svc.assertSubscriptionActive(T, tx)).rejects.toMatchObject({ code: "SETUP_REQUIRED", httpStatus: 402 });
+      await expect(svc.assert(T, "whatsapp_numbers", 1, tx)).resolves.toBeUndefined();
+      // Setup that expired without a channel is restricted.
+      snapshot.setupEndsAt = new Date(Date.now() - 1000);
+      await expect(svc.assertSubscriptionActive(T, tx)).rejects.toBeInstanceOf(PlanLimitExceededError);
+      // An active trial behaves like a paid tenant.
+      snapshot.trialStartedAt = new Date(Date.now() - 2000);
+      snapshot.trialEndsAt = new Date(Date.now() + 86_400_000);
+      await expect(svc.assertSubscriptionActive(T, tx)).resolves.toBeUndefined();
+    } finally {
+      snapshot.setupEndsAt = null;
+      snapshot.trialStartedAt = null;
+      snapshot.trialEndsAt = null;
+    }
   });
 
   it("assert passes under the limit (default plan start)", async () => {

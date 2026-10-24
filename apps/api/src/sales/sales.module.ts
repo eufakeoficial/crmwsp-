@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
+import { BillingModule } from "../billing/billing.module.js";
 import { EventsModule } from "../events/events.module.js";
 import { InboxModule } from "../inbox/inbox.module.js";
 import { OpportunitiesController, PipelinesController } from "./opportunities.controller.js";
@@ -9,7 +10,7 @@ import { TasksController } from "./tasks.controller.js";
 import { OrderExtractionsController } from "../inbox/order-extractions.controller.js";
 
 @Module({
-  imports: [AuthModule, EventsModule, InboxModule],
+  imports: [AuthModule, BillingModule, EventsModule, InboxModule],
   controllers: [PipelinesController, OpportunitiesController, TasksController, QuotesController, PublicQuotesController, OrderExtractionsController],
   providers: [{ provide: PUBLIC_QUOTE_RATE_LIMIT, useValue: DEFAULT_PUBLIC_QUOTE_RATE_LIMIT }],
 })

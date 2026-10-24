@@ -105,11 +105,23 @@ function main(): void {
     db: db.db,
     provider: nowPaymentsOptions ? new NowPaymentsProvider(nowPaymentsOptions) : null,
     logger,
+    sendSetupReminder: async (r) => {
+      const days = Math.max(1, Math.ceil((r.setupEndsAt.getTime() - Date.now()) / 86_400_000));
+      const title = `Conecta tu WhatsApp: te quedan ${days} ${days === 1 ? "día" : "días"} para empezar tu prueba`;
+      const { text, html } = renderEmail({
+        title,
+        body: `${r.tenantName} todavía no tiene un número de WhatsApp conectado. Conéctalo para empezar tus 7 días de prueba gratuita; si no, la cuenta pasará a solo lectura.`,
+        ...(process.env.PUBLIC_WEB_URL ? { ctaLabel: "Conectar WhatsApp", ctaUrl: `${process.env.PUBLIC_WEB_URL}/app/channels` } : {}),
+      });
+      await createMailerFromEnv().send({ to: r.ownerEmail, subject: title, text, html });
+    },
   });
   subscriptionWorker.on("failed", (job, err) =>
     logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
   );
-  if (nowPaymentsOptions) {
+  // Always scheduled: without NOWPayments the reconcile part is a no-op, but the plan sync and the
+  // setup reminders (ADR 0015) still run.
+  {
     void scheduleSubscriptionReconcileTick(subscriptionQueue).catch((err: unknown) =>
       logger.warn(`subscription reconcile scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
     );

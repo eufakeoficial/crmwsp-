@@ -41,6 +41,7 @@ function fakeDb(selects: unknown[][]) {
 function limitsStub(free = 10) {
   return {
     lock: vi.fn(async () => undefined),
+    startTrialIfEligible: vi.fn(async () => true),
     assert: vi.fn(async (_t: string, key: string, amount = 1) => {
       if (amount > free) throw new PlanLimitExceededError(`Plan Start: ${key} limit_reached`, { details: { key, reason: "limit_reached" } });
     }),
@@ -137,6 +138,8 @@ describe("POST /channels/360dialog/connect", () => {
     await controller.connect360dialog(fakeDb([[]]).db, { channelIds: ["CH1"] }, req);
     expect(limits.lock).toHaveBeenCalledWith(expect.anything(), TENANT, "whatsapp_numbers");
     expect(limits.assert).toHaveBeenLastCalledWith(TENANT, "whatsapp_numbers", 1, expect.anything());
+    // The first active channel starts the trial of a tenant in setup (ADR 0015).
+    expect(limits.startTrialIfEligible).toHaveBeenCalledTimes(1);
   });
 
   it("rejects malformed channel ids and unconfigured partner credentials", async () => {

@@ -58,6 +58,7 @@ import { formatMoney, renderQuotePdf } from "@crmwsp/pdf";
 import type { Queue } from "bullmq";
 import { z } from "zod";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
+import { ActivationGuard } from "../billing/activation.guard.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { type HttpReply, type HttpRequest } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
@@ -111,7 +112,7 @@ const webBase = (): string =>
   (process.env["PUBLIC_WEB_URL"] ?? (process.env["WEB_ORIGINS"] ?? "").split(",")[0]?.trim() ?? "").replace(/\/+$/, "") || "http://localhost:3000";
 
 @Controller("quotes")
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, ActivationGuard)
 export class QuotesController {
   constructor(
     @Inject(OUTBOUND_QUEUE) private readonly queue: Queue,

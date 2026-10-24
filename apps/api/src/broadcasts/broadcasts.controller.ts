@@ -30,6 +30,7 @@ import {
 } from "@crmwsp/db";
 import { canTransitionBroadcast, countTemplatePlaceholders } from "@crmwsp/domain";
 import { CurrentTenantDb, Roles } from "../auth/decorators.js";
+import { ActivationGuard } from "../billing/activation.guard.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import type { HttpRequest } from "../common/http.js";
@@ -107,7 +108,7 @@ export async function broadcastStats(tx: Transaction, id: string): Promise<Broad
 
 @Controller("broadcasts")
 // SessionGuard is global (APP_GUARD) and runs first.
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, ActivationGuard)
 export class BroadcastsController {
   constructor(@Inject(PlanLimitsService) private readonly limits: PlanLimitsService) {}
 

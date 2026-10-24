@@ -25,6 +25,8 @@ const ACCESS_LABEL: Record<BillingPlanResponse["subscription"]["access"], string
   active: "Suscripción al día",
   grace: "Período vencido: en días de gracia",
   restricted: "Suscripción vencida: solo lectura (tus datos se conservan)",
+  setup: "Configuración: conecta tu WhatsApp para empezar tu prueba",
+  trial: "Prueba gratuita en curso",
 };
 
 function UsageRow({ item }: { item: BillingPlanResponse["usage"][number] }) {

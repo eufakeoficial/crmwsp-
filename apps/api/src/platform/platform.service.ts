@@ -26,6 +26,8 @@ import {
   type SubscriptionPaymentList,
   type SubscriptionPaymentListQuery,
   type TenantPlanChangeRequest,
+  type TenantLifecycleExtendRequest,
+  type TenantLifecycleExtendResponse,
   type TenantStatusChangeRequest,
   ValidationError,
 } from "@crmwsp/contracts";
@@ -119,6 +121,11 @@ export class PlatformService {
     const [tenant] = await guarded(() => this.repo.listTenants(actor.userId, { tenantId }));
     if (!tenant) throw new NotFoundError();
     return tenant;
+  }
+
+  async extendLifecycle(actor: PlatformActor, tenantId: string, body: TenantLifecycleExtendRequest): Promise<TenantLifecycleExtendResponse> {
+    const endsAt = await guarded(() => this.repo.extendLifecycle(actor.userId, tenantId, body.kind, body.days, actor.ip));
+    return { kind: body.kind, endsAt: endsAt.toISOString() };
   }
 
   async recordPayment(actor: PlatformActor, body: RecordSubscriptionPaymentRequest): Promise<SubscriptionPayment> {

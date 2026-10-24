@@ -21,6 +21,11 @@ export const tenantPlans = pgTable(
     plan: text("plan", { enum: tenantPlanIds }).notNull().default("start"),
     /** Optional per-tenant limit overrides set by a platform admin (`{ limitKey: number | null }`). */
     limitsOverride: jsonb("limits_override").$type<Record<string, number | null>>(),
+    /** Trial lifecycle (migration 0068). `setupEndsAt` null = grandfathered tenant. */
+    setupEndsAt: timestamp("setup_ends_at", { withTimezone: true }),
+    trialStartedAt: timestamp("trial_started_at", { withTimezone: true }),
+    trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+    setupReminderSentAt: timestamp("setup_reminder_sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

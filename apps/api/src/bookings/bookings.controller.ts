@@ -15,6 +15,7 @@ import {
 import { and, asc, bookingResources, bookings, contacts, conversations, eq, gt, isUuid, lt, sql, type Transaction } from "@crmwsp/db";
 import { canTransitionBooking, computeAvailableSlots, isActiveBookingStatus } from "@crmwsp/domain";
 import { CurrentTenantDb, Roles } from "../auth/decorators.js";
+import { ActivationGuard } from "../billing/activation.guard.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import type { HttpRequest } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
@@ -39,7 +40,7 @@ const TRANSITION_ROUTES: Record<string, BookingStatus> = {
 };
 
 @Controller("bookings")
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, ActivationGuard)
 export class BookingsController {
   @Get()
   async list(@CurrentTenantDb() db: TenantDb, @Query() query: unknown): Promise<{ items: Booking[] }> {

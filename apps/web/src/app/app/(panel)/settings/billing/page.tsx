@@ -44,6 +44,8 @@ const ACCESS_LABEL: Record<BillingPlanResponse["subscription"]["access"], string
   active: "Suscripción al día",
   grace: "Período vencido: en días de gracia",
   restricted: "Suscripción vencida: acceso de solo lectura (sin IA ni envíos)",
+  setup: "Configuración: conecta tu WhatsApp para empezar tu prueba",
+  trial: "Prueba gratuita en curso",
 };
 
 function PendingCharge({ charge }: { charge: SubscriptionChargeDto }) {

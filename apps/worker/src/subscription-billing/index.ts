@@ -1,4 +1,4 @@
-import { decideSettlement, subscriptionAccess, type LocalCharge } from "@crmwsp/billing";
+import { decideSettlement, tenantAccess, type LocalCharge } from "@crmwsp/billing";
 import { SETTLE_SUBSCRIPTION_EVENT_JOB, SUBSCRIPTION_BILLING_QUEUE_NAME } from "@crmwsp/contracts";
 import { eq, isUuid, sql, subscriptionCharges, withTenant, type Database, type Transaction } from "@crmwsp/db";
 import { PaymentProviderError, parseNowPaymentsPayment, type NowPaymentsPayment, type NowPaymentsProvider } from "@crmwsp/payments";
@@ -25,6 +25,38 @@ export interface SubscriptionBillingDeps {
   /** Null when NOWPAYMENTS_API_KEY is unset: IPN settlement still works, reconciliation is off. */
   provider: Pick<NowPaymentsProvider, "getPayment"> | null;
   logger?: Logger;
+  /** Sends the day-5 setup reminder (ADR 0015); omitted = reminders off. */
+  sendSetupReminder?: (r: SetupReminder) => Promise<void>;
+}
+
+export interface SetupReminder {
+  tenantId: string;
+  tenantName: string;
+  ownerEmail: string;
+  setupEndsAt: Date;
+}
+
+/**
+ * Day-5 setup reminder: tenants still without a WhatsApp channel 2 days before setup ends.
+ * Claimed (marked sent) before sending, so a failed send is not retried: at most one email.
+ */
+export async function runSetupReminders(deps: Pick<SubscriptionBillingDeps, "db" | "logger" | "sendSetupReminder">, limit = 50): Promise<number> {
+  const send = deps.sendSetupReminder;
+  if (!send) return 0;
+  const rows = await deps.db.execute<{ tenant_id: string; tenant_name: string; owner_email: string | null; setup_ends_at: string | Date }>(
+    sql`select tenant_id, tenant_name, owner_email, setup_ends_at from public.tenant_setup_reminders_claim(${limit})`,
+  );
+  let sent = 0;
+  for (const r of rows) {
+    if (!r.owner_email) continue;
+    try {
+      await send({ tenantId: r.tenant_id, tenantName: r.tenant_name, ownerEmail: r.owner_email, setupEndsAt: new Date(r.setup_ends_at) });
+      sent++;
+    } catch (err) {
+      (deps.logger ?? silent).warn(`setup reminder failed (${err instanceof Error ? err.name : "unknown"})`);
+    }
+  }
+  return sent;
 }
 
 export type SettleOutcome =
@@ -41,10 +73,19 @@ export type SettleOutcome =
 
 const silent: Logger = { info: () => {}, warn: () => {}, error: () => {} };
 
-/** True when the current tenant's paid period ended more than the grace days ago. */
+const asDate = (v: unknown): Date | null => (v instanceof Date ? v : typeof v === "string" ? new Date(v) : null);
+
+/**
+ * True when the current tenant is restricted: paid period ended past grace, or (new tenants,
+ * ADR 0015) setup expired without a channel or trial ended past grace.
+ */
 export async function isSubscriptionRestricted(tx: Transaction, now: Date = new Date()): Promise<boolean> {
   const [row] = await tx.execute<{ d: string | null }>(sql`select public.tenant_subscription_paid_until()::text as d`);
-  return subscriptionAccess(row?.d ?? null, now) === "restricted";
+  const [lc] = await tx.execute<{ setup_ends_at?: unknown; trial_started_at?: unknown; trial_ends_at?: unknown }>(
+    sql`select setup_ends_at, trial_started_at, trial_ends_at from tenant_plans limit 1`,
+  );
+  const lifecycle = lc ? { setupEndsAt: asDate(lc.setup_ends_at), trialStartedAt: asDate(lc.trial_started_at), trialEndsAt: asDate(lc.trial_ends_at) } : null;
+  return tenantAccess(row?.d ?? null, lifecycle, now) === "restricted";
 }
 
 function toPayload(p: NowPaymentsPayment): Record<string, unknown> {
@@ -190,6 +231,7 @@ export function createSubscriptionBillingWorker(opts: SubscriptionBillingWorkerO
       if (job.name === SUBSCRIPTION_RECONCILE_TICK_JOB) {
         const res = await runSubscriptionReconcileTick(deps);
         await runSubscriptionPlanSync(deps);
+        await runSetupReminders(deps);
         return res;
       }
       throw new UnrecoverableError("unknown job name");

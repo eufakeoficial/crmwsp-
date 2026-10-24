@@ -15,6 +15,8 @@ import {
   type RecordSubscriptionPaymentRequest,
   type SubscriptionPaymentListQuery,
   type TenantPlanChangeRequest,
+  type TenantLifecycleExtendRequest,
+  tenantLifecycleExtendResponseSchema,
   type TenantStatus,
   type TenantStatusChangeRequest,
   platformDashboardSchema,
@@ -39,6 +41,8 @@ export const platformApi = {
     request(`/platform/tenants/${encodeURIComponent(id)}/status`, { method: "POST", body, schema: platformTenantSchema }),
   changePlan: (id: string, body: TenantPlanChangeRequest) =>
     request(`/platform/tenants/${encodeURIComponent(id)}/plan`, { method: "PUT", body, schema: platformTenantSchema }),
+  extendLifecycle: (id: string, body: TenantLifecycleExtendRequest) =>
+    request(`/platform/tenants/${encodeURIComponent(id)}/lifecycle`, { method: "POST", body, schema: tenantLifecycleExtendResponseSchema }),
   payments: (q: SubscriptionPaymentListQuery = {}) =>
     request("/platform/payments", { query: { tenantId: q.tenantId, month: q.month }, schema: subscriptionPaymentListSchema }),
   recordPayment: (body: RecordSubscriptionPaymentRequest) => request("/platform/payments", { method: "POST", body, schema: subscriptionPaymentSchema }),

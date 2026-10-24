@@ -1,6 +1,8 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import {
   type PlatformAuditPage,
+  type TenantLifecycleExtendResponse,
+  tenantLifecycleExtendRequestSchema,
   type PlatformChannelList,
   type PlatformPlans,
   type PlatformSubscriptionChargeList,
@@ -78,6 +80,13 @@ export class PlatformController {
   @Put("tenants/:id/plan")
   plan(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("id") id: string, @Body() body: unknown): Promise<PlatformTenant> {
     return this.platform.changePlan(actorOf(user, req), parseOrThrow(uuidSchema, id), parseOrThrow(tenantPlanChangeRequestSchema, body));
+  }
+
+  /** Extend a new tenant's setup or trial by N days (ADR 0015); audited as `tenant.lifecycle_extended`. */
+  @Post("tenants/:id/lifecycle")
+  @HttpCode(200)
+  lifecycle(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("id") id: string, @Body() body: unknown): Promise<TenantLifecycleExtendResponse> {
+    return this.platform.extendLifecycle(actorOf(user, req), parseOrThrow(uuidSchema, id), parseOrThrow(tenantLifecycleExtendRequestSchema, body));
   }
 
   @Get("payments")

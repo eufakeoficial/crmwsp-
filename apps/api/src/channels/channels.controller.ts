@@ -24,6 +24,7 @@ import { TenantGuard } from "../auth/tenant.guard.js";
 import type { HttpRequest, RequestTenant } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
+import { ActivationGuard } from "../billing/activation.guard.js";
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import { PG_UNIQUE_VIOLATION, pgCode, writeAudit } from "../inbox/audit.js";
 import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_API_KEY_PURPOSE, webhookUrlFor } from "./channels.constants.js";
@@ -40,7 +41,7 @@ function redactedHint(row: ChannelConnection, cipher: CipherBox): string | null 
 const ADMIN_ROLES = new Set(["owner", "admin"]);
 
 /** The part of PlanLimitsService the channels need (stubbed in unit tests). */
-export type ChannelPlanLimits = Pick<PlanLimitsService, "assert" | "lock">;
+export type ChannelPlanLimits = Pick<PlanLimitsService, "assert" | "lock" | "startTrialIfEligible">;
 
 @Controller("channels")
 @UseGuards(TenantGuard)
@@ -107,6 +108,7 @@ export class ChannelsController {
           })
           .returning();
         if (!created) throw new Error("insert returned no row");
+        await this.limits.startTrialIfEligible(tx);
         await writeAudit(tx, {
           tenantId: db.tenantId,
           userId: db.userId,
@@ -185,6 +187,7 @@ export class ChannelsController {
             })
             .returning();
           if (!created) throw new Error("insert returned no row");
+          await this.limits.startTrialIfEligible(tx);
           await writeAudit(tx, {
             tenantId: db.tenantId,
             userId: db.userId,
@@ -279,6 +282,7 @@ export class ChannelsController {
   }
 
   @Post(":id/templates")
+  @UseGuards(ActivationGuard)
   @Roles("owner", "admin")
   async submitTemplate(
     @CurrentTenantDb() db: TenantDb,
@@ -419,6 +423,7 @@ export class ChannelsController {
         .where(eq(channelConnections.id, id))
         .returning();
       if (!updated) throw new NotFoundError();
+      if (updated.status === "active") await this.limits.startTrialIfEligible(tx);
       await writeAudit(tx, {
         tenantId: db.tenantId,
         userId: db.userId,

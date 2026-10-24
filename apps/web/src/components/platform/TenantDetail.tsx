@@ -81,6 +81,48 @@ function PlanEditor({ tenant, onSaved }: { tenant: PlatformTenant; onSaved: () =
   );
 }
 
+/** Extend a new tenant's setup or trial by N days (ADR 0015). Audited server side. */
+function LifecycleEditor({ tenantId }: { tenantId: string }) {
+  const [kind, setKind] = useState<"setup" | "trial">("trial");
+  const [days, setDays] = useState("7");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    const n = Number(days);
+    if (!Number.isInteger(n) || n < 1 || n > 90) {
+      setMsg("Los días deben ser un entero entre 1 y 90.");
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await platformApi.extendLifecycle(tenantId, { kind, days: n });
+      setMsg(`${kind === "setup" ? "Configuración" : "Prueba"} extendida hasta ${formatDateTime(r.endsAt)}.`);
+    } catch (err) {
+      setMsg(platformErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <label className="flex flex-col gap-1 text-[12px] font-bold">
+        Etapa
+        <select value={kind} onChange={(e) => setKind(e.target.value as "setup" | "trial")} className={fieldClass}>
+          <option value="setup">Configuración (sin WhatsApp)</option>
+          <option value="trial">Prueba gratuita</option>
+        </select>
+      </label>
+      <label className="flex flex-col gap-1 text-[12px] font-bold">
+        Días
+        <input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} className={fieldClass} />
+      </label>
+      <Button size="sm" disabled={busy} onClick={() => void save()}>Extender</Button>
+      {msg ? <span className="text-[12px] text-muted" role="status">{msg}</span> : null}
+    </div>
+  );
+}
+
 export function TenantDetail({ id }: { id: string }) {
   const state = useAsync(() => platformApi.tenant(id), [id]);
   const actions = useStatusAction(() => state.reload());
@@ -119,6 +161,9 @@ export function TenantDetail({ id }: { id: string }) {
               </Section>
               <Section title="Plan">
                 <PlanEditor key={`${t.plan}-${JSON.stringify(t.limitsOverride)}`} tenant={t} onSaved={state.reload} />
+              </Section>
+              <Section title="Prueba gratuita">
+                <LifecycleEditor tenantId={t.id} />
               </Section>
               <Section title="Miembros y canales">
                 <ul className="m-0 list-none p-0 text-[13px]">

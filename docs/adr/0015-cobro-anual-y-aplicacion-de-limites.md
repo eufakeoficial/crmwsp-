@@ -57,3 +57,39 @@ Una auditoría del cobro SaaS (ADR 0013) encontró que:
 - Un tenant puede quedar por encima del límite de contactos por mensajes entrantes; es deliberado.
 - Si en el futuro cambian los precios, los cargos pendientes creados con el precio anterior dejarán
   de liquidarse (`mismatch`) y habrá que conciliarlos a mano o versionar los precios.
+
+## Prueba gratuita y modo configuración (T6)
+
+Hasta ahora un tenant que nunca pagó (`paid_until` nulo, `unbilled`) nunca quedaba restringido.
+
+### Ciclo de vida de los tenants nuevos
+- **Configuración (setup)**: al crearse el tenant (trigger sobre `tenants`, migración 0068) se guarda
+  `tenant_plans.setup_ends_at = alta + 7 días`. En setup se permite conectar WhatsApp (Gupshup /
+  360dialog), configurar IA y agente, conocimiento, el simulador de IA (tope de 50 mensajes) y el
+  onboarding. Se bloquea con **402 `SETUP_REQUIRED`**: envíos desde el inbox, importación de
+  contactos, presupuestos, pedidos, reservas, envío de plantillas, difusiones e invitaciones.
+  Las lecturas siguen permitidas. Implementación: `ActivationGuard` (escrituras de presupuestos,
+  pedidos, reservas, difusiones y plantillas) y `PlanLimitsService` (contactos, asientos, difusiones
+  y envíos salientes).
+- **Prueba (trial)**: empieza cuando el primer `channel_connection` queda activo (cualquier
+  proveedor), dentro de la misma transacción (`tenant_trial_start`, idempotente). Dura 7 días con los
+  límites del plan Start (`trial_started_at`, `trial_ends_at`).
+- Sin canal en 7 días: la cuenta queda **restringida** (solo lectura, comportamiento existente).
+  Se desbloquea pagando o con una extensión del admin de plataforma.
+- Tras la prueba: los 3 días de gracia existentes y luego restringida.
+- Pagar en cualquier momento pasa a `active` con las reglas normales de la suscripción: un tenant que
+  pagó alguna vez sigue solo las reglas de `paid_until`.
+- **Tenants existentes**: `setup_ends_at` nulo = conservan el comportamiento `unbilled` anterior.
+
+### Administración y avisos
+- `POST /platform/tenants/:id/lifecycle {kind: setup|trial, days 1..90}` extiende desde
+  `max(fin actual, ahora)`; auditado como `tenant.lifecycle_extended` en `platform_audit_events`.
+- Banner en el panel con los días restantes ("te quedan X días para conectar" / "de prueba") y el
+  estado en "Plan y uso" y "Suscripción".
+- Recordatorio por email al día 5 de setup (ya existía un mailer): lo envía el tick de suscripciones
+  del worker, que ahora se programa siempre. Se marca enviado **antes** de enviar
+  (`tenant_setup_reminders_claim`), así se manda como mucho una vez; un fallo de envío no se reintenta.
+
+### Consecuencias
+- Los tests e2e que dan de alta un tenant por la API y luego crean presupuestos/pedidos sin conectar
+  un canal recibirán `SETUP_REQUIRED`; deben conectar un canal o marcar el tenant como heredado.

@@ -14,6 +14,7 @@ export const ErrorCode = {
   InsufficientStock: "INSUFFICIENT_STOCK",
   StorageNotConfigured: "STORAGE_NOT_CONFIGURED",
   PlanLimitExceeded: "PLAN_LIMIT_EXCEEDED",
+  SetupRequired: "SETUP_REQUIRED",
   Internal: "INTERNAL_ERROR",
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -73,6 +74,13 @@ export class ConflictError extends AppError {
 export class PlanLimitExceededError extends AppError {
   constructor(message = "Plan limit exceeded", options?: AppErrorOptions) {
     super(ErrorCode.PlanLimitExceeded, message, 402, options);
+  }
+}
+
+/** The tenant is still in setup: connect a WhatsApp channel to start the trial (ADR 0015). 402. */
+export class SetupRequiredError extends AppError {
+  constructor(message = "Connect your WhatsApp channel to start your trial", options?: AppErrorOptions) {
+    super(ErrorCode.SetupRequired, message, 402, options);
   }
 }
 

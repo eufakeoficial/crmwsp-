@@ -43,10 +43,15 @@ export const billingPlanResponseSchema = z.object({
   billingProvider: z.enum(["none", "nowpayments"]),
   subscription: z.object({
     /** `unbilled` = never paid through the platform (not restricted). */
-    access: z.enum(["unbilled", "active", "grace", "restricted"]),
+    access: z.enum(["unbilled", "active", "grace", "restricted", "setup", "trial"]),
     /** Last paid day (`YYYY-MM-DD`, UTC), `null` when never paid. */
     paidUntil: z.string().nullable(),
     graceDays: z.number().int(),
+    /** Trial lifecycle (ADR 0015); null for grandfathered tenants. ISO timestamps. */
+    setupEndsAt: z.string().nullable(),
+    trialEndsAt: z.string().nullable(),
+    /** Days left in setup or trial (null in any other state). */
+    daysLeft: z.number().int().nullable(),
   }),
 });
 export type BillingPlanResponse = z.infer<typeof billingPlanResponseSchema>;

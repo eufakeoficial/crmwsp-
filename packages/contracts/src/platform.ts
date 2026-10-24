@@ -117,6 +117,12 @@ export const tenantPlanChangeRequestSchema = z.object({
 });
 export type TenantPlanChangeRequest = z.infer<typeof tenantPlanChangeRequestSchema>;
 
+/** `POST /platform/tenants/:id/lifecycle`: extend setup or trial by N days (ADR 0015, audited). */
+export const tenantLifecycleExtendRequestSchema = z.object({ kind: z.enum(["setup", "trial"]), days: z.number().int().min(1).max(90) }).strict();
+export type TenantLifecycleExtendRequest = z.infer<typeof tenantLifecycleExtendRequestSchema>;
+export const tenantLifecycleExtendResponseSchema = z.object({ kind: z.enum(["setup", "trial"]), endsAt: z.string() });
+export type TenantLifecycleExtendResponse = z.infer<typeof tenantLifecycleExtendResponseSchema>;
+
 export const recordSubscriptionPaymentRequestSchema = z
   .object({
     tenantId: uuidSchema,

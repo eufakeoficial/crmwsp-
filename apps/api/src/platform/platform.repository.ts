@@ -82,6 +82,14 @@ export class PlatformRepository {
     await this.sql`select public.platform_set_tenant_plan(${actor}, ${tenantId}, ${plan}, ${json}::jsonb, ${ip}::inet)`;
   }
 
+  /** Extends setup or trial (`platform_extend_lifecycle`, 0068); returns the new end. */
+  async extendLifecycle(actor: string, tenantId: string, kind: "setup" | "trial", days: number, ip: string | null): Promise<Date> {
+    const [r] = await this.sql<{ ends_at: Date }[]>`
+      select public.platform_extend_lifecycle(${actor}, ${tenantId}, ${kind}, ${days}::integer, ${ip}::inet) as ends_at`;
+    if (!r) throw new Error("platform_extend_lifecycle returned no row");
+    return new Date(r.ends_at);
+  }
+
   async recordPayment(
     actor: string,
     p: {

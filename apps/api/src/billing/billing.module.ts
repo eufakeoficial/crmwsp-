@@ -7,6 +7,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { DB_HANDLE, type DbHandle } from "../common/http.js";
 import { BillingController } from "./billing.controller.js";
 import { NowPaymentsIpnController } from "./nowpayments-ipn.controller.js";
+import { ActivationGuard } from "./activation.guard.js";
 import { PlanLimitsService } from "./plan-limits.service.js";
 import { NOWPAYMENTS_IPN_SECRET, NOWPAYMENTS_PROVIDER, SUBSCRIPTION_EVENT_STORE, SUBSCRIPTION_QUEUE } from "./subscription.constants.js";
 import { PgSubscriptionEventStore, SubscriptionService } from "./subscription.service.js";
@@ -16,6 +17,7 @@ import { PgSubscriptionEventStore, SubscriptionService } from "./subscription.se
   controllers: [BillingController, NowPaymentsIpnController],
   providers: [
     PlanLimitsService,
+    ActivationGuard,
     SubscriptionService,
     {
       // Null when NOWPAYMENTS_API_KEY is unset: charge creation answers 502, nothing else breaks.
@@ -39,7 +41,7 @@ import { PgSubscriptionEventStore, SubscriptionService } from "./subscription.se
       },
     },
   ],
-  exports: [PlanLimitsService],
+  exports: [PlanLimitsService, ActivationGuard],
 })
 export class BillingModule implements OnApplicationShutdown {
   constructor(@Optional() @Inject(SUBSCRIPTION_QUEUE) private readonly queue?: Queue) {}

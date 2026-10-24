@@ -12,6 +12,7 @@ import {
 import { contacts, eq, isUuid, orders, sql, type Transaction } from "@crmwsp/db";
 import type { OrderAction } from "@crmwsp/domain";
 import { CurrentTenantDb, Roles } from "../auth/decorators.js";
+import { ActivationGuard } from "../billing/activation.guard.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import type { HttpRequest } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
@@ -44,7 +45,7 @@ export function mapStockError(err: unknown): never {
 }
 
 @Controller("orders")
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, ActivationGuard)
 export class OrdersController {
   @Get()
   async list(@CurrentTenantDb() db: TenantDb, @Query() query: unknown): Promise<OrderList> {
