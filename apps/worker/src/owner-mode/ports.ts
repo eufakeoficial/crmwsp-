@@ -1,6 +1,6 @@
 import type { OwnerCommandInterpretation } from "@crmwsp/contracts";
 import { ownerCommandResponseFormat, buildOwnerInterpreterMessages, estimateCost, OpenAICompatibleProvider, type LLMProvider } from "@crmwsp/ai";
-import { checkLimit, resolveEffectivePlan } from "@crmwsp/billing";
+import { aiMessagesAllowed } from "../ai/plan-gate.js";
 import type { CipherBox } from "@crmwsp/crypto";
 import { channelConnections, consumeUsage, llmConnections, readPlanUsage, usageLedger, withTenant, type Database } from "@crmwsp/db";
 import type { WhatsAppProvider } from "@crmwsp/whatsapp";
@@ -63,7 +63,7 @@ export function createOwnerInterpreter(deps: {
       const usage = await readPlanUsage(tx);
       // Admin overrides apply; a subscription restricted past grace (ADR 0013) runs no AI.
       if (await isSubscriptionRestricted(tx)) return { kind: "limit" as const };
-      if (!checkLimit(resolveEffectivePlan(usage.plan, usage.limitsOverride), "ai_messages", usage.aiMessages, 1).allowed) {
+      if (!(await aiMessagesAllowed(tx, usage, c))) {
         return { kind: "limit" as const };
       }
       return { kind: "ok" as const, conn: c };
