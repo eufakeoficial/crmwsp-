@@ -127,8 +127,8 @@ DECLARE
 BEGIN
   IF p_resend_email_id IS NULL OR pg_catalog.length(p_resend_email_id) > 128
      OR p_from_email IS NULL OR pg_catalog.length(p_from_email) > 254 OR p_from_email !~ '^[^\s@]+@[^\s@]+$'
-     OR pg_catalog.coalesce(pg_catalog.array_length(p_refs, 1), 0) > 50
-     OR pg_catalog.coalesce(pg_catalog.array_length(p_to, 1), 0) > 50
+     OR coalesce(pg_catalog.array_length(p_refs, 1), 0) > 50
+     OR coalesce(pg_catalog.array_length(p_to, 1), 0) > 50
      OR (p_message_id IS NOT NULL AND pg_catalog.length(p_message_id) > 256)
      OR (p_auto_reason IS NOT NULL AND p_auto_reason NOT IN ('auto_submitted', 'precedence', 'bounce', 'list')) THEN
     RAISE EXCEPTION 'support_email_ingest: invalid argument' USING ERRCODE = '22023';
@@ -148,7 +148,7 @@ BEGIN
     RETURN;
   END IF;
 
-  IF pg_catalog.coalesce(pg_catalog.array_length(p_refs, 1), 0) > 0 THEN
+  IF coalesce(pg_catalog.array_length(p_refs, 1), 0) > 0 THEN
     SELECT s.* INTO v_ticket FROM public."support_messages" m
     JOIN public."support_tickets" s ON s."id" = m."ticket_id"
     WHERE m."email_message_id" = ANY (p_refs) AND s."channel" = 'email'
@@ -161,7 +161,7 @@ BEGIN
     FOR UPDATE;
     v_found := FOUND;
   END IF;
-  IF NOT v_found AND pg_catalog.coalesce(p_subject_norm, '') <> '' THEN
+  IF NOT v_found AND coalesce(p_subject_norm, '') <> '' THEN
     SELECT s.* INTO v_ticket FROM public."support_tickets" s
     WHERE s."channel" = 'email' AND s."contact_email" = p_from_email AND s."subject_norm" = p_subject_norm
       AND s."last_message_at" > pg_catalog.now() - interval '30 days'
@@ -179,21 +179,21 @@ BEGIN
     INSERT INTO public."support_tickets" ("tenant_id", "channel", "subject", "category", "created_by",
                                           "contact_email", "contact_name", "subject_norm", "admin_unread")
     VALUES (v_tenant, 'email',
-            pg_catalog.coalesce(NULLIF(pg_catalog.left(pg_catalog.btrim(p_subject), 160), ''), '(sin asunto)'),
+            coalesce(NULLIF(pg_catalog.left(pg_catalog.btrim(p_subject), 160), ''), '(sin asunto)'),
             'other', v_user, p_from_email, pg_catalog.left(p_from_name, 120), pg_catalog.left(p_subject_norm, 200), true)
     RETURNING * INTO v_ticket;
     v_created := true;
   END IF;
 
-  v_body := pg_catalog.left(pg_catalog.coalesce(NULLIF(pg_catalog.btrim(p_text), ''), '(sin texto)'), 200000);
+  v_body := pg_catalog.left(coalesce(NULLIF(pg_catalog.btrim(p_text), ''), '(sin texto)'), 200000);
   INSERT INTO public."support_messages" ("tenant_id", "ticket_id", "author_type", "author_user_id", "body", "internal",
                                          "from_email", "to_emails", "email_message_id", "resend_email_id", "html",
                                          "attachments", "auto_reason")
   VALUES (v_ticket."tenant_id", v_ticket."id", 'email_contact', v_ticket."created_by", v_body, false,
-          p_from_email, pg_catalog.coalesce(p_to, '{}'),
-          pg_catalog.coalesce(p_message_id, '<' || p_resend_email_id || '@resend.inbound>'), p_resend_email_id,
+          p_from_email, coalesce(p_to, '{}'),
+          coalesce(p_message_id, '<' || p_resend_email_id || '@resend.inbound>'), p_resend_email_id,
           CASE WHEN pg_catalog.length(p_html) <= 500000 THEN p_html ELSE NULL END,
-          pg_catalog.coalesce(p_attachments, '[]'::jsonb), p_auto_reason)
+          coalesce(p_attachments, '[]'::jsonb), p_auto_reason)
   RETURNING "id" INTO v_msg;
 
   UPDATE public."support_tickets" s
@@ -229,7 +229,7 @@ BEGIN
   RETURN QUERY
     SELECT s."id", s."number", s."subject", s."status", s."priority", s."contact_email", s."contact_name",
            s."tenant_id", t."name", s."assignee_id", au."name",
-           pg_catalog.coalesce((SELECT pg_catalog.left(m."body", 160) FROM public."support_messages" m
+           coalesce((SELECT pg_catalog.left(m."body", 160) FROM public."support_messages" m
                                 WHERE m."ticket_id" = s."id" AND NOT m."internal"
                                 ORDER BY m."created_at" DESC, m."id" DESC LIMIT 1), ''),
            s."admin_unread", s."last_message_at"
