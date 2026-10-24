@@ -10,6 +10,7 @@ import { formatMoneyMinor } from "@/lib/format";
 import { useToast } from "@/lib/hooks/use-toast";
 import { errorMessage } from "@/lib/messages";
 import { pipelineApi } from "@/lib/pipeline-api";
+import { NewOpportunityDialog } from "./NewOpportunityDialog";
 import { canMoveOpportunities, columnTotal, groupByStage } from "./pipeline-meta";
 
 const MAX_PAGES = 5;
@@ -24,6 +25,7 @@ export function PipelineBoard() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [lostFor, setLostFor] = useState<{ opp: Opportunity; stage: Stage } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const { message, show } = useToast();
 
   const load = useCallback(async () => {
@@ -82,6 +84,11 @@ export function PipelineBoard() {
   return (
     <>
       <PageHeader title="Pipeline" subtitle="Tus ventas en curso ordenadas por etapa, desde el primer contacto hasta el cierre." />
+      {canMove ? (
+        <div className="mb-4">
+          <Button onClick={() => setCreating(true)}>Nueva oportunidad</Button>
+        </div>
+      ) : null}
       {error ? <div className="mb-4"><Alert>{errorMessage(error)}</Alert></div> : null}
       {truncated ? <div className="mb-4"><Alert>Se muestran las {items?.length} oportunidades más recientes.</Alert></div> : null}
 
@@ -166,6 +173,15 @@ export function PipelineBoard() {
             const { opp, stage } = lostFor;
             setLostFor(null);
             void move(opp, stage, reason);
+          }}
+        />
+      ) : null}
+      {creating ? (
+        <NewOpportunityDialog
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false);
+            void load();
           }}
         />
       ) : null}

@@ -8,7 +8,10 @@ describe("admin nav", () => {
     expect(resolveActiveKey("/app/inbox")).toBeNull();
   });
   it("lists only sections that have a page", () => {
-    expect(ADMIN_ITEMS.map((i) => i.key)).toEqual(["home", "tenants", "approvals", "users", "channels", "finance", "payments", "plans", "coupons", "usage", "audit", "policies", "settings"]);
+    expect(ADMIN_ITEMS.map((i) => i.key)).toEqual([
+      "home", "tenants", "approvals", "users", "channels", "finance", "payments", "plans", "coupons", "usage",
+      "support", "email", "canned", "audit", "policies", "settings",
+    ]);
   });
   it("searches ignoring accents and case", () => {
     expect(searchNav("facturacion").length).toBe(0);

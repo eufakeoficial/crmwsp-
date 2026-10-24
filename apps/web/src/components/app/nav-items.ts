@@ -1,4 +1,4 @@
-import { AlertCircle, BookOpen, Bot, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, CalendarDays, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, MessageSquareText, Package, Plug, Settings, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -40,6 +40,7 @@ export const NAV_MAIN: readonly NavItem[] = [
   { key: "pipeline", label: "Pipeline", href: "/app/pipeline", icon: Kanban },
   { key: "quotes", label: "Presupuestos", href: "/app/quotes", icon: FileText },
   { key: "orders", label: "Pedidos", href: "/app/orders", icon: ShoppingBag },
+  { key: "agenda", label: "Agenda", href: "/app/agenda", icon: CalendarDays },
   { key: "ai", label: "IA", href: "/app/ai", icon: Sparkles, children: AI_CHILDREN },
 ];
 
@@ -50,11 +51,13 @@ export const NAV_MORE: readonly NavItem[] = [
   { key: "broadcasts", label: "Campañas", href: "/app/broadcasts", icon: Megaphone },
   { key: "products", label: "Productos", href: "/app/products", icon: Package },
   { key: "channels", label: "Canales", href: "/app/channels", icon: Plug },
+  { key: "wa-templates", label: "Plantillas de WhatsApp", href: "/app/templates", icon: MessageSquareText },
   { key: "team", label: "Equipo", href: "/app/team", icon: Users },
 ];
 
 export const NAV_SECONDARY: readonly NavItem[] = [
   { key: "settings", label: "Configuración", href: "/app/settings", icon: Settings, children: SETTINGS_SECTIONS },
+  { key: "support", label: "Soporte", href: "/app/support", icon: LifeBuoy },
 ];
 
 /** Active item from the path: `/app` only matches exactly, the rest match by prefix. */

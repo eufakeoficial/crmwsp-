@@ -43,5 +43,19 @@ export const messageTemplateSchema = z.object({
 });
 export type MessageTemplateDto = z.infer<typeof messageTemplateSchema>;
 
+/** GET /channels/:id/templates (every status; viewers included). */
+export const messageTemplateListSchema = z.object({ items: z.array(messageTemplateSchema) });
+export type MessageTemplateListResponse = z.infer<typeof messageTemplateListSchema>;
+
+/** POST /channels/:id/templates/sync: on-demand reconciliation with the BSP listing. */
+export const syncTemplatesResponseSchema = z.object({
+  updated: z.number().int().nonnegative(),
+  imported: z.number().int().nonnegative(),
+  /** Rejection reasons reported by the BSP in this sync; not persisted. */
+  rejections: z.array(z.object({ name: z.string(), language: z.string(), reason: z.string() })),
+  items: z.array(messageTemplateSchema),
+});
+export type SyncTemplatesResponse = z.infer<typeof syncTemplatesResponseSchema>;
+
 /** Queue name of the periodic template status sync (apps/worker). */
 export const TEMPLATE_SYNC_QUEUE_NAME = "template-sync";

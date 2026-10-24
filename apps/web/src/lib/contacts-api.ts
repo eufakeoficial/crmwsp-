@@ -4,9 +4,11 @@ import {
   contactBookListSchema,
   contactBookSearchResultSchema,
   contactBulkResultSchema,
+  contactSchema,
   contactTagCountsSchema,
   importContactsResultSchema,
   type ContactBulkRequest,
+  type CreateContactRequest,
   type ListContactBookQuery,
   type SearchContactBookRequest,
 } from "@crmwsp/contracts";
@@ -26,4 +28,9 @@ export const contactBookApi = {
     request(`/contact-book/${id}/tags`, { method: "PATCH", body: { tags }, schema: contactBookItemSchema }),
   setMarketingConsent: (id: string, granted: boolean) =>
     request(`/contact-book/${id}/marketing-consent`, { method: "PUT", body: { granted }, schema: contactBookItemSchema }),
+};
+
+/** Manual contact creation (POST /contacts). A duplicate phone answers 409 with `details.contactId`. */
+export const contactCreateApi = {
+  create: (input: CreateContactRequest) => request("/contacts", { method: "POST", body: input, schema: contactSchema }),
 };

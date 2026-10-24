@@ -21,6 +21,7 @@ export interface LifecycleEmailDeps {
 const silent: Logger = { info: () => {}, warn: () => {}, error: () => {} };
 const BILLING_PATH = "/app/settings/billing";
 const RECENT_HOURS = 48;
+const SUPPORT_PATH = "/app/support";
 
 const dateFmt = new Intl.DateTimeFormat("es", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 export const formatDay = (value: string | Date): string =>
@@ -96,6 +97,34 @@ export async function runReferralRewardEmails(deps: LifecycleEmailDeps): Promise
   return sent;
 }
 
+type SupportReplyRow = {
+  message_id: string; tenant_id: string; ticket_number: number; ticket_subject: string;
+  creator_email: string | null; creator_name: string | null; agent_name: string | null; body: string;
+};
+const EXCERPT_MAX = 600;
+
+/** Emails the ticket creator when the platform publicly replies on an app ticket (ADR 0016). */
+export async function runSupportReplyEmails(deps: LifecycleEmailDeps): Promise<number> {
+  const rows = await deps.db.execute<SupportReplyRow>(sql`select * from public.email_recent_support_replies(${RECENT_HOURS}, 100)`);
+  let sent = 0;
+  for (const r of rows) {
+    if (!r.creator_email) continue;
+    const to = r.creator_email;
+    const excerpt = r.body.length > EXCERPT_MAX ? `${r.body.slice(0, EXCERPT_MAX).trimEnd()}…` : r.body;
+    const ok = await dispatch(deps, `support-reply:${r.message_id}`, r.tenant_id, () =>
+      templateMessage(to, "ticket-respuesta", {
+        name: r.creator_name ?? "",
+        ticketRef: `#${r.ticket_number}`,
+        ticketSubject: r.ticket_subject,
+        agentName: r.agent_name ?? "Equipo de soporte",
+        excerpt,
+        ticketUrl: siteLink(deps.ctx, SUPPORT_PATH),
+      }, deps.ctx), "ticket-respuesta");
+    if (ok) sent++;
+  }
+  return sent;
+}
+
 type CandidateRow = {
   tenant_id: string; tenant_name: string; owner_email: string | null; owner_name: string | null; plan: string;
   paid_until: string | Date | null; setup_ends_at: string | Date | null; trial_started_at: string | Date | null;
@@ -152,7 +181,7 @@ export async function runTenantLifecycleEmails(deps: LifecycleEmailDeps): Promis
 /** One pass over every lifecycle/billing email; a failing group never blocks the others. */
 export async function runLifecycleEmails(deps: LifecycleEmailDeps): Promise<number> {
   let sent = 0;
-  for (const run of [runPaidChargeEmails, runReferralRewardEmails, runTenantLifecycleEmails]) {
+  for (const run of [runPaidChargeEmails, runReferralRewardEmails, runSupportReplyEmails, runTenantLifecycleEmails]) {
     try {
       sent += await run(deps);
     } catch (err) {

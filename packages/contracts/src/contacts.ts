@@ -8,6 +8,14 @@ export type MarketingConsentStatus = z.infer<typeof marketingConsentStatusSchema
 
 export const contactTagSchema = z.string().trim().min(1).max(40);
 
+/** Manual contact creation. The phone is normalized to E.164 by the API (humans type spaces, dashes, "00"). */
+export const createContactRequestSchema = z.object({
+  phone: z.string().trim().min(5).max(30),
+  name: z.string().trim().min(1).max(120).optional(),
+  email: z.string().trim().email().max(200).optional(),
+});
+export type CreateContactRequest = z.infer<typeof createContactRequestSchema>;
+
 export const contactBookItemSchema = z.object({
   id: uuidSchema,
   name: z.string().nullable(),
