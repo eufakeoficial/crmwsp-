@@ -30,6 +30,7 @@ import {
 } from "@crmwsp/db";
 import { canTransitionBroadcast, countTemplatePlaceholders } from "@crmwsp/domain";
 import { CurrentTenantDb, Roles } from "../auth/decorators.js";
+import { ActivationGuard, AllowLapsedWrite } from "../billing/activation.guard.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import type { HttpRequest } from "../common/http.js";
@@ -107,7 +108,7 @@ export async function broadcastStats(tx: Transaction, id: string): Promise<Broad
 
 @Controller("broadcasts")
 // SessionGuard is global (APP_GUARD) and runs first.
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, ActivationGuard)
 export class BroadcastsController {
   constructor(@Inject(PlanLimitsService) private readonly limits: PlanLimitsService) {}
 
@@ -150,6 +151,7 @@ export class BroadcastsController {
   }
 
   @Post("preview")
+  @AllowLapsedWrite()
   // Read-only audience count (POST only to carry the filter body): viewers may use it.
   @Roles("owner", "admin", "agent", "viewer")
   @HttpCode(200)
@@ -301,6 +303,7 @@ export class BroadcastsController {
 
   /** Stops the campaign: pending recipients are skipped; already-queued sends are dropped by the worker. */
   @Post(":id/cancel")
+  @AllowLapsedWrite()
   @Roles("owner", "admin")
   @HttpCode(200)
   async cancel(@CurrentTenantDb() db: TenantDb, @Param("id") id: string, @Req() req: HttpRequest): Promise<Broadcast> {

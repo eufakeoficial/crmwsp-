@@ -3,22 +3,31 @@ import { pathToFileURL } from "node:url";
 import { parsePdf } from "@crmwsp/knowledge";
 import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
 import { createDb } from "@crmwsp/db";
-import { GupshupProvider } from "@crmwsp/whatsapp";
+import { createDefaultWhatsAppProvider } from "@crmwsp/whatsapp";
 import { Queue } from "bullmq";
 import { createAiWorker, createBspMediaLoader } from "./ai/index.js";
 import { AI_QUEUE_NAME, OUTBOUND_QUEUE_NAME, createRedis } from "./queue.js";
 import { createInboundWorker } from "./worker.js";
+import { POLICY_MONITOR_QUEUE_NAME, createPolicyMonitorWorker, schedulePolicyMonitorTick } from "./policy-monitor/index.js";
 import { createOutboundWorker } from "./outbound.js";
 import { FOLLOW_UP_QUEUE_NAME, createFollowUpWorker, scheduleFollowUpTick } from "./followups/index.js";
 import { CAPI_QUEUE_NAME, createCapiWorker, scheduleCapiTick, type FetchLike } from "./meta-capi/index.js";
 import { META_ADS_QUEUE_NAME, createMetaAdsWorker, scheduleMetaAdsTick, type MetaGetFetch } from "./meta-ads/index.js";
 import { BROADCAST_QUEUE_NAME, createBroadcastWorker, scheduleBroadcastTick } from "./broadcasts/index.js";
+import { TEMPLATE_SYNC_QUEUE_NAME, createTemplateSyncWorker, scheduleTemplateSyncTick } from "./templates/index.js";
 import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
-import { createMailerFromEnv, renderEmail } from "@crmwsp/mailer";
+import { createMailerFromEnv, emailContextFromEnv, resendReceivingFromEnv, siteLink, templateMessage } from "@crmwsp/mailer";
+import { createSupportEmailWorker } from "./support-email/index.js";
 import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotificationTick } from "./notifications/index.js";
 import { OWNER_MODE_QUEUE_NAME, createOwnerInterpreter, createOwnerModeWorker, createOwnerSender } from "./owner-mode/index.js";
 import { WEBHOOK_QUEUE_NAME, createWebhookSender, createWebhookWorker, scheduleWebhookTick } from "./webhooks/index.js";
 import { ORDER_EXTRACTION_QUEUE_NAME, createOrderExtractionWorker } from "./order-extraction/index.js";
+import { NowPaymentsProvider, nowPaymentsOptionsFromEnv } from "@crmwsp/payments";
+import {
+  SUBSCRIPTION_BILLING_QUEUE_NAME,
+  createSubscriptionBillingWorker,
+  scheduleSubscriptionReconcileTick,
+} from "./subscription-billing/index.js";
 
 export * from "./queue.js";
 export * from "./processors.js";
@@ -28,12 +37,18 @@ export * from "./ai/index.js";
 export * from "./followups/index.js";
 export * from "./meta-capi/index.js";
 export * from "./meta-ads/index.js";
+export * from "./templates/index.js";
 export * from "./notifications/index.js";
 export * from "./media/index.js";
 export * from "./webhooks/index.js";
 export * from "./broadcasts/index.js";
 export * from "./owner-mode/index.js";
 export * from "./order-extraction/index.js";
+export * from "./subscription-billing/index.js";
+export * from "./support-email/index.js";
+export * from "./channel-quality.js";
+export * from "./platform-alerts.js";
+export * from "./policy-monitor/index.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -73,9 +88,12 @@ function main(): void {
 
   const worker = createInboundWorker({
     connection,
+    // Producer only (opt-out confirmations); sends wait in the queue until the outbound worker runs.
+    outboundQueue: new Queue(OUTBOUND_QUEUE_NAME, { connection: createRedis(redisUrl) }),
+    alertMailer: createMailerFromEnv(),
     concurrency: Number.isInteger(concurrency) && concurrency > 0 ? concurrency : 5,
     db: db.db,
-    provider: new GupshupProvider(),
+    provider: createDefaultWhatsAppProvider(),
     publisher,
     aiQueue,
     ownerQueue,
@@ -86,6 +104,55 @@ function main(): void {
   worker.on("failed", (job, err) =>
     logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
   );
+
+  // SaaS subscription settlement (NOWPayments, ADR 0013): needs no master keys. Without
+  // NOWPAYMENTS_API_KEY, IPN settlement still runs and the reconciliation tick is a no-op.
+  const nowPaymentsOptions = nowPaymentsOptionsFromEnv(process.env);
+  const subscriptionQueue = new Queue(SUBSCRIPTION_BILLING_QUEUE_NAME, { connection: createRedis(redisUrl) });
+  const subscriptionWorker = createSubscriptionBillingWorker({
+    connection: createRedis(redisUrl),
+    db: db.db,
+    provider: nowPaymentsOptions ? new NowPaymentsProvider(nowPaymentsOptions) : null,
+    logger,
+    ...(process.env.TRIAL_IDENTITY_SECRET ? { trialIdentitySecret: process.env.TRIAL_IDENTITY_SECRET } : {}),
+    lifecycleEmails: { send: (m) => createMailerFromEnv().send(m), ctx: emailContextFromEnv() },
+    sendSetupReminder: async (r) => {
+      const days = Math.max(1, Math.ceil((r.setupEndsAt.getTime() - Date.now()) / 86_400_000));
+      const ctx = emailContextFromEnv();
+      await createMailerFromEnv().send(
+        templateMessage(r.ownerEmail, "recordatorio-conecta-whatsapp", { tenantName: r.tenantName, days, connectUrl: siteLink(ctx, "/app/channels") }, ctx),
+      );
+    },
+  });
+  // Platform email inbox (Resend, ADR 0020). Without RESEND_API_KEY jobs fail and are retried.
+  const supportEmailWorker = createSupportEmailWorker({
+    connection: createRedis(redisUrl),
+    db: db.db,
+    resend: resendReceivingFromEnv(process.env),
+    publisher,
+    logger,
+  });
+  // Daily Meta/WhatsApp policy monitor (ADR 0021): opt-out with POLICY_MONITOR_DISABLED=1.
+  const policyMonitorQueue = new Queue(POLICY_MONITOR_QUEUE_NAME, { connection: createRedis(redisUrl) });
+  const policyMonitorWorker = createPolicyMonitorWorker({ connection: createRedis(redisUrl), db: db.db, mailer: createMailerFromEnv(), logger });
+  if (process.env["POLICY_MONITOR_DISABLED"] !== "1") {
+    void schedulePolicyMonitorTick(policyMonitorQueue).catch((err: unknown) =>
+      logger.warn(`policy monitor scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
+  }
+  supportEmailWorker.on("failed", (job, err) =>
+    logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
+  );
+  subscriptionWorker.on("failed", (job, err) =>
+    logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
+  );
+  // Always scheduled: without NOWPayments the reconcile part is a no-op, but the plan sync and the
+  // setup reminders (ADR 0015) still run.
+  {
+    void scheduleSubscriptionReconcileTick(subscriptionQueue).catch((err: unknown) =>
+      logger.warn(`subscription reconcile scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
+  }
 
   // Outbound sends need the master keys to decrypt BSP credentials. Without them the
   // inbound worker still runs; send-message jobs wait in the queue.
@@ -102,6 +169,8 @@ function main(): void {
   let capiQueue: Queue | undefined;
   let metaAdsWorker: ReturnType<typeof createMetaAdsWorker> | undefined;
   let metaAdsQueue: Queue | undefined;
+  let templateSyncWorker: ReturnType<typeof createTemplateSyncWorker> | undefined;
+  let templateSyncQueue: Queue | undefined;
   let webhooksWorker: ReturnType<typeof createWebhookWorker> | undefined;
   let webhookQueue: Queue | undefined;
   let broadcastWorker: ReturnType<typeof createBroadcastWorker> | undefined;
@@ -115,7 +184,7 @@ function main(): void {
       connection: createRedis(redisUrl),
       concurrency: 5,
       db: db.db,
-      provider: new GupshupProvider(),
+      provider: createDefaultWhatsAppProvider(),
       publisher,
       cipher,
       logger,
@@ -133,7 +202,7 @@ function main(): void {
       cipher,
       outboundQueue,
       lockRedis,
-      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider(), store: mediaStore }),
+      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: createDefaultWhatsAppProvider(), store: mediaStore }),
       logger,
     });
     // F4: order detection on voice notes, photos and PDFs (PDF text via @crmwsp/knowledge).
@@ -145,7 +214,7 @@ function main(): void {
       outboundQueue,
       aiQueue,
       pdfText: async (bytes) => (await parsePdf(bytes)).text,
-      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider(), store: mediaStore }),
+      loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: createDefaultWhatsAppProvider(), store: mediaStore }),
       logger,
     });
     orderExtractionWorker.on("failed", (job, err) =>
@@ -156,7 +225,7 @@ function main(): void {
         connection: createRedis(redisUrl),
         db: db.db,
         store: mediaStore,
-        loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: new GupshupProvider() }),
+        loadMedia: createBspMediaLoader({ db: db.db, cipher, provider: createDefaultWhatsAppProvider() }),
         logger,
       });
       mediaWorker.on("failed", (job, err) =>
@@ -186,15 +255,11 @@ function main(): void {
       db: db.db,
       publisher,
       outboundQueue,
-      sendOwnerText: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
+      sendOwnerText: createOwnerSender({ db: db.db, provider: createDefaultWhatsAppProvider(), cipher }),
       sendOwnerEmail: async (msg) => {
         if (!msg.to) return;
-        const { text, html } = renderEmail({
-          title: msg.title,
-          body: msg.body ?? "",
-          ...(process.env.PUBLIC_WEB_URL ? { ctaLabel: "Abrir CRMWSP", ctaUrl: `${process.env.PUBLIC_WEB_URL}/app` } : {}),
-        });
-        await mailer.send({ to: msg.to, subject: msg.title, text, html });
+        const ctx = emailContextFromEnv();
+        await mailer.send(templateMessage(msg.to, "notificacion-generica", { title: msg.title, body: msg.body ?? "", appUrl: siteLink(ctx, "/app") }, ctx));
       },
       logger,
     });
@@ -215,6 +280,12 @@ function main(): void {
     void scheduleMetaAdsTick(metaAdsQueue).catch((err: unknown) =>
       logger.warn(`meta ads scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
     );
+    // WhatsApp template review status sync (every 15 min); channel API keys need the master keys.
+    templateSyncQueue = new Queue(TEMPLATE_SYNC_QUEUE_NAME, { connection: createRedis(redisUrl) });
+    templateSyncWorker = createTemplateSyncWorker({ connection: createRedis(redisUrl), db: db.db, cipher, provider: createDefaultWhatsAppProvider(), logger });
+    void scheduleTemplateSyncTick(templateSyncQueue).catch((err: unknown) =>
+      logger.warn(`template sync scheduler not registered (${err instanceof Error ? err.name : "unknown"})`),
+    );
     // Outbound tenant webhooks (signed with the decrypted endpoint secret). http:// only outside production.
     webhookQueue = new Queue(WEBHOOK_QUEUE_NAME, { connection: createRedis(redisUrl) });
     webhooksWorker = createWebhookWorker({
@@ -231,7 +302,7 @@ function main(): void {
     ownerWorker = createOwnerModeWorker({
       connection: createRedis(redisUrl),
       db: db.db,
-      send: createOwnerSender({ db: db.db, provider: new GupshupProvider(), cipher }),
+      send: createOwnerSender({ db: db.db, provider: createDefaultWhatsAppProvider(), cipher }),
       interpret: createOwnerInterpreter({ db: db.db, cipher, logger }),
       aiQueue,
       outboundQueue,
@@ -252,8 +323,8 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
-      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), metaAdsQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close(), orderExtractionQueue.close()]))
+    void Promise.allSettled([worker.close(), subscriptionWorker.close(), supportEmailWorker.close(), policyMonitorWorker.close(), policyMonitorQueue.close(), subscriptionQueue.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), templateSyncWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
+      .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), metaAdsQueue?.close(), templateSyncQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close(), orderExtractionQueue.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));
   };

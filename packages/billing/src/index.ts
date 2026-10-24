@@ -1,8 +1,9 @@
 /**
- * Plans and usage limits (pure domain, no I/O). Plan definitions mirror the landing pricing
- * section (apps/web/src/components/landing/PricingSection.tsx): keep both in sync.
+ * Plans and usage limits (pure domain, no I/O). Plan definitions are the source of truth for
+ * prices and limits; the public pricing copy (packages/contracts/src/site-content.ts and the
+ * landing sections) must be kept in sync by hand.
  *
- * Subscription charging is OUT OF SCOPE: no payment provider bills the plan yet. The plan of a
+ * Subscription charging lives in ./subscription.ts (NOWPayments, ADR 0013). The plan of a
  * tenant is set by the platform (system/migrator role, never the app role) in `tenant_plans`
  * (migration 0023) and only enforced here.
  */
@@ -106,6 +107,11 @@ export interface UsageItem {
   used: number;
   /** 0-100, `null` when unlimited or not included. */
   percent: number | null;
+  /**
+   * Usage above the limit. Only possible where creation is never blocked (contacts created by
+   * inbound customer messages, ADR 0015) or after the limit was lowered.
+   */
+  exceeded: boolean;
 }
 
 export function summarizeUsage(plan: PlanDefinition, used: Partial<Record<LimitKey, number>>): UsageItem[] {
@@ -113,7 +119,7 @@ export function summarizeUsage(plan: PlanDefinition, used: Partial<Record<LimitK
     const limit = plan.limits[key];
     const u = Math.max(0, Math.floor(used[key] ?? 0));
     const percent = limit === null || limit === 0 ? null : Math.min(100, Math.round((u / limit) * 100));
-    return { key, limit, used: u, percent };
+    return { key, limit, used: u, percent, exceeded: limit !== null && u > limit };
   });
 }
 
@@ -130,3 +136,8 @@ export function usagePeriod(at: Date, timeZone = "UTC"): string {
   const m = parts.find((p) => p.type === "month")?.value ?? "01";
   return `${y}-${m}`;
 }
+
+export * from "./subscription.js";
+export * from "./lifecycle.js";
+export * from "./coupons.js";
+export * from "./notifications.js";

@@ -1,4 +1,4 @@
-import { renderEmail } from "@crmwsp/mailer";
+import { emailContextFromEnv, templateMessage } from "@crmwsp/mailer";
 import { createHash, randomBytes } from "node:crypto";
 
 /** 32 random bytes, base64url (43 chars). Only the SHA-256 is stored. */
@@ -21,19 +21,8 @@ export function publicWebUrl(env: NodeJS.ProcessEnv = process.env): string {
 /** Nest injection token for the shared `@crmwsp/mailer` instance. */
 export const MAILER = Symbol("MAILER");
 
-const ROLE_ES: Record<string, string> = { admin: "Administrador", agent: "Agente", viewer: "Lector" };
-
-/** Spanish invitation email. The link is the only place the token ever appears. */
+/** Branded Spanish invitation email (`invitacion-equipo`). The link is the only place the token ever appears. */
 export function invitationEmail(input: { tenantName: string; role: string; inviterName: string | null; link: string }) {
-  const who = input.inviterName ? `${input.inviterName} te ha invitado` : "Te han invitado";
-  const { text, html } = renderEmail({
-    title: `Únete a ${input.tenantName}`,
-    body: [
-      `${who} a unirte al equipo de ${input.tenantName} como ${ROLE_ES[input.role] ?? input.role}.`,
-      "El enlace caduca en 7 días y solo se puede usar una vez. Si no esperabas esta invitación, ignora este correo.",
-    ].join("\n\n"),
-    ctaLabel: "Aceptar invitación",
-    ctaUrl: input.link,
-  });
-  return { subject: `Invitación para unirte a ${input.tenantName}`.slice(0, 200), text, html };
+  const { subject, text, html } = templateMessage("", "invitacion-equipo", { ...input, days: 7 }, emailContextFromEnv());
+  return { subject, text, html: html ?? "" };
 }

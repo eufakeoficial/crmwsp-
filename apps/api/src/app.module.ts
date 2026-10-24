@@ -11,6 +11,7 @@ import { HealthController } from "./health.controller.js";
 import { InboxModule } from "./inbox/inbox.module.js";
 import { KnowledgeModule } from "./knowledge/knowledge.module.js";
 import { SalesModule } from "./sales/sales.module.js";
+import { BookingsModule } from "./bookings/bookings.module.js";
 import { StorageModule } from "./storage/storage.module.js";
 import { TenantModule } from "./tenant/tenant.module.js";
 import { PaymentsModule } from "./payments/payments.module.js";
@@ -30,9 +31,12 @@ import { TeamModule } from "./team/team.module.js";
 import { OwnerModeModule } from "./owner-mode/owner-mode.module.js";
 import { SettingsModule } from "./settings/settings.module.js";
 import { PlatformModule } from "./platform/platform.module.js";
+import { PublicAssistantModule } from "./public-assistant/public-assistant.module.js";
+import { SupportModule } from "./support/support.module.js";
+import { SupportEmailModule } from "./support-email/support-email.module.js";
 
 @Module({
-  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, AnalyticsModule, FollowUpsModule, NotificationsModule, PaymentReviewsModule, IntegrationsModule, BillingModule, AdsModule, DevelopersModule, BroadcastsModule, ContactsModule, SettingsModule, OwnerModeModule, TeamModule, PlatformModule],
+  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, AnalyticsModule, FollowUpsModule, NotificationsModule, PaymentReviewsModule, IntegrationsModule, BillingModule, AdsModule, DevelopersModule, BroadcastsModule, ContactsModule, SettingsModule, OwnerModeModule, TeamModule, PlatformModule, PublicAssistantModule, BookingsModule, SupportModule, SupportEmailModule],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AppErrorFilter }],
 })

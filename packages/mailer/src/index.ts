@@ -1,5 +1,8 @@
 import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
+import { BRAND, renderTemplate, type EmailContext, type EmailData, type EmailKey } from "./templates/index.js";
+
+export * from "./templates/index.js";
 
 export interface MailMessage {
   to: string;
@@ -7,6 +10,20 @@ export interface MailMessage {
   text: string;
   html?: string;
   replyTo?: string;
+  /** Extra headers (e.g. RFC 8058 List-Unsubscribe for optional emails). */
+  headers?: Record<string, string>;
+  /** Overrides the default sender (e.g. "Vende+ WSP <contacto@vendemas.chat>"). */
+  from?: string;
+  /** RFC 5322 Message-ID to use (`<id@domain>`), so replies can be threaded. */
+  messageId?: string;
+  /** Threading headers for replies (`<id@domain>` values). */
+  inReplyTo?: string;
+  references?: string[];
+}
+
+/** Rejects header-injection characters in values that become mail headers. */
+export function assertSafeHeaderValue(value: string): void {
+  if (/[\r\n\0]/.test(value) || value.length > 998) throw new MailerError("unsafe header value");
 }
 
 export interface Mailer {
@@ -63,14 +80,31 @@ export class SmtpMailer implements Mailer {
   }
 
   async send(message: MailMessage): Promise<{ messageId: string }> {
+    const headerValues = [
+      message.from,
+      message.messageId,
+      message.inReplyTo,
+      message.to,
+      message.subject,
+      message.replyTo,
+      ...(message.references ?? []),
+      ...Object.entries(message.headers ?? {}).flat(),
+    ];
+    for (const v of headerValues) {
+      if (v !== undefined) assertSafeHeaderValue(v);
+    }
     try {
       const info = (await this.transport.sendMail({
-        from: this.from,
+        from: message.from ?? this.from,
         to: message.to,
         subject: message.subject,
         text: message.text,
         ...(message.html ? { html: message.html } : {}),
         ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+        ...(message.headers && Object.keys(message.headers).length ? { headers: message.headers } : {}),
+        ...(message.messageId ? { messageId: message.messageId } : {}),
+        ...(message.inReplyTo ? { inReplyTo: message.inReplyTo } : {}),
+        ...(message.references?.length ? { references: message.references } : {}),
       })) as { messageId?: string };
       return { messageId: String(info.messageId ?? "") };
     } catch (err) {
@@ -119,24 +153,31 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export interface EmailTemplateInput {
-  title: string;
-  body: string;
-  ctaLabel?: string;
-  ctaUrl?: string;
+/** Public brand assets served by apps/web (apps/web/public/brand). Emails need an absolute https URL. */
+export const DEFAULT_EMAIL_ASSETS_URL = "https://www.vendemas.chat/brand";
+
+const trimSlash = (v: string) => v.replace(/\/+$/, "");
+
+/**
+ * Template context from env: links point to PUBLIC_WEB_URL (or the first WEB_ORIGINS entry,
+ * else the production site); the logo always loads from an absolute https URL
+ * (EMAIL_ASSETS_URL when it is https, else DEFAULT_EMAIL_ASSETS_URL).
+ */
+export function emailContextFromEnv(env: Record<string, string | undefined> = process.env): EmailContext {
+  const site = trimSlash((env.PUBLIC_WEB_URL ?? env.WEB_ORIGINS?.split(",")[0] ?? "").trim()) || BRAND.siteUrl;
+  const assets = trimSlash(env.EMAIL_ASSETS_URL?.trim() ?? "");
+  return { siteUrl: /^https?:\/\//i.test(site) ? site : BRAND.siteUrl, assetsUrl: /^https:\/\//i.test(assets) ? assets : DEFAULT_EMAIL_ASSETS_URL };
 }
 
-/** Tiny Spanish transactional template. Only http(s) CTA URLs are rendered. */
-export function renderEmail(input: EmailTemplateInput): { text: string; html: string } {
-  const cta = input.ctaLabel && input.ctaUrl && /^https?:\/\//i.test(input.ctaUrl) ? { label: input.ctaLabel, url: input.ctaUrl } : null;
-  const text = [input.title, "", input.body, ...(cta ? ["", `${cta.label}: ${cta.url}`] : []), "", "— CRMWSP"].join("\n");
-  const paragraphs = input.body
-    .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 12px">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
-    .join("");
-  const button = cta
-    ? `<p style="margin:20px 0"><a href="${escapeHtml(cta.url)}" style="background:#16a34a;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">${escapeHtml(cta.label)}</a></p>`
-    : "";
-  const html = `<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;color:#111;max-width:560px;margin:0 auto;padding:16px"><h2 style="margin:0 0 16px">${escapeHtml(input.title)}</h2>${paragraphs}${button}<p style="color:#666;font-size:12px;margin-top:24px">CRMWSP</p></body></html>`;
-  return { text, html };
+/** Joins the site URL and an absolute path. */
+export function siteLink(ctx: EmailContext, path: string): string {
+  return `${trimSlash(ctx.siteUrl)}${path.startsWith("/") ? path : `/${path}`}`;
 }
+
+/** Renders a branded template into a ready-to-send message. */
+export function templateMessage<K extends EmailKey>(to: string, key: K, data: EmailData<K>, ctx: EmailContext): MailMessage {
+  const email = renderTemplate(key, data, ctx);
+  return { to, subject: email.subject.slice(0, 200), text: email.text, html: email.html, ...(Object.keys(email.headers).length ? { headers: email.headers } : {}) };
+}
+
+export * from "./resend.js";

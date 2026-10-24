@@ -2,6 +2,7 @@ import { Inject, Module, type OnApplicationShutdown } from "@nestjs/common";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { AuthModule } from "../auth/auth.module.js";
+import { BillingModule } from "../billing/billing.module.js";
 import { EventsModule } from "../events/events.module.js";
 import { AttachmentsController } from "./attachments.controller.js";
 import { ContactsController } from "./contacts.controller.js";
@@ -11,7 +12,7 @@ import { InboxV2Controller } from "./inbox-v2.controller.js";
 import { OUTBOUND_QUEUE, outboundQueueName } from "./outbound.constants.js";
 
 @Module({
-  imports: [AuthModule, EventsModule],
+  imports: [AuthModule, EventsModule, BillingModule],
   controllers: [ConversationsController, ContactsController, AttachmentsController, InboxV2Controller, InboxCatalogController],
   providers: [
     {

@@ -9,7 +9,7 @@ import {
 } from "@nestjs/common";
 import { HttpAdapterHost } from "@nestjs/core";
 import { createDb } from "@crmwsp/db";
-import { GupshupProvider, type WhatsAppProvider } from "@crmwsp/whatsapp";
+import { createDefaultWhatsAppProvider, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { PgInboundEventStore, type InboundEventStore } from "./inbound-event-store.js";
@@ -24,7 +24,7 @@ import {
   WEBHOOK_RATE_LIMITER,
   WHATSAPP_PROVIDER,
 } from "./webhooks.constants.js";
-import { WebhooksController } from "./webhooks.controller.js";
+import { Dialog360WebhooksController, WebhooksController } from "./webhooks.controller.js";
 import { WebhooksService } from "./webhooks.service.js";
 
 export interface WebhooksModuleOptions {
@@ -56,7 +56,7 @@ function installBodyLimit(host: HttpAdapterHost): true {
     throw new Error("WebhooksModule requires the Fastify adapter");
   }
   instance.addHook("onRoute", (route) => {
-    if (route.url.includes("/webhooks/gupshup")) {
+    if (route.url.includes("/webhooks/gupshup") || route.url.includes("/webhooks/360dialog")) {
       route.bodyLimit = Math.min(route.bodyLimit ?? WEBHOOK_BODY_LIMIT, WEBHOOK_BODY_LIMIT);
     }
   });
@@ -100,7 +100,7 @@ function buildProviders(options: WebhooksModuleOptions): Provider[] {
         return new PgInboundEventStore(handle.sql);
       },
     },
-    { provide: WHATSAPP_PROVIDER, useValue: options.provider ?? new GupshupProvider() },
+    { provide: WHATSAPP_PROVIDER, useValue: options.provider ?? createDefaultWhatsAppProvider() },
     {
       provide: WEBHOOK_RATE_LIMITER,
       // A custom limit (tests) gets its own counters instead of the shared process store.
@@ -121,11 +121,11 @@ export class WebhooksCoreModule implements NestModule, OnApplicationShutdown {
   ) {}
 
   static forRoot(options: WebhooksModuleOptions = {}): DynamicModule {
-    return { module: WebhooksCoreModule, controllers: [WebhooksController], providers: buildProviders(options) };
+    return { module: WebhooksCoreModule, controllers: [WebhooksController, Dialog360WebhooksController], providers: buildProviders(options) };
   }
 
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(WebhookGuardMiddleware).forRoutes(WebhooksController);
+    consumer.apply(WebhookGuardMiddleware).forRoutes(WebhooksController, Dialog360WebhooksController);
   }
 
   async onApplicationShutdown(): Promise<void> {

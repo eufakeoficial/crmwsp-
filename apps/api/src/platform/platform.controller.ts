@@ -1,8 +1,13 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import {
   type PlatformAuditPage,
+  type TenantLifecycleExtendResponse,
+  type TenantTrialGrantResponse,
+  tenantLifecycleExtendRequestSchema,
   type PlatformChannelList,
   type PlatformPlans,
+  type PlatformSubscriptionChargeList,
+  platformSubscriptionChargeQuerySchema,
   type PlatformUsage,
   type PlatformUser,
   type PlatformUserList,
@@ -78,6 +83,20 @@ export class PlatformController {
     return this.platform.changePlan(actorOf(user, req), parseOrThrow(uuidSchema, id), parseOrThrow(tenantPlanChangeRequestSchema, body));
   }
 
+  /** Extend a new tenant's setup or trial by N days (ADR 0015); audited as `tenant.lifecycle_extended`. */
+  @Post("tenants/:id/lifecycle")
+  @HttpCode(200)
+  lifecycle(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("id") id: string, @Body() body: unknown): Promise<TenantLifecycleExtendResponse> {
+    return this.platform.extendLifecycle(actorOf(user, req), parseOrThrow(uuidSchema, id), parseOrThrow(tenantLifecycleExtendRequestSchema, body));
+  }
+
+  /** Grant a 7-day trial anyway (number already used one, or setup expired); audited `tenant.trial_granted`. */
+  @Post("tenants/:id/trial/grant")
+  @HttpCode(200)
+  grantTrial(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("id") id: string): Promise<TenantTrialGrantResponse> {
+    return this.platform.grantTrial(actorOf(user, req), parseOrThrow(uuidSchema, id));
+  }
+
   @Get("payments")
   payments(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Query() query: unknown): Promise<SubscriptionPaymentList> {
     return this.platform.listPayments(actorOf(user, req), parseOrThrow(subscriptionPaymentListQuerySchema, query));
@@ -108,6 +127,12 @@ export class PlatformController {
   @Get("channels")
   async channels(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Query() query: unknown): Promise<PlatformChannelList> {
     return { items: await this.platform.listChannels(actorOf(user, req), parseOrThrow(platformChannelListQuerySchema, query)) };
+  }
+
+  /** NOWPayments subscription charges (crypto, ADR 0013), all states. */
+  @Get("subscription-charges")
+  subscriptionCharges(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Query() query: unknown): Promise<PlatformSubscriptionChargeList> {
+    return this.platform.listSubscriptionCharges(actorOf(user, req), parseOrThrow(platformSubscriptionChargeQuerySchema, query));
   }
 
   @Get("plans")

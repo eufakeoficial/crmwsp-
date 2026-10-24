@@ -11,7 +11,9 @@ import type {
   PlatformPlanId,
   PlatformUser,
   PlatformTenant,
+  PlatformSubscriptionCharge,
   SubscriptionPayment,
+  SubscriptionPaymentListedMethod,
   SubscriptionPaymentMethod,
   TenantStatus,
   TenantStatusAction,
@@ -80,6 +82,27 @@ export class PlatformRepository {
     await this.sql`select public.platform_set_tenant_plan(${actor}, ${tenantId}, ${plan}, ${json}::jsonb, ${ip}::inet)`;
   }
 
+  /** Tenant ids flagged "posible multicuenta" (`platform_multiaccount_suspects`, 0069). */
+  async multiAccountSuspects(actor: string, threshold: number): Promise<Set<string>> {
+    const rows = await this.sql<{ tenant_id: string }[]>`select tenant_id from public.platform_multiaccount_suspects(${actor}, ${threshold}::integer)`;
+    return new Set(rows.map((r) => r.tenant_id));
+  }
+
+  /** Grants a 7-day trial anyway (`platform_grant_trial`, 0069); audited. */
+  async grantTrial(actor: string, tenantId: string, ip: string | null): Promise<Date> {
+    const [r] = await this.sql<{ ends_at: Date }[]>`select public.platform_grant_trial(${actor}, ${tenantId}, ${ip}::inet) as ends_at`;
+    if (!r) throw new Error("platform_grant_trial returned no row");
+    return new Date(r.ends_at);
+  }
+
+  /** Extends setup or trial (`platform_extend_lifecycle`, 0068); returns the new end. */
+  async extendLifecycle(actor: string, tenantId: string, kind: "setup" | "trial", days: number, ip: string | null): Promise<Date> {
+    const [r] = await this.sql<{ ends_at: Date }[]>`
+      select public.platform_extend_lifecycle(${actor}, ${tenantId}, ${kind}, ${days}::integer, ${ip}::inet) as ends_at`;
+    if (!r) throw new Error("platform_extend_lifecycle returned no row");
+    return new Date(r.ends_at);
+  }
+
   async recordPayment(
     actor: string,
     p: {
@@ -118,6 +141,34 @@ export class PlatformRepository {
       reference: r.reference,
       notes: r.notes,
       recordedByEmail: r.recorded_by_email,
+      createdAt: iso(r.created_at),
+    }));
+  }
+
+  /** NOWPayments subscription charges (all states) via `platform_list_subscription_charges` (0061). */
+  async listSubscriptionCharges(actor: string, f: { tenantId?: string | undefined; status?: string | undefined }): Promise<PlatformSubscriptionCharge[]> {
+    const rows = await this.sql<ChargeRow[]>`
+      select charge_id, tenant_id, tenant_name, plan, price_amount, price_currency, pay_currency, pay_amount, actually_paid,
+             provider_payment_id, status, provider_status, verified_by, paid_at,
+             period_start::text as period_start, period_end::text as period_end, created_at
+      from public.platform_list_subscription_charges(${actor}, ${f.tenantId ?? null}, ${f.status ?? null})`;
+    return rows.map((r) => ({
+      id: r.charge_id,
+      tenantId: r.tenant_id,
+      tenantName: r.tenant_name,
+      plan: r.plan,
+      priceAmount: r.price_amount,
+      priceCurrency: r.price_currency,
+      payCurrency: r.pay_currency,
+      payAmount: r.pay_amount,
+      actuallyPaid: r.actually_paid,
+      providerPaymentId: r.provider_payment_id,
+      status: r.status,
+      providerStatus: r.provider_status,
+      verifiedBy: r.verified_by,
+      paidAt: r.paid_at ? iso(r.paid_at) : null,
+      periodStart: r.period_start,
+      periodEnd: r.period_end,
       createdAt: iso(r.created_at),
     }));
   }
@@ -324,10 +375,30 @@ interface PaymentRow {
   currency: string;
   period_start: string;
   period_end: string;
-  method: SubscriptionPaymentMethod;
+  method: SubscriptionPaymentListedMethod;
   reference: string | null;
   notes: string | null;
   recorded_by_email: string | null;
+  created_at: Date;
+}
+
+interface ChargeRow {
+  charge_id: string;
+  tenant_id: string;
+  tenant_name: string;
+  plan: PlatformPlanId;
+  price_amount: string;
+  price_currency: string;
+  pay_currency: string;
+  pay_amount: string | null;
+  actually_paid: string | null;
+  provider_payment_id: string | null;
+  status: PlatformSubscriptionCharge["status"];
+  provider_status: string | null;
+  verified_by: "webhook" | "reconciliation" | null;
+  paid_at: Date | null;
+  period_start: string | null;
+  period_end: string | null;
   created_at: Date;
 }
 
@@ -354,5 +425,6 @@ function toTenant(r: TenantRow): PlatformTenant {
     lastActivityAt: r.last_activity_at ? iso(r.last_activity_at) : null,
     paidUntil: r.paid_until,
     overdue: r.overdue === true,
+    multiAccountSuspect: false,
   };
 }

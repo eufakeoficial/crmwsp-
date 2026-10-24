@@ -96,6 +96,15 @@ export const attachmentUrlResponseSchema = z.object({
 });
 export type AttachmentUrlResponse = z.infer<typeof attachmentUrlResponseSchema>;
 
+/** Knowledge source an AI reply cited: shown as a small "Fuente" chip under the bubble. */
+export const messageCitationSchema = z.object({
+  chunkId: z.string(),
+  title: z.string(),
+  /** Short excerpt of the cited chunk (tooltip text). */
+  excerpt: z.string(),
+});
+export type MessageCitation = z.infer<typeof messageCitationSchema>;
+
 export const messageSchema = z.object({
   id: uuidSchema,
   conversationId: uuidSchema,
@@ -114,8 +123,10 @@ export const messageSchema = z.object({
   sentAt: isoDateTimeSchema.nullable(),
   createdAt: isoDateTimeSchema,
   attachments: z.array(attachmentSchema),
+  /** Sources cited by an AI-authored reply (ai_actions send_reply citations); absent otherwise. */
+  citations: z.array(messageCitationSchema).optional(),
 });
-export type Message = z.infer<typeof messageSchema>;
+export type Message =z.infer<typeof messageSchema>;
 
 /** Agent reaction on a contact message; `null` removes the agent's reaction. */
 export const setReactionRequestSchema = z.object({ emoji: reactionEmojiSchema.nullable() });

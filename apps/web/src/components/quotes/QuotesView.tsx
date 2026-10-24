@@ -1,6 +1,6 @@
 "use client";
 
-import type { Order, PaymentLinkResponse, Quote, QuoteStatus } from "@crmwsp/contracts";
+import type { Order, PaymentLinkResponse, Quote, QuoteActivityEvent, QuoteStatus } from "@crmwsp/contracts";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -14,10 +14,11 @@ import { errorMessage } from "@/lib/messages";
 import { ordersApi } from "@/lib/commerce-api";
 import { orderPaymentApi, quotesApi } from "@/lib/quotes-api";
 import { QuoteEditor } from "./QuoteEditor";
-import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QUOTE_STATUS_TONES, availableQuoteActions, contactLabel } from "./quote-meta";
+import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QUOTE_STATUS_TONES, activityText, availableQuoteActions, contactLabel } from "./quote-meta";
 
 const dateFmt = new Intl.DateTimeFormat("es", { dateStyle: "medium" });
 const formatDate = (iso: string): string => dateFmt.format(new Date(iso));
+const dateTimeFmt = new Intl.DateTimeFormat("es", { dateStyle: "medium", timeStyle: "short" });
 
 export function QuotesView() {
   const { tenant } = useSession();
@@ -246,6 +247,8 @@ function QuoteDetail({
       </dl>
       {quote.notes ? <p className="m-0 text-sm text-muted">{quote.notes}</p> : null}
 
+      <ActivityTimeline quoteId={quote.id} version={`${quote.status}:${quote.lockVersion}:${order?.status ?? ""}`} />
+
       {confirmLink ? (
         <Alert>
           Se generará un enlace nuevo y el que ya recibió el cliente dejará de funcionar.
@@ -267,6 +270,47 @@ function QuoteDetail({
         />
       ) : null}
     </Modal>
+  );
+}
+
+/** Read-only history built from real records (no separate events table). Reloads when the quote changes. */
+function ActivityTimeline({ quoteId, version }: { quoteId: string; version: string }) {
+  const [items, setItems] = useState<QuoteActivityEvent[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    quotesApi
+      .activity(quoteId)
+      .then((r) => {
+        if (!alive) return;
+        setItems(r.items);
+        setFailed(false);
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [quoteId, version]);
+  return (
+    <section aria-label="Historial de actividad" className="rounded-2xl border border-line p-3">
+      <h3 className="m-0 mb-2 text-sm font-extrabold">Historial de actividad</h3>
+      {failed ? (
+        <p className="m-0 text-sm text-muted">No se pudo cargar el historial.</p>
+      ) : items === null ? (
+        <p className="m-0 text-sm text-muted" aria-busy="true">Cargando historial…</p>
+      ) : (
+        <ol className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm">
+          {items.map((e) => (
+            <li key={e.id} className="flex flex-wrap justify-between gap-x-3">
+              <span>{activityText(e)}</span>
+              <time dateTime={e.at} className="text-muted">{dateTimeFmt.format(new Date(e.at))}</time>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
 

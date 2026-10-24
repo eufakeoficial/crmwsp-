@@ -10,6 +10,7 @@ import {
   type ContactTagCount,
 } from "@crmwsp/contracts";
 import { useCallback, useEffect, useState } from "react";
+import { SetupRequiredHint, useSetupMode } from "@/components/app/billing/SetupGate";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { Alert, Avatar, Badge, Button, CheckBox, Input, Modal, SearchInput } from "@/components/ui";
 import { contactBookApi } from "@/lib/contacts-api";
@@ -19,6 +20,7 @@ import { ContactDrawer } from "./ContactDrawer";
 import { CONSENT_LABELS, formatWhen } from "./contact-meta";
 import { FilterBuilder } from "./FilterBuilder";
 import { ImportCsvDialog } from "./ImportCsvDialog";
+import { NewContactDialog } from "./NewContactDialog";
 
 const PAGE = 25;
 type Selection = { mode: "ids"; ids: Set<string> } | { mode: "all" };
@@ -35,6 +37,7 @@ const tagFilter = (tag: string): ContactFilter => ({
 
 export function ContactsView() {
   const [draft, setDraft] = useState("");
+  const inSetup = useSetupMode();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ContactFilter>(EMPTY_CONTACT_FILTER);
   const [items, setItems] = useState<ContactBookItem[] | null>(null);
@@ -52,6 +55,7 @@ export function ContactsView() {
   const [bulkDialog, setBulkDialog] = useState<BulkDialog>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
 
   const loadSidebar = useCallback(async () => {
     try {
@@ -201,9 +205,11 @@ export function ContactsView() {
             >
               <SearchInput label="Buscar contactos" placeholder="Nombre o teléfono" value={draft} onChange={(e) => setDraft(e.target.value)} />
             </form>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>Importar CSV</Button>
+            <Button variant="outline" disabled={inSetup} title={inSetup ? "Conecta tu WhatsApp para empezar tu prueba" : undefined} onClick={() => setImportOpen(true)}>Importar CSV</Button>
+            <Button onClick={() => setNewOpen(true)}>Nuevo contacto</Button>
           </div>
 
+          {inSetup ? <SetupRequiredHint className="mb-3" /> : null}
           <FilterBuilder filter={filter} onChange={setFilter} tags={tags} segments={segments} currency={currency} onSaveSegment={() => setSaveOpen(true)} />
 
           {error ? <div className="mb-3"><Alert>{errorMessage(error)}</Alert></div> : null}
@@ -307,6 +313,22 @@ export function ContactsView() {
       ) : null}
       {saveOpen ? (
         <TextPrompt title="Guardar segmento" label="Nombre del segmento" submitLabel="Guardar" onClose={() => setSaveOpen(false)} onSubmit={(name) => void saveSegment(name)} />
+      ) : null}
+      {newOpen ? (
+        <NewContactDialog
+          onClose={() => setNewOpen(false)}
+          onCreated={(id) => {
+            setNewOpen(false);
+            setNotice("Contacto creado.");
+            void load();
+            void loadSidebar();
+            setOpenId(id);
+          }}
+          onOpenExisting={(id) => {
+            setNewOpen(false);
+            setOpenId(id);
+          }}
+        />
       ) : null}
       {importOpen ? (
         <ImportCsvDialog

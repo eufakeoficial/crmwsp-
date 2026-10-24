@@ -1,15 +1,25 @@
 import { Injectable, Logger, type OnApplicationShutdown } from "@nestjs/common";
-import { inboxEventSchema, notificationEventSchema, type InboxEvent, type NotificationEvent } from "@crmwsp/contracts";
+import {
+  inboxEventSchema,
+  notificationEventSchema,
+  supportEventSchema,
+  type InboxEvent,
+  type NotificationEvent,
+  type SupportEvent,
+} from "@crmwsp/contracts";
 import { z } from "zod";
 import { Redis } from "ioredis";
 
-/** Everything forwarded over SSE: inbox/AI events plus team notifications. */
-export type RealtimeEvent = InboxEvent | NotificationEvent;
-export const realtimeEventSchema = z.union([inboxEventSchema, notificationEventSchema]);
+/** Everything forwarded over SSE: inbox/AI events, team notifications and support ticket updates. */
+export type RealtimeEvent = InboxEvent | NotificationEvent | SupportEvent;
+export const realtimeEventSchema = z.union([inboxEventSchema, notificationEventSchema, supportEventSchema]);
 export type RealtimeListener = (event: RealtimeEvent) => void;
 
 export const tenantChannel = (tenantId: string): string => `tenant:${tenantId}:events`;
 const CHANNEL_RE = /^tenant:([0-9a-f-]{36}):events$/i;
+/** Support inbox of the platform backoffice (ADR 0016); not tied to a tenant. Also its listener key. */
+export const PLATFORM_SUPPORT_CHANNEL = "platform:support:events";
+const channelOf = (key: string): string => (key === PLATFORM_SUPPORT_CHANNEL ? key : tenantChannel(key));
 
 /**
  * Realtime fan-out. ONE shared Redis subscriber connection per process: it
@@ -36,9 +46,9 @@ export class RealtimeHub implements OnApplicationShutdown {
   }
 
   private dispatch(channel: string, raw: string): void {
-    const tenantId = CHANNEL_RE.exec(channel)?.[1];
-    if (!tenantId) return;
-    const set = this.listeners.get(tenantId.toLowerCase());
+    const key = channel === PLATFORM_SUPPORT_CHANNEL ? channel : CHANNEL_RE.exec(channel)?.[1]?.toLowerCase();
+    if (!key) return;
+    const set = this.listeners.get(key);
     if (!set || set.size === 0) return;
     let parsed: unknown;
     try {
@@ -59,7 +69,15 @@ export class RealtimeHub implements OnApplicationShutdown {
 
   /** Registers a listener; resolves once the Redis subscription is active. Returns the unsubscribe fn. */
   async subscribe(tenantId: string, listener: RealtimeListener): Promise<() => void> {
-    const key = tenantId.toLowerCase();
+    return this.subscribeKey(tenantId.toLowerCase(), listener);
+  }
+
+  /** Platform support inbox stream. The caller must have passed PlatformAdminGuard. */
+  subscribePlatformSupport(listener: RealtimeListener): Promise<() => void> {
+    return this.subscribeKey(PLATFORM_SUPPORT_CHANNEL, listener);
+  }
+
+  private async subscribeKey(key: string, listener: RealtimeListener): Promise<() => void> {
     let set = this.listeners.get(key);
     const first = !set;
     if (!set) {
@@ -67,7 +85,7 @@ export class RealtimeHub implements OnApplicationShutdown {
       this.listeners.set(key, set);
     }
     set.add(listener);
-    if (first) await this.sub().subscribe(tenantChannel(key));
+    if (first) await this.sub().subscribe(channelOf(key));
     let active = true;
     return () => {
       if (!active) return;
@@ -77,7 +95,7 @@ export class RealtimeHub implements OnApplicationShutdown {
       current.delete(listener);
       if (current.size === 0) {
         this.listeners.delete(key);
-        void this.subscriber?.unsubscribe(tenantChannel(key)).catch(() => undefined);
+        void this.subscriber?.unsubscribe(channelOf(key)).catch(() => undefined);
       }
     };
   }
@@ -92,12 +110,21 @@ export class RealtimeHub implements OnApplicationShutdown {
 
   /** Best effort: data is already committed; clients can refetch. */
   async publish(tenantId: string, event: RealtimeEvent): Promise<void> {
+    await this.publishTo(tenantChannel(tenantId), event);
+  }
+
+  /** Best effort, like publish(). Ids only. */
+  async publishPlatformSupport(event: SupportEvent): Promise<void> {
+    await this.publishTo(PLATFORM_SUPPORT_CHANNEL, event);
+  }
+
+  private async publishTo(channel: string, event: RealtimeEvent): Promise<void> {
     try {
       if (!this.publisher) {
         this.publisher = new Redis(this.redisUrl, { maxRetriesPerRequest: 1 });
         this.publisher.on("error", (err: Error) => this.logger.warn(`redis publisher error (${err.name})`));
       }
-      await this.publisher.publish(tenantChannel(tenantId), JSON.stringify(event));
+      await this.publisher.publish(channel, JSON.stringify(event));
     } catch (err) {
       this.logger.warn(`publish failed (${err instanceof Error ? err.name : "unknown"})`);
     }

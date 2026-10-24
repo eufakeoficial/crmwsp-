@@ -1,8 +1,14 @@
 import { notFound } from "next/navigation";
 import { AuditPage } from "@/components/platform/AuditPage";
+import { CouponsPage } from "@/components/platform/CouponsPage";
+import { FinancePage } from "@/components/platform/FinancePage";
+import { CannedResponsesPage } from "@/components/platform/CannedResponsesPage";
+import { SupportInbox } from "@/components/platform/SupportInbox";
+import { EmailInbox } from "@/components/platform/EmailInbox";
 import { ChannelsPage } from "@/components/platform/ChannelsPage";
 import { PaymentsPage } from "@/components/platform/PaymentsPage";
 import { PlansPage } from "@/components/platform/PlansPage";
+import { PoliciesPage } from "@/components/platform/PoliciesPage";
 import { PlatformDashboard } from "@/components/platform/PlatformDashboard";
 import { PlatformSettingsPage } from "@/components/platform/PlatformSettingsPage";
 import { TenantDetail } from "@/components/platform/TenantDetail";
@@ -18,10 +24,16 @@ const SECTIONS: Record<string, () => React.JSX.Element> = {
   approvals: () => <TenantsList mode="approvals" />,
   users: () => <UsersPage />,
   channels: () => <ChannelsPage />,
+  finance: () => <FinancePage />,
   payments: () => <PaymentsPage />,
   plans: () => <PlansPage />,
+  coupons: () => <CouponsPage />,
   usage: () => <UsagePage />,
+  support: () => <SupportInbox />,
+  email: () => <EmailInbox />,
+  canned: () => <CannedResponsesPage />,
   audit: () => <AuditPage />,
+  policies: () => <PoliciesPage />,
   settings: () => <PlatformSettingsPage />,
 };
 

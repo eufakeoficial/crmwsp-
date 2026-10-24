@@ -48,6 +48,7 @@ export function createBspMediaLoader(deps: {
       const [row] = await tx
         .select({
           sourcePhone: channelConnections.phoneE164,
+          provider: channelConnections.provider,
           appName: channelConnections.externalAppId,
           credentials: channelConnections.credentialsEncrypted,
           status: channelConnections.status,
@@ -62,7 +63,7 @@ export function createBspMediaLoader(deps: {
     const apiKey = deps.cipher.decrypt(ch.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
     // BSP inbound media is addressed by URL (see processors.ts: externalMediaId ?? url).
     return deps.provider.downloadMedia(
-      { apiKey, appName: ch.appName, sourcePhone: ch.sourcePhone },
+      { provider: ch.provider, apiKey, appName: ch.appName, sourcePhone: ch.sourcePhone },
       { url: externalMediaId, externalMediaId, ...(mimeType ? { mimeType } : {}) },
     );
   };

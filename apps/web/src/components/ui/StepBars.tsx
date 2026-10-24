@@ -5,7 +5,7 @@ export function StepBars({ total, current, className }: { total: number; current
   return (
     <div aria-hidden className={cn("grid gap-1", className)} style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}>
       {Array.from({ length: total }, (_, i) => (
-        <span key={i} className={cn("h-1.5 rounded-[3px]", i < current ? "bg-ink" : "bg-line")} />
+        <span key={i} className={cn("h-1.5 rounded-[3px]", i < current ? "bg-royal" : "bg-line")} />
       ))}
     </div>
   );

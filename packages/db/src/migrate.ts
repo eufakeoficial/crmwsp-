@@ -30,6 +30,15 @@ if (isMain) {
     .catch((err: unknown) => {
       // Do not print the URL (it contains credentials).
       console.error("db:migrate: failed", err instanceof Error ? err.message : err);
+      // Drizzle wraps the driver error; surface the Postgres diagnostics (no connection details).
+      const cause = err instanceof Error ? (err as { cause?: unknown }).cause : undefined;
+      if (cause && typeof cause === "object") {
+        const c = cause as Record<string, unknown>;
+        const fields = ["message", "code", "detail", "hint", "position", "where", "routine"] as const;
+        for (const f of fields) {
+          if (c[f] !== undefined) console.error(`db:migrate: cause.${f}:`, c[f]);
+        }
+      }
       process.exit(1);
     });
 }

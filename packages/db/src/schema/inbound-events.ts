@@ -8,6 +8,11 @@ import { tenants } from "./tenants.js";
  * from the webhook token at ingestion time. The app role cannot INSERT here:
  * ingestion goes through the SECURITY DEFINER function
  * `ingest_inbound_event` (see drizzle/0005_rls_messaging.sql).
+ *
+ * The DB enum also holds `nowpayments` (0062): SaaS subscription IPNs ingested by
+ * `ingest_nowpayments_event` (tenant resolved from the charge, no channel connection). It is
+ * not part of the TS `channelProvider` enum on purpose (channels never use it); code reading
+ * those rows filters by provider in SQL.
  */
 export const inboundEvents = pgTable(
   "inbound_events",

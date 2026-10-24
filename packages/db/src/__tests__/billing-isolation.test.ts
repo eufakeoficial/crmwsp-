@@ -42,10 +42,9 @@ describe.skipIf(!hasDb)("billing tables isolation (RLS) with the app role", () =
       if (!a || !b) throw new Error("seed failed");
       tenantA = a.id;
       tenantB = b.id;
-      await tx.insert(tenantPlans).values([
-        { tenantId: tenantA, plan: "start" },
-        { tenantId: tenantB, plan: "pro" },
-      ]);
+      // 0068: a trigger already created each tenant's lifecycle row; set the plan on it.
+      await tx.update(tenantPlans).set({ plan: "start" }).where(eq(tenantPlans.tenantId, tenantA));
+      await tx.update(tenantPlans).set({ plan: "pro" }).where(eq(tenantPlans.tenantId, tenantB));
       const [c] = await tx
         .insert(usageCounters)
         .values([

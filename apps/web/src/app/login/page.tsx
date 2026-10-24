@@ -40,7 +40,12 @@ export default function LoginPage() {
           <Input id="email" name="email" type="email" autoComplete="email" required />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="password">Contraseña</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Contraseña</Label>
+            <Link href="/forgot-password" className="text-sm text-muted underline">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
           <PasswordInput id="password" name="password" autoComplete="current-password" required />
         </div>
         <Alert>{error}</Alert>

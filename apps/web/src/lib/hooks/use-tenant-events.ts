@@ -1,6 +1,6 @@
 "use client";
 
-import { INBOX_EVENT_TYPES, type InboxEvent, inboxEventSchema } from "@crmwsp/contracts";
+import { INBOX_EVENT_TYPES, type InboxEvent, type SupportEvent, inboxEventSchema, supportEventSchema } from "@crmwsp/contracts";
 import { useEffect, useRef, useState } from "react";
 
 export type EventsStatus = "idle" | "connecting" | "open" | "reconnecting" | "limited" | "unauthorized";
@@ -43,11 +43,12 @@ export function useTenantEvents(
   tenantId: string | null,
   onEvent: (event: InboxEvent) => void,
   onResync?: () => void,
+  onSupport?: (event: SupportEvent) => void,
 ): EventsStatus {
   const [status, setStatus] = useState<EventsStatus>("idle");
-  const handlers = useRef({ onEvent, onResync });
+  const handlers = useRef({ onEvent, onResync, onSupport });
   useEffect(() => {
-    handlers.current = { onEvent, onResync };
+    handlers.current = { onEvent, onResync, onSupport };
   });
 
   useEffect(() => {
@@ -83,6 +84,15 @@ export function useTenantEvents(
         }
       };
       for (const type of EVENT_TYPES) es.addEventListener(type, listener as EventListener);
+      // Support ticket updates (ADR 0016) are not inbox events: separate handler.
+      es.addEventListener("support.ticket_updated", ((msg: MessageEvent) => {
+        try {
+          const parsed = supportEventSchema.safeParse(JSON.parse(String(msg.data)));
+          if (parsed.success) handlers.current.onSupport?.(parsed.data);
+        } catch {
+          // Malformed frame: ignore.
+        }
+      }) as EventListener);
       es.onerror = () => {
         es.close();
         if (source === es) source = null;

@@ -33,6 +33,17 @@ describe("buildAiTurnMessages", () => {
     expect(user!.content.match(/<\/conversation>/g)).toHaveLength(1);
     expect(user!.content).toContain("&lt;/conversation&gt;");
   });
+  it("stays business-scoped (Meta AI-provider rules, ADR 0021)", () => {
+    const [sys] = buildAiTurnMessages(input);
+    // Refuses general-purpose assistant use: only this business's products, services and orders.
+    expect(sys!.content).toMatch(/Only help with this business/);
+    expect(sys!.content).toMatch(/not a general-purpose assistant/);
+    // Discloses it is automated and always offers a human.
+    expect(sys!.content).toMatch(/automated assistant/);
+    expect(sys!.content).toMatch(/talk to a person/);
+    // Never asks for card numbers, bank accounts or ID documents by chat.
+    expect(sys!.content).toMatch(/Never ask for full card numbers/);
+  });
   it("states there is no knowledge when nothing was retrieved", () => {
     const [, user] = buildAiTurnMessages({ ...input, retrievedChunks: [] });
     expect(user!.content).toMatch(/no chunks retrieved/);

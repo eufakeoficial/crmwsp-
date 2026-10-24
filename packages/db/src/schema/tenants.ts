@@ -23,6 +23,13 @@ export const tenants = pgTable(
     statusReason: text("status_reason"),
     currency: char("currency", { length: 3 }).notNull().default("EUR"),
     timezone: text("timezone").notNull().default("Europe/Madrid"),
+    /** Business category key (business_categories, 0077); null for tenants created before T1. */
+    businessCategory: text("business_category"),
+    businessCategoryDetail: text("business_category_detail"),
+    /** Category review (0077): only SECURITY DEFINER functions may change these columns. */
+    categoryReviewStatus: text("category_review_status", { enum: ["none", "pending", "approved", "rejected"] }).notNull().default("none"),
+    categoryReviewReason: text("category_review_reason"),
+    businessCategorySetAt: timestamp("business_category_set_at", { withTimezone: true }),
     settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

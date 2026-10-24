@@ -117,7 +117,22 @@ export function countTemplatePlaceholders(body: string): number {
 }
 
 /** Replies that revoke marketing consent (whole message, case/accents/punctuation-insensitive). */
-export const OPT_OUT_KEYWORDS = ["BAJA", "STOP", "UNSUBSCRIBE", "CANCELAR SUSCRIPCION", "DARME DE BAJA", "NO MAS"] as const;
+export const OPT_OUT_KEYWORDS = [
+  "BAJA",
+  "STOP",
+  "UNSUBSCRIBE",
+  "CANCELAR",
+  "CANCELAR SUSCRIPCION",
+  "DARME DE BAJA",
+  "NO MAS",
+  "NO QUIERO RECIBIR MAS",
+  "NO QUIERO RECIBIR MAS MENSAJES",
+  "NO MAS MENSAJES",
+] as const;
+
+/** One-time reply after an opt-out (sent inside the 24 h window the customer just opened). */
+export const OPT_OUT_CONFIRMATION_TEXT =
+  "Listo, no te enviaremos más mensajes promocionales. Si nos escribes, te seguiremos respondiendo.";
 
 export function isOptOutMessage(body: string | null | undefined): boolean {
   if (!body) return false;

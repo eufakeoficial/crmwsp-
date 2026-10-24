@@ -25,12 +25,12 @@ export function AppTopbar({ menuOpen, onToggleMenu, hideOnDesktop = false }: { m
         aria-label="Menú"
         aria-expanded={menuOpen}
         aria-controls="app-menu-sheet"
-        className={`${ROUND} cursor-pointer bg-ink text-white desk:hidden`}
+        className={`${ROUND} cursor-pointer bg-royal text-white desk:hidden`}
       >
         <Menu aria-hidden className="size-5" />
       </button>
       <NotificationBell triggerClassName="size-9 flex-none bg-white text-ink" />
-      <Link href="/app/quotes" className="hidden h-9 items-center gap-1.5 rounded-full bg-ink px-4 text-[13px] font-bold whitespace-nowrap text-white no-underline desk:flex">
+      <Link href="/app/quotes" className="hidden h-9 items-center gap-1.5 rounded-full bg-royal px-4 hover:bg-azure text-[13px] font-bold whitespace-nowrap text-white no-underline desk:flex">
         <Plus aria-hidden className="size-5" />
         Nuevo presupuesto
       </Link>

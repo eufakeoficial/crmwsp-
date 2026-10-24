@@ -14,6 +14,7 @@ export const ErrorCode = {
   InsufficientStock: "INSUFFICIENT_STOCK",
   StorageNotConfigured: "STORAGE_NOT_CONFIGURED",
   PlanLimitExceeded: "PLAN_LIMIT_EXCEEDED",
+  SetupRequired: "SETUP_REQUIRED",
   Internal: "INTERNAL_ERROR",
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -76,6 +77,13 @@ export class PlanLimitExceededError extends AppError {
   }
 }
 
+/** The tenant is still in setup: connect a WhatsApp channel to start the trial (ADR 0015). 402. */
+export class SetupRequiredError extends AppError {
+  constructor(message = "Connect your WhatsApp channel to start your trial", options?: AppErrorOptions) {
+    super(ErrorCode.SetupRequired, message, 402, options);
+  }
+}
+
 export class RateLimitedError extends AppError {
   constructor(message = "Too many requests", options?: AppErrorOptions) {
     super(ErrorCode.RateLimited, message, 429, options);
@@ -89,7 +97,7 @@ export class TenantContextMissingError extends AppError {
   }
 }
 
-export type ExternalProvider = "gupshup" | "360dialog" | "openai" | "stripe" | "mercadopago" | "s3";
+export type ExternalProvider = "gupshup" | "360dialog" | "openai" | "stripe" | "mercadopago" | "nowpayments" | "s3" | "resend" | "smtp";
 
 export class ExternalProviderError extends AppError {
   readonly provider: ExternalProvider;

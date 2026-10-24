@@ -36,6 +36,7 @@ import { TenantGuard } from "../auth/tenant.guard.js";
 import { type HttpRequest, type RequestTenant, headerValue } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
+import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import { RealtimeHub } from "../events/realtime.hub.js";
 import { writeAudit } from "./audit.js";
 import { decodeCursor, encodeCursor } from "./cursor.js";
@@ -105,6 +106,7 @@ export class ConversationsController {
   constructor(
     @Inject(OUTBOUND_QUEUE) private readonly queue: Queue,
     @Inject(RealtimeHub) private readonly hub: RealtimeHub,
+    @Inject(PlanLimitsService) private readonly planLimits: PlanLimitsService,
   ) {}
 
   @Get()
@@ -340,6 +342,8 @@ export class ConversationsController {
     const input = parseOrThrow(sendMessageRequestSchema, body);
 
     const { message, created } = await db.run(async (tx) => {
+      // A subscription restricted past grace (ADR 0013) cannot send, not even manually.
+      await this.planLimits.assertSubscriptionActive(db.tenantId, tx);
       await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
       const findExisting = async () => {
         const [row] = await tx
@@ -431,6 +435,8 @@ export class ConversationsController {
     const input = parseOrThrow(sendTemplateMessageRequestSchema, body);
 
     const { message, created } = await db.run(async (tx) => {
+      // A subscription restricted past grace (ADR 0013) cannot send, not even manually.
+      await this.planLimits.assertSubscriptionActive(db.tenantId, tx);
       await assertConversationVisible(tx, db.tenantId, tenant.role, db.userId, id);
       const findExisting = async () => {
         const [row] = await tx

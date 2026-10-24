@@ -1,8 +1,12 @@
-import { PlanLimitExceededError } from "@crmwsp/contracts";
+import { PlanLimitExceededError, SetupRequiredError } from "@crmwsp/contracts";
 import type { DbHandle, PlanUsageSnapshot, Transaction } from "@crmwsp/db";
 import { describe, expect, it, vi } from "vitest";
 
-const snapshot: PlanUsageSnapshot = {
+const snapshot: PlanUsageSnapshot & Record<string, unknown> = {
+  setupEndsAt: null,
+  trialStartedAt: null,
+  trialEndsAt: null,
+  trialDeniedAt: null,
   plan: null,
   limitsOverride: null,
   period: "2026-10",
@@ -16,14 +20,51 @@ vi.mock("@crmwsp/db", () => ({
   readPlanUsage: vi.fn(async () => snapshot),
   consumeUsage: vi.fn(async () => null),
   withTenant: vi.fn(),
+  sql: () => ({}),
 }));
 
-const { PlanLimitsService } = await import("./plan-limits.service.js");
+const { PlanLimitsService, trialIdentitiesOf } = await import("./plan-limits.service.js");
 const svc = new PlanLimitsService({} as DbHandle);
-const tx = {} as Transaction;
+let paidUntil: string | null = null;
+const tx = { execute: vi.fn(async () => [{ d: paidUntil }]) } as unknown as Transaction;
 const T = "00000000-0000-4000-8000-000000000001";
 
 describe("PlanLimitsService", () => {
+  it("assertSubscriptionActive blocks only a subscription restricted past grace", async () => {
+    paidUntil = null; // unbilled
+    await expect(svc.assertSubscriptionActive(T, tx)).resolves.toBeUndefined();
+    paidUntil = new Date().toISOString().slice(0, 10); // active
+    await expect(svc.assertSubscriptionActive(T, tx)).resolves.toBeUndefined();
+    paidUntil = "2000-01-01"; // restricted
+    const err = await svc.assertSubscriptionActive(T, tx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PlanLimitExceededError);
+    expect((err as PlanLimitExceededError).httpStatus).toBe(402);
+    expect((err as PlanLimitExceededError).details).toMatchObject({ reason: "subscription_restricted" });
+    paidUntil = null;
+  });
+
+  it("setup (new tenant, no channel yet) blocks contacts/seats/broadcasts and outbound with SETUP_REQUIRED, but not numbers", async () => {
+    snapshot.setupEndsAt = new Date(Date.now() + 86_400_000);
+    try {
+      for (const key of ["contacts", "seats", "broadcast_sends"] as const) {
+        await expect(svc.assert(T, key, 0, tx)).rejects.toBeInstanceOf(SetupRequiredError);
+      }
+      await expect(svc.assertSubscriptionActive(T, tx)).rejects.toMatchObject({ code: "SETUP_REQUIRED", httpStatus: 402 });
+      await expect(svc.assert(T, "whatsapp_numbers", 1, tx)).resolves.toBeUndefined();
+      // Setup that expired without a channel is restricted.
+      snapshot.setupEndsAt = new Date(Date.now() - 1000);
+      await expect(svc.assertSubscriptionActive(T, tx)).rejects.toBeInstanceOf(PlanLimitExceededError);
+      // An active trial behaves like a paid tenant.
+      snapshot.trialStartedAt = new Date(Date.now() - 2000);
+      snapshot.trialEndsAt = new Date(Date.now() + 86_400_000);
+      await expect(svc.assertSubscriptionActive(T, tx)).resolves.toBeUndefined();
+    } finally {
+      snapshot.setupEndsAt = null;
+      snapshot.trialStartedAt = null;
+      snapshot.trialEndsAt = null;
+    }
+  });
+
   it("assert passes under the limit (default plan start)", async () => {
     await expect(svc.assert(T, "ai_messages", 1, tx)).resolves.toBeUndefined();
     await expect(svc.assert(T, "seats", 3, tx)).resolves.toBeUndefined();
@@ -62,10 +103,46 @@ describe("PlanLimitsService", () => {
     expect((err as PlanLimitExceededError).details).toMatchObject({ limit: 10_000 });
   });
 
+  it("a subscription lapsed past the grace period restricts every limit (nothing deleted)", async () => {
+    paidUntil = "2020-01-01";
+    try {
+      const err = await svc.assert(T, "ai_messages", 1, tx).catch((e: unknown) => e);
+      expect((err as PlanLimitExceededError).details).toMatchObject({ key: "ai_messages", reason: "not_included" });
+      const r = await svc.snapshot(tx);
+      expect(r.subscription).toMatchObject({ access: "restricted", paidUntil: "2020-01-01" });
+    } finally {
+      paidUntil = null;
+    }
+  });
+
   it("snapshot exposes plan, period and usage without a billing provider", async () => {
     const r = await svc.snapshot(tx);
     expect(r.plan).toMatchObject({ id: "start", priceMonthlyUsd: 49 });
     expect(r.billingProvider).toBe("none");
+    expect(r.subscription).toMatchObject({ access: "unbilled", paidUntil: null });
     expect(r.usage.find((u) => u.key === "ai_messages")).toMatchObject({ monthly: true, limit: 2_000, used: 1_999 });
+  });
+});
+
+describe("trial anti-abuse (ADR 0015)", () => {
+  it("hashes the channel phone into a phone:<hmac> identity, and claims nothing without the secret", () => {
+    const [id] = trialIdentitiesOf("+591 70000001", "x".repeat(32));
+    expect(id).toMatch(/^phone:[0-9a-f]{64}$/);
+    expect(trialIdentitiesOf("+59170000001", "x".repeat(32))).toEqual([id]);
+    expect(trialIdentitiesOf("+59170000001", "")).toEqual([]);
+  });
+
+  it("a tenant whose number already used the trial is payment_required: outbound refused with trial_already_used", async () => {
+    snapshot.setupEndsAt = new Date(Date.now() + 86_400_000);
+    snapshot.trialDeniedAt = new Date();
+    try {
+      const err = await svc.assertSubscriptionActive(T, tx).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PlanLimitExceededError);
+      expect((err as PlanLimitExceededError).details).toMatchObject({ reason: "trial_already_used" });
+      await expect(svc.assert(T, "ai_messages", 1, tx)).rejects.toBeInstanceOf(PlanLimitExceededError);
+    } finally {
+      snapshot.setupEndsAt = null;
+      snapshot.trialDeniedAt = null;
+    }
   });
 });

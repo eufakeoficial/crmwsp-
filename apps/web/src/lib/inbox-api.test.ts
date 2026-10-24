@@ -55,6 +55,14 @@ describe("channelsApi", () => {
     expect(last().body).toEqual({ phoneE164: "+5491155551234", appName: "Demo", apiKey: "secret-key-1" });
   });
 
+  it("sets partner credentials via PUT", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json(200, channel)));
+    await channelsApi.setPartnerCredentials(ID(1), { gupshupAppId: "app-1", partnerToken: "sk_partner_token" });
+    expect(last().url).toBe(`/api/channels/${ID(1)}/partner-credentials`);
+    expect(last().init.method).toBe("PUT");
+    expect(last().body).toEqual({ gupshupAppId: "app-1", partnerToken: "sk_partner_token" });
+  });
+
   it("rotates the token and toggles status", async () => {
     fetchMock.mockImplementation(() => Promise.resolve(json(200, channel)));
     await channelsApi.rotateWebhookToken(ID(1));

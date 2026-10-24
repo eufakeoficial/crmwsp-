@@ -19,7 +19,7 @@ export function Pagination({ page, pageCount, onChange, summary }: { page: numbe
             aria-label={`Página ${n}`}
             aria-current={n === page ? "page" : undefined}
             onClick={() => onChange(n)}
-            className={cn(BTN, n === page && "border-ink bg-ink font-extrabold text-white")}
+            className={cn(BTN, n === page && "border-royal bg-royal font-extrabold text-white")}
           >
             {n}
           </button>

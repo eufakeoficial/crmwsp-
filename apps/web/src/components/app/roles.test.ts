@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { canManageChannels } from "./roles";
+import { canBook, canManageAgenda, canManageChannels } from "./roles";
+
+describe("agenda roles", () => {
+  it("lets owner and admin configure, and agents also book, but never viewers", () => {
+    expect(canManageAgenda("admin")).toBe(true);
+    expect(canManageAgenda("agent")).toBe(false);
+    expect(canBook("agent")).toBe(true);
+    expect(canBook("viewer")).toBe(false);
+    expect(canBook(undefined)).toBe(false);
+  });
+});
 
 describe("canManageChannels", () => {
   it("allows owner and admin only", () => {

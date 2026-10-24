@@ -19,11 +19,11 @@ export function AppMenuSheet({ onClose, counts }: { onClose: () => void; counts?
         aria-modal="true"
         aria-label="Menú"
         tabIndex={-1}
-        className="fixed inset-x-0 bottom-0 z-[45] flex max-h-[85vh] flex-col gap-1 overflow-y-auto rounded-t-[28px] bg-ink px-3 pt-3.5 pb-6 outline-none desk:hidden"
+        className="fixed inset-x-0 bottom-0 z-[45] flex max-h-[85vh] flex-col gap-1 overflow-y-auto rounded-t-[28px] bg-brand-gradient px-3 pt-3.5 pb-6 outline-none desk:hidden"
       >
         <div className="flex items-center px-1.5 pb-2">
           <b className="flex-1 text-[18px] text-white">CRMWSP</b>
-          <button type="button" onClick={onClose} aria-label="Cerrar menú" className="grid size-11 cursor-pointer place-items-center rounded-full bg-ink-2 text-white">
+          <button type="button" onClick={onClose} aria-label="Cerrar menú" className="grid size-11 cursor-pointer place-items-center rounded-full bg-white/10 text-white">
             <X aria-hidden className="size-5" />
           </button>
         </div>

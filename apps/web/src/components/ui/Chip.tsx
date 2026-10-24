@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 export function chipClasses(active: boolean, className?: string): string {
   return cn(
     "inline-flex h-8 flex-none cursor-pointer items-center rounded-full border-[1.5px] px-3 text-[12px] font-bold whitespace-nowrap",
-    active ? "border-ink bg-ink text-white" : "border-line-2 bg-white text-ink hover:border-ink",
+    active ? "border-royal bg-royal text-white" : "border-line-2 bg-white text-ink hover:border-royal",
     className,
   );
 }

@@ -1,4 +1,4 @@
-import type { Quote, QuoteStatus } from "@crmwsp/contracts";
+import type { Quote, QuoteActivityEvent, QuoteActivityKind, QuoteStatus } from "@crmwsp/contracts";
 import type { Tone } from "@/components/ui";
 
 export const QUOTE_STATUS_ORDER: readonly QuoteStatus[] = [
@@ -67,4 +67,31 @@ export function datePlusDays(days: number): string {
   const d = new Date(Date.now() + days * 86_400_000);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export const QUOTE_ACTIVITY_LABELS: Record<QuoteActivityKind, string> = {
+  quote_created: "Presupuesto creado",
+  quote_approved: "Presupuesto aprobado",
+  quote_sent: "Presupuesto enviado al cliente",
+  quote_accepted: "Presupuesto aceptado por el cliente",
+  order_created: "Pedido creado",
+  payment_review_received: "Comprobante recibido",
+  payment_review_approved: "Comprobante aprobado",
+  payment_review_rejected: "Comprobante rechazado",
+  order_paid: "Pago confirmado",
+  order_cancelled: "Pedido cancelado",
+};
+
+const VERIFIER_LABELS = {
+  webhook: "confirmado por el proveedor de pagos",
+  reconciliation: "confirmado por conciliación",
+  manual: "marcado manualmente por el equipo",
+} as const;
+
+/** Spanish text of one activity entry, e.g. "Pago confirmado · P-12 · confirmado por conciliación". */
+export function activityText(e: QuoteActivityEvent): string {
+  const parts: string[] = [QUOTE_ACTIVITY_LABELS[e.kind]];
+  if (e.orderNumber) parts.push(e.orderNumber);
+  if (e.kind === "order_paid" && e.verifiedBy) parts.push(VERIFIER_LABELS[e.verifiedBy]);
+  return parts.join(" · ");
 }

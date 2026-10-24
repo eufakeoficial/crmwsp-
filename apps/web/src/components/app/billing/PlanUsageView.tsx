@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { BillingPlanResponse, PlanLimitKeyDto } from "@crmwsp/contracts";
+import type { BillingPlanResponse, PlanLimitKeyDto, ReferralSummary } from "@crmwsp/contracts";
 import { SettingsFrame } from "@/components/ai/AccessGate";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
@@ -19,9 +20,21 @@ const LABELS: Record<PlanLimitKeyDto, string> = {
 
 const fmt = (n: number) => n.toLocaleString("es");
 
+const ACCESS_LABEL: Record<BillingPlanResponse["subscription"]["access"], string> = {
+  unbilled: "Sin suscripción registrada",
+  active: "Suscripción al día",
+  grace: "Período vencido: en días de gracia",
+  restricted: "Suscripción vencida: solo lectura (tus datos se conservan)",
+  setup: "Configuración: conecta tu WhatsApp para empezar tu prueba",
+  trial: "Prueba gratuita en curso",
+  payment_required: "Este número ya usó su prueba gratuita. Activa un plan para continuar.",
+};
+
 function UsageRow({ item }: { item: BillingPlanResponse["usage"][number] }) {
-  const { key, limit, used, percent } = item;
-  const text = limit === null ? `${fmt(used)} · ilimitado` : limit === 0 ? "No incluido en tu plan" : `${fmt(used)} de ${fmt(limit)}`;
+  const { key, limit, used, percent, exceeded } = item;
+  // `ai_messages` has no cap (null) when the tenant uses its own AI key (BYOK).
+  const unlimited = key === "ai_messages" ? "Ilimitado (tu clave)" : "ilimitado";
+  const text = limit === null ? `${fmt(used)} · ${unlimited}` : limit === 0 ? "No incluido en tu plan" : `${fmt(used)} de ${fmt(limit)}`;
   const tone = percent !== null && percent >= 100 ? "bg-red-600" : percent !== null && percent >= 80 ? "bg-amber-500" : "bg-ink";
   return (
     <li className="flex flex-col gap-1.5">
@@ -33,6 +46,13 @@ function UsageRow({ item }: { item: BillingPlanResponse["usage"][number] }) {
         <div role="progressbar" aria-label={LABELS[key]} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="h-2 overflow-hidden rounded-full bg-line">
           <div className={`h-full ${tone}`} style={{ width: `${percent}%` }} />
         </div>
+      ) : null}
+      {exceeded ? (
+        <p className="m-0 text-xs font-semibold text-red-600">
+          {key === "contacts"
+            ? "Superaste el límite de tu plan: los mensajes de clientes nuevos se siguen recibiendo, pero no podrás importar contactos hasta mejorar el plan."
+            : "Superaste el límite de tu plan."}
+        </p>
       ) : null}
     </li>
   );
@@ -52,7 +72,17 @@ function Body() {
         <p className="m-0 text-sm text-ink-3">Plan actual</p>
         <p className="m-0 text-[28px] font-extrabold">{data.plan.name}</p>
         <p className="m-0 text-ink-3">US${data.plan.priceMonthlyUsd} /mes · período {data.period}</p>
-        <p className="m-0 mt-2 text-sm text-ink-3">El cobro de la suscripción aún no está automatizado: para cambiar de plan, contacta con soporte.</p>
+        <p className={`m-0 mt-1 text-sm font-semibold ${data.subscription.access === "restricted" ? "text-red-600" : data.subscription.access === "grace" ? "text-amber-600" : ""}`}>
+          {ACCESS_LABEL[data.subscription.access]}
+          {data.subscription.paidUntil ? ` · pagado hasta el ${data.subscription.paidUntil}` : ""}
+        </p>
+        <p className="m-0 mt-2 text-sm text-ink-3">
+          Paga o renueva tu suscripción (30 días por pago, o 365 en el plan anual; en cripto, sin cobros automáticos) desde{" "}
+          <Link href="/app/settings/billing" className="font-semibold underline">
+            Ajustes › Suscripción
+          </Link>
+          .
+        </p>
       </Card>
       <Card>
         <ul className="m-0 flex list-none flex-col gap-4 p-0">
@@ -61,7 +91,44 @@ function Body() {
           ))}
         </ul>
       </Card>
+      <ReferralCard />
     </div>
+  );
+}
+
+/** Discreet referral link (ADR 0017): a credit when a referred company makes its first payment. */
+function ReferralCard() {
+  const [r, setR] = useState<ReferralSummary>();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    billingApi.referrals().then(setR, () => undefined);
+  }, []);
+  if (!r) return null;
+  const link = `${window.location.origin}/signup?ref=${r.code}`;
+  return (
+    <Card>
+      <details>
+        <summary className="cursor-pointer text-sm font-semibold">Recomienda y ahorra</summary>
+        <p className="m-0 mt-2 text-sm text-ink-3">
+          Cuando una empresa se registra con tu enlace y hace su primer pago, recibes {r.rewardPercent}% de descuento en tu próximo pago mensual
+          (acumulable hasta un mes gratis).
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <code className="break-all rounded bg-paper p-2 text-[13px]">{link}</code>
+          <button
+            type="button"
+            className="text-sm font-semibold underline"
+            onClick={() => void navigator.clipboard?.writeText(link).then(() => setCopied(true), () => undefined)}
+          >
+            {copied ? "Copiado" : "Copiar enlace"}
+          </button>
+        </div>
+        <p className="m-0 mt-2 text-[13px] text-ink-3">
+          {r.referred} registradas · {r.pending} esperando su primer pago · {r.rewarded} con recompensa · {r.creditsAvailable} recompensa(s) disponible(s) ·{" "}
+          {r.creditsUsed} usada(s)
+        </p>
+      </details>
+    </Card>
   );
 }
 

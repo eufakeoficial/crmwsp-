@@ -25,7 +25,7 @@ Documento de diseño del sistema. Deriva de `docs/STRATEGY.md` (tesis de product
 | Cache / colas | Redis 7 | BullMQ, rate limiting, locks de conversación |
 | Archivos | S3-compatible (Cloudflare R2 o AWS S3), bucket por entorno, prefijo por tenant, URLs firmadas | Privacidad y retención por tenant |
 | Auth | Propia en la API: email + contraseña (scrypt) y sesiones opacas en cookie, ver [ADR 0006](adr/0006-auth-sesiones-api.md); API keys por tenant para integraciones (pendiente) | Sin coste por usuario y con la identidad en nuestra base, alineada con RLS |
-| Pagos SaaS | Stripe Billing | Suscripciones, límites, suspensión segura |
+| Pagos SaaS | NOWPayments (cripto, pago único por período; ADR 0013/0015) | Suscripción mensual o anual sin cobro automático, límites por plan, gracia y solo lectura |
 | Pagos del cliente final | Stripe Payment Links / Checkout (primer PSP), interfaz `PaymentProvider` para añadir Redsys/Bizum/MercadoPago | Verificación por webhook firmado |
 | WhatsApp | Gupshup (BSP principal) tras adaptador `WhatsAppProvider`. No se usa Meta Cloud API directo: requiere ser Tech Provider verificado por Meta y no disponemos de esa estructura empresarial. El BSP gestiona alta de números, WABA, plantillas y facturación de Meta; nosotros consumimos su API y webhooks. | Adaptador evita acoplarse a un BSP concreto; cambiar de proveedor no toca el dominio |
 | IA | OpenAI como único proveedor: interfaz `LLMProvider` con una sola implementación. Routing entre modelo barato (`gpt-4o-mini` o equivalente vigente) para clasificación/extracción y modelo potente solo para turnos complejos. BYOK por tenant (clave OpenAI propia del cliente) o créditos del SaaS con límite. Embeddings `text-embedding-3-small`; audio con Whisper. | Coste bajo y previsible; un solo SDK que mantener |
@@ -49,7 +49,7 @@ crmwsp/
 │   ├── payments/     # Adaptador PaymentProvider: Stripe y futuros
 │   ├── ai/           # LLMProvider, prompts versionados, extractores, policy engine, evaluación
 │   ├── knowledge/    # Ingesta de catálogos/FAQ/PDF, chunking, embeddings, versionado
-│   ├── billing/      # Usage ledger, límites por plan, integración Stripe Billing
+│   ├── billing/      # Planes, límites por plan y reglas de cobro de la suscripción (NOWPayments)
 │   └── ui/           # Componentes shadcn compartidos
 ├── infra/            # Docker Compose dev, Dockerfiles, IaC
 ├── docs/             # Este documento, ADRs, runbooks
@@ -69,7 +69,7 @@ Todas las tablas de negocio llevan `tenant_id uuid NOT NULL` con índice compues
 - `api_keys` — por tenant, hash, scopes, último uso.
 
 ### Canal
-- `channel_connections` — `provider` (`gupshup`; `360dialog` más adelante), número, identificador de canal del BSP, API key del BSP cifrada (envelope encryption), estado, calidad del número reportada por el BSP.
+- `channel_connections` — `provider` (`gupshup` o `360dialog`; este último permite Coexistence con la app WhatsApp Business, ADR 0014), número, identificador de canal del BSP, API key del BSP cifrada (envelope encryption), estado, calidad del número reportada por el BSP.
 - `message_templates` — plantillas aprobadas por Meta, categoría, idioma, estado, variables.
 
 ### Contactos y conversaciones
@@ -104,7 +104,7 @@ Todas las tablas de negocio llevan `tenant_id uuid NOT NULL` con índice compues
 
 ### Económico y auditoría
 - `usage_ledger` — tenant, tipo (`wa_message`, `llm_tokens`, `storage`, `psp_fee`), cantidad, coste estimado, referencia.
-- `subscriptions` — espejo de Stripe, plan, límites, estado.
+- `tenant_plans` — plan y overrides de límites del tenant; `subscription_charges` — cobros NOWPayments (plan, `period_days` 30/365, estado, período concedido); `subscription_payments` — períodos pagados (fuente de `paid_until`).
 - `inbound_events` — todo webhook crudo: proveedor, `dedupe_key` único, payload, `signature_valid` (autenticidad: token de URL válido; firma si el BSP la ofrece), `processed_at`.
 - `audit_events` — actor (user/ai/system), entidad, acción, diff, IP, motivo.
 - `execution_logs` — trazas de workers por job.

@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { randomUUID } from "node:crypto";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
-import { and, auditEvents, createDb, type DbHandle, eq, inArray, teamInvitations, tenants, users } from "@crmwsp/db";
+import { and, auditEvents, createDb, type DbHandle, eq, inArray, teamInvitations, tenantPlans, tenants, users } from "@crmwsp/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../app.module.js";
 import type { MailMessage } from "@crmwsp/mailer";
@@ -70,6 +70,9 @@ describe.skipIf(!hasDb)("team invitations and members (e2e)", () => {
       if (key === "owner") Object.assign(s, { ownerCookie: cookieOf(res), tenantA: body.tenants[0]!.id, ownerId: body.user.id });
       else Object.assign(s, { otherCookie: cookieOf(res), tenantB: body.tenants[0]!.id, otherId: body.user.id });
     }
+    // Signup leaves a new tenant in setup (ADR 0015); grandfather the test tenants so writes are not
+    // answered with SETUP_REQUIRED.
+    await migrator.db.update(tenantPlans).set({ setupEndsAt: null }).where(inArray(tenantPlans.tenantId, [s.tenantA, s.tenantB]));
   });
 
   afterAll(async () => {

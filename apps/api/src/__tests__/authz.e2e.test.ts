@@ -11,6 +11,7 @@ import {
   inArray,
   memberships,
   messages,
+  tenantPlans,
   tenants,
   users,
   type DbHandle,
@@ -112,6 +113,9 @@ describe.skipIf(!hasEnv)("write authorization: deny-by-default and inbox permiss
       { tenantId: tenantT, userId: ids.viewer, role: "viewer" },
       { tenantId: tenantT, userId: ids.admin, role: "admin" },
     ]);
+    // Signup leaves a new tenant in setup (ADR 0015); grandfather the test tenants so writes are not
+    // answered with SETUP_REQUIRED.
+    await migrator.db.update(tenantPlans).set({ setupEndsAt: null }).where(inArray(tenantPlans.tenantId, [tenantT]));
     const [t] = await migrator.db.select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, tenantT));
     await migrator.db
       .update(tenants)

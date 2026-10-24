@@ -13,6 +13,7 @@ const POLL_MS = 30_000;
 
 export function notificationHref(n: Pick<Notification, "kind" | "entity" | "entityId" | "conversationId">): string | null {
   if (n.kind === "payment_review") return "/app/payments/reviews";
+  if (n.kind === "channel_quality") return "/app/channels";
   if (n.entity === "order" && n.entityId) return `/app/orders/${n.entityId}`;
   if (n.kind === "approval_requested") return "/app/settings/approvals";
   if (n.conversationId) return `/app/inbox?conversation=${n.conversationId}`;

@@ -18,13 +18,25 @@ export interface PlanUsageSnapshot {
   contacts: number;
   seats: number;
   whatsappNumbers: number;
+  /** Trial lifecycle (migration 0068); all null for grandfathered tenants. */
+  setupEndsAt: Date | null;
+  trialStartedAt: Date | null;
+  trialEndsAt: Date | null;
+  /** Trial denied: the number already used a free trial (0069). */
+  trialDeniedAt: Date | null;
 }
+
+const toDate = (v: string | Date | null): Date | null => (v === null ? null : v instanceof Date ? v : new Date(v));
 
 /** Reads the plan and every usage figure of the current tenant (call inside `withTenant`). */
 export async function readPlanUsage(tx: Transaction): Promise<PlanUsageSnapshot> {
   const [row] = await tx.execute<{
     plan: string | null;
     limits_override: Record<string, number | null> | null;
+    setup_ends_at: string | Date | null;
+    trial_started_at: string | Date | null;
+    trial_ends_at: string | Date | null;
+    trial_denied_at: string | Date | null;
     period: string;
     ai_messages: string | null;
     broadcast_sends: string | null;
@@ -36,6 +48,10 @@ export async function readPlanUsage(tx: Transaction): Promise<PlanUsageSnapshot>
     select
       (select plan from tenant_plans limit 1) as plan,
       (select limits_override from tenant_plans limit 1) as limits_override,
+      (select setup_ends_at from tenant_plans limit 1) as setup_ends_at,
+      (select trial_started_at from tenant_plans limit 1) as trial_started_at,
+      (select trial_ends_at from tenant_plans limit 1) as trial_ends_at,
+      (select trial_denied_at from tenant_plans limit 1) as trial_denied_at,
       p.period,
       (select used from usage_counters u where u.period = p.period and u.limit_key = 'ai_messages') as ai_messages,
       (select used from usage_counters u where u.period = p.period and u.limit_key = 'broadcast_sends') as broadcast_sends,
@@ -55,6 +71,10 @@ export async function readPlanUsage(tx: Transaction): Promise<PlanUsageSnapshot>
     contacts: Number(row.contacts),
     seats: Number(row.seats),
     whatsappNumbers: Number(row.numbers),
+    setupEndsAt: toDate(row.setup_ends_at),
+    trialStartedAt: toDate(row.trial_started_at),
+    trialEndsAt: toDate(row.trial_ends_at),
+    trialDeniedAt: toDate(row.trial_denied_at),
   };
 }
 

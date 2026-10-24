@@ -385,6 +385,174 @@
       "when": 1792570010000,
       "tag": "0059_rls_sales_playbooks",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792570020000,
+      "tag": "0060_follow_up_quote_unanswered",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792570030000,
+      "tag": "0061_channel_partner_credentials",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792580000000,
+      "tag": "0062_nowpayments_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792580010000,
+      "tag": "0063_rls_subscription_charges",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792580020000,
+      "tag": "0064_subscription_refund_restack",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792580030000,
+      "tag": "0065_subscription_plan_per_period",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792590000000,
+      "tag": "0066_bookings",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792680000000,
+      "tag": "0067_subscription_annual_period",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792690000000,
+      "tag": "0068_tenant_trial_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792700000000,
+      "tag": "0069_trial_claims",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1792710000000,
+      "tag": "0071_coupons",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792720000000,
+      "tag": "0072_referrals",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1792730000000,
+      "tag": "0073_platform_finance",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1792740000000,
+      "tag": "0074_email_dispatches_password_reset",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792750000000,
+      "tag": "0075_support_tickets",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1792760000000,
+      "tag": "0076_support_email_inbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1792770000000,
+      "tag": "0077_business_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1792780000000,
+      "tag": "0078_channel_quality_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792790000000,
+      "tag": "0079_policy_monitor",
+      "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1792900000000,
+      "tag": "0090_channel_connect_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1792910000000,
+      "tag": "0091_email_lifecycle_candidates_keyset",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1792920000000,
+      "tag": "0092_email_lifecycle_candidates_cycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1792930000000,
+      "tag": "0093_coupon_over_cap_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1792940000000,
+      "tag": "0094_security_definer_arg_checks",
+      "breakpoints": true
     }
   ]
 }

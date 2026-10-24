@@ -5,9 +5,9 @@ export type ButtonVariant = "primary" | "accent" | "outline" | "ghost" | "whatsa
 export type ButtonSize = "sm" | "md" | "lg";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-ink text-white hover:bg-ink-2",
+  primary: "bg-royal text-white hover:bg-azure",
   accent: "bg-lime font-extrabold text-ink hover:brightness-95",
-  outline: "border-[1.5px] border-ink bg-white text-ink hover:bg-paper",
+  outline: "border-[1.5px] border-royal bg-white text-royal hover:bg-royal-soft",
   ghost: "bg-transparent text-ink hover:bg-ink/8",
   whatsapp: "bg-whatsapp text-whatsapp-ink hover:brightness-95",
 };

@@ -15,6 +15,9 @@ import {
   type RecordSubscriptionPaymentRequest,
   type SubscriptionPaymentListQuery,
   type TenantPlanChangeRequest,
+  type TenantLifecycleExtendRequest,
+  tenantLifecycleExtendResponseSchema,
+  tenantTrialGrantResponseSchema,
   type TenantStatus,
   type TenantStatusChangeRequest,
   platformDashboardSchema,
@@ -25,6 +28,11 @@ import {
   platformTenantSchema,
   subscriptionPaymentListSchema,
   subscriptionPaymentSchema,
+  platformCouponListSchema,
+  platformCouponSchema,
+  platformCouponRedemptionListSchema,
+  type PlatformCouponSaveRequest,
+  platformFinanceSchema,
 } from "@crmwsp/contracts";
 import { ApiError, request } from "./api";
 
@@ -39,6 +47,10 @@ export const platformApi = {
     request(`/platform/tenants/${encodeURIComponent(id)}/status`, { method: "POST", body, schema: platformTenantSchema }),
   changePlan: (id: string, body: TenantPlanChangeRequest) =>
     request(`/platform/tenants/${encodeURIComponent(id)}/plan`, { method: "PUT", body, schema: platformTenantSchema }),
+  grantTrial: (id: string) =>
+    request(`/platform/tenants/${encodeURIComponent(id)}/trial/grant`, { method: "POST", body: {}, schema: tenantTrialGrantResponseSchema }),
+  extendLifecycle: (id: string, body: TenantLifecycleExtendRequest) =>
+    request(`/platform/tenants/${encodeURIComponent(id)}/lifecycle`, { method: "POST", body, schema: tenantLifecycleExtendResponseSchema }),
   payments: (q: SubscriptionPaymentListQuery = {}) =>
     request("/platform/payments", { query: { tenantId: q.tenantId, month: q.month }, schema: subscriptionPaymentListSchema }),
   recordPayment: (body: RecordSubscriptionPaymentRequest) => request("/platform/payments", { method: "POST", body, schema: subscriptionPaymentSchema }),
@@ -48,6 +60,14 @@ export const platformApi = {
     request(`/platform/users/${encodeURIComponent(id)}/revoke-sessions`, { method: "POST", schema: revokeSessionsResponseSchema }),
   channels: (q: PlatformChannelListQuery = {}) => request("/platform/channels", { query: { status: q.status }, schema: platformChannelListSchema }),
   plans: () => request("/platform/plans", { schema: platformPlansSchema }),
+  coupons: () => request("/platform/coupons", { schema: platformCouponListSchema }),
+  finance: (refresh = false) => request("/platform/finance", { query: { refresh: refresh ? "1" : undefined }, schema: platformFinanceSchema }),
+  createCoupon: (body: PlatformCouponSaveRequest) => request("/platform/coupons", { method: "POST", body, schema: platformCouponSchema }),
+  updateCoupon: (id: string, body: PlatformCouponSaveRequest) =>
+    request(`/platform/coupons/${encodeURIComponent(id)}`, { method: "PUT", body, schema: platformCouponSchema }),
+  deleteCoupon: (id: string) => request(`/platform/coupons/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  couponRedemptions: (id: string) =>
+    request(`/platform/coupons/${encodeURIComponent(id)}/redemptions`, { schema: platformCouponRedemptionListSchema }),
   usage: (q: PlatformUsageQuery = {}) => request("/platform/usage", { query: { month: q.month }, schema: platformUsageSchema }),
   audit: (q: PlatformAuditQuery = {}) =>
     request("/platform/audit", {

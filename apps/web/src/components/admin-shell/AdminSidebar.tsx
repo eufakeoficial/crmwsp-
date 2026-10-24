@@ -25,11 +25,11 @@ function NavGroup({ group, open, activeKey, counts, onToggle, onNavigate }: { gr
             const Icon = item.icon;
             return (
               <li key={item.key}>
-                <Link href={item.href} onClick={onNavigate} aria-current={active ? "page" : undefined} className={cn("flex min-h-10 items-center gap-2.5 rounded-xl px-2.5 text-[14px] text-ink no-underline", active ? "bg-lime font-extrabold" : "font-semibold hover:bg-paper")}>
-                  <Icon aria-hidden className={cn("size-[17px] flex-none", active ? "text-ink" : "text-muted")} />
+                <Link href={item.href} onClick={onNavigate} aria-current={active ? "page" : undefined} className={cn("flex min-h-10 items-center gap-2.5 rounded-xl px-2.5 text-[14px] no-underline", active ? "bg-royal font-extrabold text-white" : "font-semibold text-ink hover:bg-royal-soft")}>
+                  <Icon aria-hidden className={cn("size-[17px] flex-none", active ? "text-lime" : "text-muted")} />
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>
                   {count ? (
-                    <span className={cn("rounded-full px-[7px] text-xs font-extrabold", active ? "bg-ink text-lime" : "bg-danger-soft text-danger")}>
+                    <span className={cn("rounded-full px-[7px] text-xs font-extrabold", active ? "bg-lime text-ink" : "bg-danger-soft text-danger")}>
                       <span className="sr-only">Pendientes: </span>
                       {count}
                     </span>

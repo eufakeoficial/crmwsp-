@@ -8,6 +8,8 @@ import {
   type PlatformChannel,
   type PlatformChannelListQuery,
   type PlatformPlans,
+  type PlatformSubscriptionChargeList,
+  type PlatformSubscriptionChargeQuery,
   type PlatformUsage,
   type PlatformUsageQuery,
   type PlatformUser,
@@ -24,13 +26,16 @@ import {
   type SubscriptionPaymentList,
   type SubscriptionPaymentListQuery,
   type TenantPlanChangeRequest,
+  type TenantLifecycleExtendRequest,
+  type TenantTrialGrantResponse,
+  MULTIACCOUNT_THRESHOLD,
+  type TenantLifecycleExtendResponse,
   type TenantStatusChangeRequest,
   ValidationError,
 } from "@crmwsp/contracts";
 import { currentMonthUtc, dayRangeUtc, estimateMrr, microCentsToUsd } from "@crmwsp/domain";
-import { type Mailer, renderEmail } from "@crmwsp/mailer";
+import { type Mailer, emailContextFromEnv, siteLink, templateMessage } from "@crmwsp/mailer";
 import { pgCode } from "../inbox/audit.js";
-import { publicWebUrl } from "../team/invitation-token.js";
 import { PlatformRepository } from "./platform.repository.js";
 
 /** Nest injection token for the mailer used by the platform module. */
@@ -84,14 +89,24 @@ export class PlatformService {
     return this.repo.isAdmin(userId);
   }
 
-  listTenants(actor: PlatformActor, q: PlatformTenantListQuery): Promise<PlatformTenant[]> {
-    return guarded(() => this.repo.listTenants(actor.userId, q));
+  async listTenants(actor: PlatformActor, q: PlatformTenantListQuery): Promise<PlatformTenant[]> {
+    const [rows, suspects] = await guarded(() =>
+      Promise.all([this.repo.listTenants(actor.userId, q), this.repo.multiAccountSuspects(actor.userId, MULTIACCOUNT_THRESHOLD)]),
+    );
+    return rows.map((t) => ({ ...t, multiAccountSuspect: suspects.has(t.id) }));
+  }
+
+  async grantTrial(actor: PlatformActor, tenantId: string): Promise<TenantTrialGrantResponse> {
+    const endsAt = await guarded(() => this.repo.grantTrial(actor.userId, tenantId, actor.ip));
+    return { trialEndsAt: endsAt.toISOString() };
   }
 
   async tenantDetail(actor: PlatformActor, tenantId: string): Promise<PlatformTenantDetail> {
     return guarded(async () => {
-      const [tenant] = await this.repo.listTenants(actor.userId, { tenantId });
-      if (!tenant) throw new NotFoundError();
+      const [found] = await this.repo.listTenants(actor.userId, { tenantId });
+      if (!found) throw new NotFoundError();
+      const suspects = await this.repo.multiAccountSuspects(actor.userId, MULTIACCOUNT_THRESHOLD);
+      const tenant = { ...found, multiAccountSuspect: suspects.has(found.id) };
       const [members, channels, payments, audit] = await Promise.all([
         this.repo.members(actor.userId, tenantId),
         this.repo.channels(actor.userId, tenantId),
@@ -117,6 +132,11 @@ export class PlatformService {
     const [tenant] = await guarded(() => this.repo.listTenants(actor.userId, { tenantId }));
     if (!tenant) throw new NotFoundError();
     return tenant;
+  }
+
+  async extendLifecycle(actor: PlatformActor, tenantId: string, body: TenantLifecycleExtendRequest): Promise<TenantLifecycleExtendResponse> {
+    const endsAt = await guarded(() => this.repo.extendLifecycle(actor.userId, tenantId, body.kind, body.days, actor.ip));
+    return { kind: body.kind, endsAt: endsAt.toISOString() };
   }
 
   async recordPayment(actor: PlatformActor, body: RecordSubscriptionPaymentRequest): Promise<SubscriptionPayment> {
@@ -179,6 +199,10 @@ export class PlatformService {
     return guarded(() => this.repo.listChannels(actor.userId, q.status ?? null));
   }
 
+  async listSubscriptionCharges(actor: PlatformActor, q: PlatformSubscriptionChargeQuery): Promise<PlatformSubscriptionChargeList> {
+    return { items: await guarded(() => this.repo.listSubscriptionCharges(actor.userId, q)) };
+  }
+
   async plans(actor: PlatformActor): Promise<PlatformPlans> {
     return guarded(async () => {
       const [counts, overrides] = await Promise.all([this.repo.planCounts(actor.userId), this.repo.limitOverrides(actor.userId)]);
@@ -234,36 +258,21 @@ export class PlatformService {
 
   /** Best effort: a mail failure never undoes the (already audited) status change. */
   private async notifyOwner(to: string, ownerName: string | null, tenantName: string, action: string, reason: string | null): Promise<void> {
-    const hello = ownerName ? `Hola ${ownerName},` : "Hola,";
-    const copy: Record<string, { subject: string; title: string; body: string; cta?: string }> = {
-      approve: {
-        subject: `Tu cuenta ${tenantName} está aprobada`,
-        title: "Cuenta aprobada",
-        body: `${hello}\n\nHemos revisado y aprobado la cuenta de ${tenantName}. Ya puedes conectar tus canales y usar la IA.`,
-        cta: "Entrar al panel",
-      },
-      reject: {
-        subject: `Tu solicitud para ${tenantName} no fue aprobada`,
-        title: "Solicitud no aprobada",
-        body: `${hello}\n\nTras revisar la cuenta de ${tenantName}, no podemos aprobarla por ahora.${reason ? `\n\nMotivo: ${reason}` : ""}\n\nSi crees que es un error, responde a este correo.`,
-      },
-      suspend: {
-        subject: `La cuenta ${tenantName} está suspendida`,
-        title: "Cuenta suspendida",
-        body: `${hello}\n\nHemos suspendido la cuenta de ${tenantName}. Mientras siga suspendida no se procesan mensajes ni se usa la IA.${reason ? `\n\nMotivo: ${reason}` : ""}\n\nResponde a este correo para regularizarla.`,
-      },
-    };
-    const c = copy[action];
-    if (!c) return;
+    const ctx = emailContextFromEnv();
+    const message =
+      action === "approve"
+        ? templateMessage(to, "cuenta-aprobada", { name: ownerName, tenantName, appUrl: siteLink(ctx, "/app") }, ctx)
+        : action === "reject"
+          ? templateMessage(to, "cuenta-rechazada", { name: ownerName, tenantName, reason }, ctx)
+          : action === "suspend"
+            ? templateMessage(to, "cuenta-suspendida", { name: ownerName, tenantName, reason }, ctx)
+            : null;
+    if (!message) return;
     try {
-      const { text, html } = renderEmail({
-        title: c.title,
-        body: c.body,
-        ...(c.cta ? { ctaLabel: c.cta, ctaUrl: `${publicWebUrl()}/app` } : {}),
-      });
-      await this.mailer.send({ to, subject: c.subject.slice(0, 200), text, html });
+      await this.mailer.send(message);
     } catch (err) {
       this.logger.warn(`platform status mail failed: ${(err as Error).name}`);
     }
   }
+
 }

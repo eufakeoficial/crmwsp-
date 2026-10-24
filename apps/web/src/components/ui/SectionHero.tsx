@@ -20,7 +20,7 @@ export function SectionHero({
   tone?: Tone;
 }) {
   return (
-    <section className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-[22px] bg-ink p-[18px] text-white">
+    <section className="relative flex flex-wrap items-center gap-4 overflow-hidden rounded-[22px] bg-brand-gradient p-[18px] text-white">
       <span aria-hidden className={cn("absolute -top-10 -right-[30px] size-[200px] rounded-full opacity-50", TONE_BG[tone])} />
       <span className="relative grid size-12 flex-none place-items-center rounded-[16px] bg-lime text-ink">
         <Icon aria-hidden className="size-6" />

@@ -27,12 +27,18 @@ import {
   type Order,
   type Quote,
   type QuoteAcceptLink,
+  type QuoteActivityResponse,
   type QuoteList,
 } from "@crmwsp/contracts";
+import { buildQuoteActivity } from "@crmwsp/domain";
 import {
   actionApprovals,
   aiActions,
   and,
+  auditEvents,
+  inArray,
+  paymentReviews,
+  payments,
   contacts,
   conversations,
   desc,
@@ -52,6 +58,7 @@ import { formatMoney, renderQuotePdf } from "@crmwsp/pdf";
 import type { Queue } from "bullmq";
 import { z } from "zod";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
+import { ActivationGuard } from "../billing/activation.guard.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { type HttpReply, type HttpRequest } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
@@ -105,7 +112,7 @@ const webBase = (): string =>
   (process.env["PUBLIC_WEB_URL"] ?? (process.env["WEB_ORIGINS"] ?? "").split(",")[0]?.trim() ?? "").replace(/\/+$/, "") || "http://localhost:3000";
 
 @Controller("quotes")
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, ActivationGuard)
 export class QuotesController {
   constructor(
     @Inject(OUTBOUND_QUEUE) private readonly queue: Queue,
@@ -126,6 +133,48 @@ export class QuotesController {
   async detail(@CurrentTenantDb() db: TenantDb, @Param("id") id: string): Promise<Quote> {
     if (!isUuid(id)) throw new NotFoundError();
     return db.run((tx) => loadQuote(tx, id));
+  }
+
+  /**
+   * Read-only activity history, derived from existing timestamps (quote columns, its orders,
+   * receipt reviews, provider payments and the audited manual mark-paid). No events table.
+   */
+  @Get(":id/activity")
+  async activity(@CurrentTenantDb() db: TenantDb, @Param("id") id: string): Promise<QuoteActivityResponse> {
+    if (!isUuid(id)) throw new NotFoundError();
+    return db.run(async (tx) => {
+      const [q] = await tx.select().from(quotes).where(eq(quotes.id, id));
+      if (!q) throw new NotFoundError();
+      const quoteOrders = await tx.select().from(orders).where(eq(orders.quoteId, id));
+      const orderIds = quoteOrders.map((o) => o.id);
+      const [reviews, pays, manual] =
+        orderIds.length === 0
+          ? [[], [], []]
+          : await Promise.all([
+              tx.select().from(paymentReviews).where(inArray(paymentReviews.orderId, orderIds)),
+              tx.select().from(payments).where(inArray(payments.orderId, orderIds)),
+              tx
+                .select({ entityId: auditEvents.entityId, createdAt: auditEvents.createdAt })
+                .from(auditEvents)
+                .where(
+                  and(
+                    eq(auditEvents.entity, "order"),
+                    eq(auditEvents.action, "order.mark_paid"),
+                    inArray(auditEvents.entityId, orderIds),
+                    sql`${auditEvents.diff}->>'verifiedBy' = 'manual'`,
+                  ),
+                ),
+            ]);
+      return {
+        items: buildQuoteActivity({
+          quote: q,
+          orders: quoteOrders,
+          reviews,
+          payments: pays.map((p) => ({ orderId: p.orderId, paidAt: p.paidAt, verifiedBy: p.status === "succeeded" ? p.verifiedBy : null })),
+          manualPayments: manual.flatMap((m) => (m.entityId ? [{ orderId: m.entityId, at: m.createdAt }] : [])),
+        }),
+      };
+    });
   }
 
   @Post()

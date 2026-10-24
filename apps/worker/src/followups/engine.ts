@@ -16,6 +16,8 @@ export interface DueFollowUp {
   /** Approved template on the conversation's channel, or null (missing / not approved / other channel). */
   approvedTemplate: { id: string; body: string } | null;
   orderStatus: string | null;
+  quoteStatus?: string | null;
+  quoteValidUntil?: Date | null;
 }
 
 /** Storage port used by the dispatcher; the Postgres adapter runs inside one tenant transaction. */
@@ -66,6 +68,8 @@ export async function dispatchDue(
       messageBody: f.messageBody,
       approvedTemplate: f.approvedTemplate,
       orderStatus: f.orderStatus,
+      quoteStatus: f.quoteStatus ?? null,
+      quoteValidUntil: f.quoteValidUntil ?? null,
       quietHours: settings.quietHours,
       timeZone,
     });

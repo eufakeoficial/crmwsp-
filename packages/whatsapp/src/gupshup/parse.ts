@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { e164PhoneSchema } from "@crmwsp/contracts";
-import type { DeliveryStatus, InboundReferral, InboundWebhookResult, NormalizedInboundMessage } from "../types.js";
+import type { DeliveryStatus, InboundReferral, InboundWebhookResult, NormalizedAccountEvent, NormalizedInboundMessage } from "../types.js";
 import {
   referralSchema,
   v2InboundMessageSchema,
@@ -50,6 +51,39 @@ export function parseReferral(raw: unknown): InboundReferral | undefined {
 }
 
 const ignored = (reason: string): InboundWebhookResult => ({ kind: "ignored", reason });
+
+const ACCOUNT_FIELDS = new Set<NormalizedAccountEvent["field"]>([
+  "phone_number_quality_update",
+  "account_update",
+  "message_template_status_update",
+  "message_template_quality_update",
+]);
+
+const short = (v: unknown, max = 120): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim().slice(0, max) : null);
+
+/** Whitelisted reading of an account/number/template change; never keeps the raw value. */
+export function parseAccountChange(field: string | undefined, value: Record<string, unknown>): InboundWebhookResult | null {
+  if (!field || !ACCOUNT_FIELDS.has(field as NormalizedAccountEvent["field"])) return null;
+  const obj = (v: unknown): Record<string, unknown> => (typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+  const restriction = Array.isArray(value["restriction_info"]) ? obj(value["restriction_info"][0]) : {};
+  const phoneRaw = short(value["display_phone_number"], 32) ?? short(value["phone_number"], 32);
+  const account: NormalizedAccountEvent = {
+    field: field as NormalizedAccountEvent["field"],
+    event: short(value["event"], 64)?.toUpperCase() ?? null,
+    quality: short(value["new_quality_score"], 16)?.toUpperCase() ?? null,
+    messagingLimit: short(value["current_limit"], 32),
+    templateName: short(value["message_template_name"], 512),
+    templateLanguage: short(value["message_template_language"], 16),
+    reason:
+      short(value["reason"]) ??
+      short(obj(value["violation_info"])["violation_type"]) ??
+      short(restriction["restriction_type"]) ??
+      short(obj(value["ban_info"])["waba_ban_state"]),
+    phone: phoneRaw ? (toE164(phoneRaw.replace(/[^\d+]/g, "")) ?? null) : null,
+  };
+  const hash = createHash("sha256").update(JSON.stringify([field, value])).digest("hex").slice(0, 40);
+  return { kind: "account", dedupeKey: `account:${field}:${hash}`, account };
+}
 
 /** Entry point. Never throws. */
 export function parseGupshupWebhook(body: unknown): InboundWebhookResult[] {
@@ -185,13 +219,19 @@ function parseV2Event(body: unknown): InboundWebhookResult {
   return result;
 }
 
-function parseV3(body: unknown): InboundWebhookResult[] {
+/** Meta Cloud API webhook envelope; also used by the 360dialog adapter, which forwards it unchanged. */
+export function parseV3(body: unknown): InboundWebhookResult[] {
   const env = v3EnvelopeSchema.safeParse(body);
   if (!env.success) return [ignored("invalid v3 envelope")];
   const out: InboundWebhookResult[] = [];
   for (const entry of env.data.entry) {
     for (const change of entry.changes) {
       const value = change.value;
+      const account = parseAccountChange(change.field, value as Record<string, unknown>);
+      if (account) {
+        out.push(account);
+        continue;
+      }
       const to = value.metadata?.display_phone_number ? toE164(value.metadata.display_phone_number) : undefined;
       for (const rawMsg of value.messages ?? []) {
         const m = v3MessageSchema.safeParse(rawMsg);

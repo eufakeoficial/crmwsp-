@@ -75,7 +75,7 @@ function isRetryable(err: unknown): boolean {
 /** Persistable error: provider messages are fixed strings without request data. */
 function sanitizeError(err: unknown): Record<string, unknown> {
   const e = err as { name?: unknown; status?: unknown; message?: unknown; provider?: unknown } | null;
-  if (e && e.provider === "gupshup" && typeof e.message === "string") {
+  if (e && (e.provider === "gupshup" || e.provider === "360dialog") && typeof e.message === "string") {
     return { code: "provider_error", message: e.message.slice(0, 200), ...(typeof e.status === "number" ? { status: e.status } : {}) };
   }
   if (e?.name === "DecryptionError") return { code: "credentials_unavailable" };
@@ -262,6 +262,7 @@ export async function processSendMessage(
         msgTemplateParams: messages.templateParams,
         connectionId: channelConnections.id,
         sourcePhone: channelConnections.phoneE164,
+        provider: channelConnections.provider,
         appName: channelConnections.externalAppId,
         connectionStatus: channelConnections.status,
         credentials: channelConnections.credentialsEncrypted,
@@ -305,7 +306,7 @@ export async function processSendMessage(
       if (loaded.connectionStatus === "disabled") throw new UnrecoverableError("channel is disabled");
       if (!loaded.credentials || !loaded.appName) throw new UnrecoverableError("channel has no credentials");
       const apiKey = deps.cipher.decrypt(loaded.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
-      const conn = { apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone };
+      const conn = { provider: loaded.provider, apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone };
       const voiced = await maybeSendVoice(deps, tx, {
         tenantId,
         messageId,
@@ -416,6 +417,7 @@ export async function processSendReaction(
         conversationId: messages.conversationId,
         to: contacts.phoneE164,
         sourcePhone: channelConnections.phoneE164,
+        provider: channelConnections.provider,
         appName: channelConnections.externalAppId,
         connectionStatus: channelConnections.status,
         credentials: channelConnections.credentialsEncrypted,
@@ -437,7 +439,7 @@ export async function processSendReaction(
       if (!loaded.credentials || !loaded.appName) throw new UnrecoverableError("channel has no credentials");
       const apiKey = deps.cipher.decrypt(loaded.credentials, { tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
       await deps.provider.sendReaction(
-        { apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone },
+        { provider: loaded.provider, apiKey, appName: loaded.appName, sourcePhone: loaded.sourcePhone },
         { to: loaded.to, messageExternalId: loaded.externalId, emoji },
       );
       return { res: { outcome: "sent" } as SendReactionResult, conversationId: loaded.conversationId };

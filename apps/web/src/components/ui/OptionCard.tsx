@@ -23,7 +23,7 @@ export function OptionCard({
       aria-pressed={pressed ? selected : undefined}
       aria-checked={pressed ? undefined : selected}
       onClick={onSelect}
-      className={cn("cursor-pointer rounded-[18px] border-2 p-4 text-left text-ink", selected ? "border-ink bg-lime-soft" : "border-line bg-white", className)}
+      className={cn("cursor-pointer rounded-[18px] border-2 p-4 text-left text-ink", selected ? "border-royal bg-royal-soft" : "border-line bg-white", className)}
     >
       {children}
     </button>

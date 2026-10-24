@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_CHILDREN, AI_SECTIONS, NAV_MAIN, NAV_MORE, NAV_SECONDARY, isActive, isMoreActive } from "./nav-items";
+import { AI_CHILDREN, AI_SECTIONS, NAV_MAIN, NAV_MORE, NAV_SECONDARY, SETTINGS_SECTIONS, isActive, isMoreActive } from "./nav-items";
 
 describe("isActive", () => {
   it("matches /app only exactly", () => {
@@ -14,13 +14,17 @@ describe("isActive", () => {
     expect(new Set(NAV_MAIN.map((i) => i.key)).size).toBe(NAV_MAIN.length);
   });
   it("keeps the daily items visible and the rest under Más", () => {
-    expect(NAV_MAIN.map((i) => i.label)).toEqual(["Inicio", "Inbox", "Contactos", "Pipeline", "Presupuestos", "Pedidos", "IA"]);
-    expect(NAV_MORE.map((i) => i.label)).toEqual(["Comprobantes", "Rentabilidad", "Campañas", "Productos", "Canales", "Equipo"]);
+    expect(NAV_MAIN.map((i) => i.label)).toEqual(["Inicio", "Inbox", "Contactos", "Pipeline", "Presupuestos", "Pedidos", "Agenda", "IA"]);
+    expect(NAV_MORE.map((i) => i.label)).toEqual(["Comprobantes", "Rentabilidad", "Campañas", "Productos", "Canales", "Plantillas de WhatsApp", "Equipo"]);
   });
   it("has unique keys and hrefs across every group", () => {
     const all = [...NAV_MAIN, ...NAV_MORE, ...NAV_SECONDARY];
     expect(new Set(all.map((i) => i.key)).size).toBe(all.length);
     expect(new Set(all.map((i) => i.href)).size).toBe(all.length);
+  });
+  it("shows Soporte next to Configuración for every member", () => {
+    expect(NAV_SECONDARY.map((i) => i.key)).toEqual(["settings", "support"]);
+    expect(NAV_SECONDARY.find((i) => i.key === "support")?.href).toBe("/app/support");
   });
   it("detects when the active route is inside Más", () => {
     expect(isMoreActive("/app/products/42")).toBe(true);
@@ -31,5 +35,12 @@ describe("isActive", () => {
     expect(NAV_MAIN.find((i) => i.key === "ai")?.children).toBe(AI_CHILDREN);
     expect(AI_CHILDREN.map((i) => i.href)).toContain("/app/ai/playbook");
     expect(AI_SECTIONS.map((i) => i.label)).toEqual(["Resumen", "Ejecuciones", "Necesitan atención", "Playbook de ventas"]);
+  });
+});
+
+describe("SETTINGS_SECTIONS (F9)", () => {
+  it("has Modo dueño exactly once and no duplicated routes", () => {
+    expect(SETTINGS_SECTIONS.filter((s) => s.label === "Modo dueño")).toHaveLength(1);
+    expect(new Set(SETTINGS_SECTIONS.map((s) => s.href)).size).toBe(SETTINGS_SECTIONS.length);
   });
 });

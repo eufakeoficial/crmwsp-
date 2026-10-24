@@ -2,6 +2,8 @@
 export const INBOUND_QUEUE_NAME = "inbound";
 export const INGEST_MESSAGE_JOB = "ingest-message";
 export const INGEST_STATUS_JOB = "ingest-status";
+/** Meta account/number/template event (ADR 0021); keep in sync with apps/worker/src/queue.ts. */
+export const INGEST_ACCOUNT_JOB = "ingest-account";
 
 export interface InboundJobData {
   eventId: string;
