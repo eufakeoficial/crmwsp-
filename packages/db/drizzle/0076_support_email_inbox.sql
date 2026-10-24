@@ -6,6 +6,8 @@
 --    email tickets (CHECK). The tenant_isolation policies compare tenant_id with app.tenant_id, so
 --    NULL rows are never visible to the app role (NULL = x is not true).
 --  * Writes happen only through SECURITY DEFINER functions (same conventions as 0075).
+-- All pending migrations run in ONE transaction: SQL-language bodies below compare provider::text,
+-- because a value added here cannot be used (cast) until it commits (55P04).
 ALTER TYPE "public"."channel_provider" ADD VALUE IF NOT EXISTS 'resend';--> statement-breakpoint
 
 ALTER TABLE "support_tickets" ALTER COLUMN "tenant_id" DROP NOT NULL;--> statement-breakpoint
@@ -83,7 +85,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $fn$
   SELECT e."payload", e."processed_at" FROM public."inbound_events" e
-  WHERE e."id" = p_event_id AND e."provider" = 'resend'::public."channel_provider";
+  WHERE e."id" = p_event_id AND e."provider"::text = 'resend';
 $fn$;--> statement-breakpoint
 
 CREATE FUNCTION public."resend_event_mark"(p_event_id uuid, p_error text)
@@ -94,7 +96,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $fn$
   UPDATE public."inbound_events" SET "processed_at" = pg_catalog.now(), "error" = pg_catalog.left(p_error, 200)
-  WHERE "id" = p_event_id AND "provider" = 'resend'::public."channel_provider";
+  WHERE "id" = p_event_id AND "provider"::text = 'resend';
 $fn$;--> statement-breakpoint
 
 -- Worker: store one received email as a ticket message (threading + per-sender rate limit).
