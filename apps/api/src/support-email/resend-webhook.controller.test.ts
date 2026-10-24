@@ -62,11 +62,17 @@ describe("ResendWebhookController", () => {
       expect(ingest).not.toHaveBeenCalled();
     }
   });
-  it("does not re-enqueue a duplicate delivery", async () => {
+  it("re-enqueues a duplicate delivery under the same job id (idempotent)", async () => {
     const { ctrl, reply, add } = setup(SECRET, false);
     await ctrl.receive(request(event), reply);
     expect(reply.status).toBe(200);
-    expect(add).not.toHaveBeenCalled();
+    expect(add).toHaveBeenCalledWith("process-resend-email", { eventId: "00000000-0000-4000-8000-000000000001" }, expect.objectContaining({ jobId: "resend-00000000-0000-4000-8000-000000000001" }));
+  });
+  it("503 when the queue is down so Resend retries", async () => {
+    const { ctrl, reply, add } = setup();
+    add.mockRejectedValueOnce(new Error("redis"));
+    await ctrl.receive(request(event), reply);
+    expect(reply.status).toBe(503);
   });
   it("acknowledges other event types without storing", async () => {
     const { ctrl, reply, ingest } = setup();

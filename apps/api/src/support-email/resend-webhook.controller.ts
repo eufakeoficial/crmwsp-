@@ -87,16 +87,14 @@ export class ResendWebhookController {
     }
     try {
       const stored = await this.store.ingest(`resend:${emailId}`, event);
-      if (stored.inserted && this.queue) {
-        try {
-          await this.queue.add(
-            "process-resend-email",
-            { eventId: stored.eventId },
-            { jobId: `resend-${stored.eventId}`, attempts: 8, backoff: { type: "exponential", delay: 5_000 }, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } },
-          );
-        } catch (err) {
-          this.logger.warn(`support email enqueue failed (${err instanceof Error ? err.name : "unknown"}); the sweep will retry`);
-        }
+      // Enqueued on every verified delivery (also duplicates): the jobId dedupes in BullMQ and
+      // the worker skips processed events, so a failed enqueue is healed by Resend's retry.
+      if (this.queue) {
+        await this.queue.add(
+          "process-resend-email",
+          { eventId: stored.eventId },
+          { jobId: `resend-${stored.eventId}`, attempts: 8, backoff: { type: "exponential", delay: 5_000 }, removeOnComplete: { count: 1000 }, removeOnFail: { count: 5000 } },
+        );
       }
       reply.code(200).send();
     } catch (err) {

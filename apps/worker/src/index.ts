@@ -15,7 +15,8 @@ import { META_ADS_QUEUE_NAME, createMetaAdsWorker, scheduleMetaAdsTick, type Met
 import { BROADCAST_QUEUE_NAME, createBroadcastWorker, scheduleBroadcastTick } from "./broadcasts/index.js";
 import { TEMPLATE_SYNC_QUEUE_NAME, createTemplateSyncWorker, scheduleTemplateSyncTick } from "./templates/index.js";
 import { MEDIA_QUEUE_NAME, createMediaWorker, mediaStoreFromEnv } from "./media/index.js";
-import { createMailerFromEnv, renderEmail } from "@crmwsp/mailer";
+import { createMailerFromEnv, renderEmail, resendReceivingFromEnv } from "@crmwsp/mailer";
+import { createSupportEmailWorker } from "./support-email/index.js";
 import { NOTIFICATION_QUEUE_NAME, createNotificationWorker, scheduleNotificationTick } from "./notifications/index.js";
 import { OWNER_MODE_QUEUE_NAME, createOwnerInterpreter, createOwnerModeWorker, createOwnerSender } from "./owner-mode/index.js";
 import { WEBHOOK_QUEUE_NAME, createWebhookSender, createWebhookWorker, scheduleWebhookTick } from "./webhooks/index.js";
@@ -43,6 +44,7 @@ export * from "./broadcasts/index.js";
 export * from "./owner-mode/index.js";
 export * from "./order-extraction/index.js";
 export * from "./subscription-billing/index.js";
+export * from "./support-email/index.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -106,6 +108,17 @@ function main(): void {
     provider: nowPaymentsOptions ? new NowPaymentsProvider(nowPaymentsOptions) : null,
     logger,
   });
+  // Platform email inbox (Resend, ADR 0020). Without RESEND_API_KEY jobs fail and are retried.
+  const supportEmailWorker = createSupportEmailWorker({
+    connection: createRedis(redisUrl),
+    db: db.db,
+    resend: resendReceivingFromEnv(process.env),
+    publisher,
+    logger,
+  });
+  supportEmailWorker.on("failed", (job, err) =>
+    logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
+  );
   subscriptionWorker.on("failed", (job, err) =>
     logger.warn(`job ${job?.name ?? "?"} ${job?.id ?? "?"} failed (${err.name}), attempt ${job?.attemptsMade ?? 0}`),
   );
@@ -288,7 +301,7 @@ function main(): void {
     if (closing) return;
     closing = true;
     // worker.close() waits for in-flight jobs to finish.
-    void Promise.allSettled([worker.close(), subscriptionWorker.close(), subscriptionQueue.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), templateSyncWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
+    void Promise.allSettled([worker.close(), subscriptionWorker.close(), supportEmailWorker.close(), subscriptionQueue.close(), outbound?.close(), ai?.close(), followUps?.close(), notificationsWorker?.close(), mediaWorker?.close(), capiWorker?.close(), metaAdsWorker?.close(), templateSyncWorker?.close(), webhooksWorker?.close(), broadcastWorker?.close(), ownerWorker?.close(), orderExtractionWorker?.close()])
       .then(() => Promise.allSettled([aiQueue.close(), outboundQueue?.close(), followUpQueue?.close(), notificationQueue?.close(), mediaQueue?.close(), capiQueue?.close(), metaAdsQueue?.close(), templateSyncQueue?.close(), webhookQueue?.close(), broadcastQueue?.close(), ownerQueue.close(), orderExtractionQueue.close()]))
       .then(() => Promise.allSettled([db.close(), connection.quit(), publisher.quit(), lockRedis?.quit()]))
       .finally(() => process.exit(0));
