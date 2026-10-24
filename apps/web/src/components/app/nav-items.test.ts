@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_CHILDREN, AI_SECTIONS, NAV_MAIN, NAV_MORE, NAV_SECONDARY, isActive, isMoreActive } from "./nav-items";
+import { AI_CHILDREN, AI_SECTIONS, NAV_MAIN, NAV_MORE, NAV_SECONDARY, SETTINGS_SECTIONS, isActive, isMoreActive } from "./nav-items";
 
 describe("isActive", () => {
   it("matches /app only exactly", () => {
@@ -35,5 +35,12 @@ describe("isActive", () => {
     expect(NAV_MAIN.find((i) => i.key === "ai")?.children).toBe(AI_CHILDREN);
     expect(AI_CHILDREN.map((i) => i.href)).toContain("/app/ai/playbook");
     expect(AI_SECTIONS.map((i) => i.label)).toEqual(["Resumen", "Ejecuciones", "Necesitan atención", "Playbook de ventas"]);
+  });
+});
+
+describe("SETTINGS_SECTIONS (F9)", () => {
+  it("has Modo dueño exactly once and no duplicated routes", () => {
+    expect(SETTINGS_SECTIONS.filter((s) => s.label === "Modo dueño")).toHaveLength(1);
+    expect(new Set(SETTINGS_SECTIONS.map((s) => s.href)).size).toBe(SETTINGS_SECTIONS.length);
   });
 });
