@@ -125,7 +125,14 @@ function Redemptions({ couponId }: { couponId: string }) {
             <tr key={r.id}>
               <td className={td}>{r.tenantName}</td>
               <td className={td}>{r.plan === "pro" ? "Pro" : "Start"}</td>
-              <td className={td}>{r.freeDays > 0 ? `${r.freeDays} días` : `US$${r.discountAmount}`}</td>
+              <td className={td}>
+                {r.freeDays > 0 ? `${r.freeDays} días` : `US$${r.discountAmount}`}
+                {r.overCap ? (
+                  <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-semibold text-amber-800" title="Se pagó cuando el cupón ya había alcanzado su máximo de usos (la reserva había vencido). Revisar.">
+                    Revisar: sobre el máximo
+                  </span>
+                ) : null}
+              </td>
               <td className={td}>US${r.priceAmount}</td>
               <td className={td}>{formatDate(r.createdAt)}</td>
             </tr>

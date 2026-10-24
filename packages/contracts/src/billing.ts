@@ -206,6 +206,8 @@ export const platformCouponRedemptionSchema = z.object({
   freeDays: z.number().int(),
   priceAmount: z.string(),
   createdAt: z.string(),
+  /** Paid after the coupon reached max_redemptions (its hold had expired): needs admin review. */
+  overCap: z.boolean().default(false),
 });
 export type PlatformCouponRedemption = z.infer<typeof platformCouponRedemptionSchema>;
 export const platformCouponRedemptionListSchema = z.object({ items: z.array(platformCouponRedemptionSchema) });
