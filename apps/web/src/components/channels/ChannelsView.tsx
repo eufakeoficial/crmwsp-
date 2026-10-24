@@ -8,7 +8,7 @@ import { useSession } from "@/components/app/SessionProvider";
 import { Alert, Banner, Button, Modal, Toast } from "@/components/ui";
 import { canManageChannels } from "@/components/app/roles";
 import { useToast } from "@/lib/hooks/use-toast";
-import { buildDialog360ConnectUrl } from "@/lib/dialog360";
+import { buildDialog360ConnectUrl, DIALOG360_STATE_KEY } from "@/lib/dialog360";
 import { channelsApi } from "@/lib/inbox-api";
 import { channelErrorMessage, isEncryptionNotConfigured } from "@/lib/messages";
 import { ChannelCard } from "./ChannelCard";
@@ -58,6 +58,21 @@ export function ChannelsView() {
     }
   }
 
+  // The server issues a single-use state bound to this user; the callback must send it back.
+  async function startDialog360(partnerId: string) {
+    try {
+      const { state } = await channelsApi.dialog360ConnectState();
+      try {
+        window.sessionStorage.setItem(DIALOG360_STATE_KEY, state);
+      } catch {
+        // Storage blocked: the state still travels in the redirect URL.
+      }
+      window.location.assign(buildDialog360ConnectUrl(partnerId, window.location.origin, state));
+    } catch (err) {
+      setError(err);
+    }
+  }
+
   const noKeys = isEncryptionNotConfigured(error);
   return (
     <>
@@ -66,7 +81,7 @@ export function ChannelsView() {
         {canManage ? (
           <div className="flex flex-wrap gap-2">
             {d360PartnerId ? (
-              <Button variant="whatsapp" onClick={() => window.location.assign(buildDialog360ConnectUrl(d360PartnerId, window.location.origin))}>
+              <Button variant="whatsapp" onClick={() => void startDialog360(d360PartnerId)}>
                 <Plug aria-hidden className="size-5" />Conectar con 360dialog (mantén tu WhatsApp Business)
               </Button>
             ) : null}

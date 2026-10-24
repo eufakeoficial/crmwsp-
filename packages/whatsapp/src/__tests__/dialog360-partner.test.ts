@@ -59,3 +59,21 @@ describe("Dialog360PartnerClient", () => {
     expect(extractChannelPhone({ display_phone_number: "5491140000000" })).toBe("+5491140000000");
   });
 });
+
+describe("Dialog360PartnerClient.getChannel", () => {
+  it("returns the client id and phone of the exact channel only", async () => {
+    const { c } = client(json({ partner_channels: [{ id: "OTHER", client_id: "cl_x" }, { id: "CH1", client_id: "cl_1", setup_info: { phone_number: "+54 9 11 4000-0000" } }] }));
+    expect(await c.getChannel("CH1")).toEqual({ id: "CH1", clientId: "cl_1", phone: "+5491140000000" });
+  });
+
+  it("never falls back to another channel and fails closed on errors", async () => {
+    const { c } = client(json({ partner_channels: [{ id: "OTHER", client_id: "cl_x" }] }), json({}, 500));
+    expect(await c.getChannel("CH1")).toBeUndefined();
+    await expect(c.getChannel("CH1")).rejects.toThrow();
+  });
+
+  it("reads a nested client id", async () => {
+    const { c } = client(json({ channels: [{ id: "CH1", client: { id: "cl_2" } }] }));
+    expect((await c.getChannel("CH1"))?.clientId).toBe("cl_2");
+  });
+});

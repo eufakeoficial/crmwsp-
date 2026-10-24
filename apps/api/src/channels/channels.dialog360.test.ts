@@ -1,20 +1,60 @@
 import type { CipherBox } from "@crmwsp/crypto";
 import type { Transaction } from "@crmwsp/db";
-import { EncryptionNotConfiguredError, PlanLimitExceededError, ValidationError } from "@crmwsp/contracts";
+import { ConflictError, EncryptionNotConfiguredError, ForbiddenError, PlanLimitExceededError, ValidationError } from "@crmwsp/contracts";
 import type { Dialog360PartnerClient, WhatsAppProvider } from "@crmwsp/whatsapp";
 import { describe, expect, it, vi } from "vitest";
 import type { HttpRequest } from "../common/http.js";
 import type { TenantDb } from "../db/tenant-db.js";
-import { ChannelsController } from "./channels.controller.js";
+import { ChannelsController, hashConnectState } from "./channels.controller.js";
 
 const TENANT = "00000000-0000-4000-8000-000000000001";
 const API_KEY = "d360_CHANNEL_KEY_SECRET_999";
 
 /** Queue-driven fake transaction (same approach as channels.templates.test.ts). */
-function fakeDb(selects: unknown[][]) {
+interface DbOpts {
+  /** channel ids the ownership probe reports as connected by another tenant. */
+  ownedElsewhere?: string[];
+  /** state hashes (hex) that check/consume accept; consumed ones are removed. */
+  states?: Set<string>;
+}
+
+const STATE = "s".repeat(43);
+const stateHex = () => hashConnectState(STATE).toString("hex");
+
+/** Flattens a drizzle sql chunk enough to tell which function is called and grab its params. */
+function sqlInfo(q: unknown): { text: string; params: unknown[] } {
+  const params: unknown[] = [];
+  let text = "";
+  const walk = (c: unknown): void => {
+    if (c && typeof c === "object" && "queryChunks" in c) {
+      for (const x of (c as { queryChunks: unknown[] }).queryChunks) walk(x);
+    } else if (c && typeof c === "object" && "value" in c && Array.isArray((c as { value: unknown }).value)) {
+      text += (c as { value: string[] }).value.join("");
+    } else {
+      params.push(c);
+      text += "?";
+    }
+  };
+  walk(q);
+  return { text, params };
+}
+
+function fakeDb(selects: unknown[][], opts: DbOpts = {}) {
   const queue = [...selects];
   const inserts: Array<Record<string, unknown>> = [];
+  const audits: Array<Record<string, unknown>> = [];
+  const states = opts.states ?? new Set([stateHex()]);
   const tx = {
+    execute: async (q: unknown) => {
+      const { text, params } = sqlInfo(q);
+      const hashHex = () => (params.find((p) => Buffer.isBuffer(p)) as Buffer | undefined)?.toString("hex") ?? "";
+      if (text.includes("channel_connect_state_check")) return [{ ok: states.has(hashHex()) }];
+      if (text.includes("channel_connect_state_consume")) return [{ ok: states.delete(hashHex()) }];
+      if (text.includes("channel_external_owned_elsewhere")) {
+        return (opts.ownedElsewhere ?? []).filter((id) => params.includes(id)).map((id) => ({ id }));
+      }
+      return [];
+    },
     select: () => {
       const chain: Record<string, unknown> = {};
       const result = queue.shift() ?? [];
@@ -24,6 +64,10 @@ function fakeDb(selects: unknown[][]) {
     },
     insert: () => ({
       values: (v: Record<string, unknown>) => {
+        if (typeof v["action"] === "string") {
+          audits.push(v);
+          return Promise.resolve(undefined);
+        }
         inserts.push(v);
         const p = Promise.resolve(undefined) as Promise<undefined> & { returning: () => Promise<unknown[]> };
         p.returning = async () => [
@@ -34,7 +78,7 @@ function fakeDb(selects: unknown[][]) {
     }),
   };
   const db = { tenantId: TENANT, userId: "user-1", run: <T>(fn: (t: Transaction) => Promise<T>) => fn(tx as unknown as Transaction) } as unknown as TenantDb;
-  return { db, inserts };
+  return { db, inserts, audits };
 }
 
 /** Plan limit stub: allows up to `free` more numbers. */
@@ -56,8 +100,9 @@ function make(partner: Partial<Dialog360PartnerClient> | null, cipher: CipherBox
 }
 
 const req = { ip: "127.0.0.1" } as unknown as HttpRequest;
+const BODY = { clientId: "cl1", channelIds: ["CH1"], state: STATE };
 const partnerStub = (over: Record<string, unknown> = {}) => ({
-  findChannelPhone: vi.fn(async () => "+5491140000000"),
+  getChannel: vi.fn(async (id: string) => ({ id, clientId: "cl1", phone: "+5491140000000" })),
   createChannelApiKey: vi.fn(async () => API_KEY),
   setWebhook: vi.fn(async () => undefined),
   ...over,
@@ -68,7 +113,7 @@ describe("POST /channels/360dialog/connect", () => {
     const partner = partnerStub();
     const { controller, cipher } = make(partner as unknown as Dialog360PartnerClient);
     const { db, inserts } = fakeDb([[]]);
-    const out = await controller.connect360dialog(db, { clientId: "cl1", channelIds: ["CH1"] }, req);
+    const out = await controller.connect360dialog(db, BODY, req);
 
     expect(partner.createChannelApiKey).toHaveBeenCalledWith("CH1");
     const hook = partner.setWebhook.mock.calls[0] as unknown as [string, string];
@@ -106,20 +151,20 @@ describe("POST /channels/360dialog/connect", () => {
       updatedAt: new Date(),
     };
     const { db, inserts } = fakeDb([[existing]]);
-    const out = await controller.connect360dialog(db, { channelIds: ["CH1"] }, req);
+    const out = await controller.connect360dialog(db, BODY, req);
     expect(out.items).toHaveLength(1);
     expect(partner.createChannelApiKey).not.toHaveBeenCalled();
     expect(inserts).toHaveLength(0);
   });
 
   it("asks for the phone when the Hub does not expose it, and uses it when given", async () => {
-    const partner = partnerStub({ findChannelPhone: vi.fn(async () => undefined) });
+    const partner = partnerStub({ getChannel: vi.fn(async (id: string) => ({ id, clientId: "cl1" })) });
     const { controller } = make(partner as unknown as Dialog360PartnerClient);
-    await expect(controller.connect360dialog(fakeDb([[]]).db, { channelIds: ["CH1"] }, req)).rejects.toBeInstanceOf(ValidationError);
+    await expect(controller.connect360dialog(fakeDb([[]]).db, BODY, req)).rejects.toBeInstanceOf(ValidationError);
     expect(partner.createChannelApiKey).not.toHaveBeenCalled();
 
     const { db, inserts } = fakeDb([[]]);
-    await controller.connect360dialog(db, { channelIds: ["CH1"], phoneE164: "+5491166667777" }, req);
+    await controller.connect360dialog(db, { ...BODY, phoneE164: "+5491166667777" }, req);
     expect(inserts[0]).toMatchObject({ phoneE164: "+5491166667777" });
   });
 
@@ -127,7 +172,7 @@ describe("POST /channels/360dialog/connect", () => {
     const partner = partnerStub();
     const { controller } = make(partner as unknown as Dialog360PartnerClient, null, limitsStub(0));
     const { db, inserts } = fakeDb([[]]);
-    await expect(controller.connect360dialog(db, { channelIds: ["CH1"] }, req)).rejects.toBeInstanceOf(PlanLimitExceededError);
+    await expect(controller.connect360dialog(db, BODY, req)).rejects.toBeInstanceOf(PlanLimitExceededError);
     expect(partner.createChannelApiKey).not.toHaveBeenCalled();
     expect(inserts).toHaveLength(0);
   });
@@ -135,7 +180,7 @@ describe("POST /channels/360dialog/connect", () => {
   it("checks the number limit again inside the insert transaction, under the per-tenant lock", async () => {
     const partner = partnerStub();
     const { controller, limits } = make(partner as unknown as Dialog360PartnerClient);
-    await controller.connect360dialog(fakeDb([[]]).db, { channelIds: ["CH1"] }, req);
+    await controller.connect360dialog(fakeDb([[]]).db, BODY, req);
     expect(limits.lock).toHaveBeenCalledWith(expect.anything(), TENANT, "whatsapp_numbers");
     expect(limits.assert).toHaveBeenLastCalledWith(TENANT, "whatsapp_numbers", 1, expect.anything());
     // The first active channel starts the trial of a tenant in setup (ADR 0015).
@@ -144,11 +189,88 @@ describe("POST /channels/360dialog/connect", () => {
 
   it("rejects malformed channel ids and unconfigured partner credentials", async () => {
     const { controller } = make(partnerStub() as unknown as Dialog360PartnerClient);
-    await expect(controller.connect360dialog(fakeDb([]).db, { channelIds: ["../x"] }, req)).rejects.toBeInstanceOf(ValidationError);
+    await expect(controller.connect360dialog(fakeDb([]).db, { ...BODY, channelIds: ["../x"] }, req)).rejects.toBeInstanceOf(ValidationError);
     const off = make(null);
-    await expect(off.controller.connect360dialog(fakeDb([]).db, { channelIds: ["CH1"] }, req)).rejects.toBeInstanceOf(EncryptionNotConfiguredError);
+    await expect(off.controller.connect360dialog(fakeDb([]).db, BODY, req)).rejects.toBeInstanceOf(EncryptionNotConfiguredError);
   });
 });
+
+describe("POST /channels/360dialog/connect hardening (F1)", () => {
+  it("refuses a channel id owned by another tenant with 409, audited, with no Partner call", async () => {
+    const partner = partnerStub();
+    const { controller } = make(partner as unknown as Dialog360PartnerClient);
+    const { db, audits, inserts } = fakeDb([[]], { ownedElsewhere: ["CH1"] });
+    await expect(controller.connect360dialog(db, BODY, req)).rejects.toBeInstanceOf(ConflictError);
+    expect(partner.getChannel).not.toHaveBeenCalled();
+    expect(partner.createChannelApiKey).not.toHaveBeenCalled();
+    expect(partner.setWebhook).not.toHaveBeenCalled();
+    expect(inserts).toHaveLength(0);
+    expect(audits[0]).toMatchObject({ action: "channel.connect_refused", diff: expect.objectContaining({ reason: "owned_by_another_tenant" }) });
+  });
+
+  it("requires clientId and refuses channels that do not belong to it", async () => {
+    const partner = partnerStub({ getChannel: vi.fn(async (id: string) => ({ id, clientId: "someone_else" })) });
+    const { controller } = make(partner as unknown as Dialog360PartnerClient);
+    const { clientId: _omit, ...noClient } = BODY;
+    await expect(controller.connect360dialog(fakeDb([[]]).db, noClient, req)).rejects.toBeInstanceOf(ValidationError);
+    const { db, audits } = fakeDb([[]]);
+    await expect(controller.connect360dialog(db, BODY, req)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(partner.createChannelApiKey).not.toHaveBeenCalled();
+    expect(audits[0]).toMatchObject({ action: "channel.connect_refused", diff: expect.objectContaining({ reason: "client_mismatch" }) });
+    const unknown = partnerStub({ getChannel: vi.fn(async () => undefined) });
+    const u = make(unknown as unknown as Dialog360PartnerClient);
+    await expect(u.controller.connect360dialog(fakeDb([[]]).db, BODY, req)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(unknown.createChannelApiKey).not.toHaveBeenCalled();
+  });
+
+  it("refuses a missing, invalid or reused state before minting any key", async () => {
+    const partner = partnerStub();
+    const { controller } = make(partner as unknown as Dialog360PartnerClient);
+    const { state: _s, ...noState } = BODY;
+    await expect(controller.connect360dialog(fakeDb([[]]).db, noState, req)).rejects.toBeInstanceOf(ValidationError);
+    await expect(controller.connect360dialog(fakeDb([[]]).db, { ...BODY, state: "x".repeat(43) }, req)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(partner.getChannel).not.toHaveBeenCalled();
+
+    const states = new Set([stateHex()]);
+    await controller.connect360dialog(fakeDb([[]], { states }).db, BODY, req);
+    expect(partner.createChannelApiKey).toHaveBeenCalledTimes(1);
+    // Replay of the same redirect: the state was consumed.
+    await expect(controller.connect360dialog(fakeDb([[]], { states }).db, BODY, req)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(partner.createChannelApiKey).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the state when it only needs the phone, so the retry works", async () => {
+    const partner = partnerStub({ getChannel: vi.fn(async (id: string) => ({ id, clientId: "cl1" })) });
+    const { controller } = make(partner as unknown as Dialog360PartnerClient);
+    const states = new Set([stateHex()]);
+    await expect(controller.connect360dialog(fakeDb([[]], { states }).db, BODY, req)).rejects.toBeInstanceOf(ValidationError);
+    expect(states.size).toBe(1);
+    await controller.connect360dialog(fakeDb([[]], { states }).db, { ...BODY, phoneE164: "+5491166667777" }, req);
+    expect(states.size).toBe(0);
+  });
+
+  it("issues a state and stores only its hash", async () => {
+    const { controller } = make(partnerStub() as unknown as Dialog360PartnerClient);
+    let stored: unknown[] = [];
+    const db = {
+      tenantId: TENANT,
+      userId: "user-1",
+      run: <T>(fn: (t: Transaction) => Promise<T>) =>
+        fn({
+          execute: async (q: unknown) => {
+            stored = sqlInfo(q).params;
+            return [{ e: "2026-10-24 12:15:00+00" }];
+          },
+        } as unknown as Transaction),
+    } as unknown as TenantDb;
+    const out = await controller.dialog360ConnectState(db);
+    expect(out.state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(stored).not.toContain(out.state);
+    expect(stored.some((p) => Buffer.isBuffer(p) && p.equals(hashConnectState(out.state)))).toBe(true);
+    expect(out.expiresAt).toBe("2026-10-24T12:15:00.000Z");
+  });
+});
+
 
 describe("POST /channels/gupshup plan limit", () => {
   it("refuses with 402 and inserts nothing when the plan has no free number", async () => {

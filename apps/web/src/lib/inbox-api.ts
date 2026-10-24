@@ -11,6 +11,7 @@ import {
   contactListResponseSchema,
   contactSchema,
   dialog360ConfigSchema,
+  dialog360ConnectStateSchema,
   conversationListResponseSchema,
   conversationSchema,
   messageListResponseSchema,
@@ -37,6 +38,8 @@ export const channelsApi = {
   createGupshup: (input: CreateGupshupChannelRequest) =>
     request("/channels/gupshup", { method: "POST", body: input, schema: channelSchema }),
   dialog360Config: () => request("/channels/360dialog/config", { schema: dialog360ConfigSchema }),
+  dialog360ConnectState: () =>
+    request("/channels/360dialog/connect-state", { method: "POST", schema: dialog360ConnectStateSchema }),
   connect360dialog: (input: Connect360dialogRequest) =>
     request("/channels/360dialog/connect", { method: "POST", body: input, schema: channelListResponseSchema }),
   setPartnerCredentials: (id: string, input: SetPartnerCredentialsRequest) =>

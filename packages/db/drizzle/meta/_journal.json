@@ -518,6 +518,13 @@
       "when": 1792790000000,
       "tag": "0079_policy_monitor",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1792900000000,
+      "tag": "0090_channel_connect_hardening",
+      "breakpoints": true
     }
   ]
 }

@@ -48,6 +48,24 @@ export function extractChannelPhone(channel: Record<string, unknown>): string | 
   return undefined;
 }
 
+export interface Dialog360ChannelInfo {
+  id: string;
+  clientId?: string;
+  phone?: string;
+}
+
+/** Client id of a Hub channel record (`client_id`, or `client.id`). */
+export function extractChannelClientId(channel: Record<string, unknown>): string | undefined {
+  const direct = channel["client_id"];
+  if (typeof direct === "string" && direct.length > 0) return direct;
+  const client = channel["client"];
+  if (client && typeof client === "object") {
+    const id = (client as Record<string, unknown>)["id"];
+    if (typeof id === "string" && id.length > 0) return id;
+  }
+  return undefined;
+}
+
 export class Dialog360PartnerClient {
   private readonly fetchImpl: typeof globalThis.fetch;
   private readonly hubUrl: string;
@@ -88,6 +106,27 @@ export class Dialog360PartnerClient {
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * Channel details for ownership checks: the client it belongs to and its phone. Undefined when the
+   * Hub does not know the channel under this partner. Errors propagate (callers must fail closed).
+   */
+  async getChannel(channelId: string): Promise<Dialog360ChannelInfo | undefined> {
+    const filters = encodeURIComponent(JSON.stringify({ id: channelId }));
+    const res = await this.call(`${this.hubUrl}/partners/${encodeURIComponent(this.opts.partnerId)}/channels?filters=${filters}`, {
+      method: "GET",
+      headers: { "x-api-key": this.opts.partnerApiKey, accept: "application/json" },
+    });
+    const parsed = channelsResponseSchema.safeParse(await this.json(res));
+    if (!parsed.success) throw new Dialog360ProviderError("Unexpected channels response from 360dialog", false, res.status);
+    const list = parsed.data.partner_channels ?? parsed.data.channels ?? [];
+    // Exact id match only: never fall back to "the first channel" for an ownership decision.
+    const match = list.find((c) => c["id"] === channelId);
+    if (!match) return undefined;
+    const clientId = extractChannelClientId(match);
+    const phone = extractChannelPhone(match);
+    return { id: channelId, ...(clientId ? { clientId } : {}), ...(phone ? { phone } : {}) };
   }
 
   /** Points the channel's webhook at our URL (contains the opaque per-connection token). */
