@@ -21,7 +21,7 @@ aplicar automáticamente cambios de reglas. Sin secretos en logs.
   columnas en `tenants`, decisión en `@crmwsp/domain` (TDD) repetida en SQL, alta y panel, cola de
   revisión en el backoffice (auditada), bloqueo de conexión de WhatsApp mientras está en revisión.
   Ruta: inline (un solo escritor, el propio agente). Checks: typecheck, lint, tests.
-- [ ] T2 — Salvaguardas: opt-in/opt-out (ya existía `consents`; se amplían palabras y se confirma
+- [x] T2 — Salvaguardas: opt-in/opt-out (ya existía `consents`; se amplían palabras y se confirma
   una vez), linter de plantillas (TDD), eventos de calidad/estado de Meta (v3) guardados y
   alertados, reglas del agente acotadas al negocio (test).
 - [ ] T3 — Monitor diario de políticas: worker con fetch acotado (timeout, reintentos, tope de
@@ -38,3 +38,4 @@ aplicar automáticamente cambios de reglas. Sin secretos en logs.
 
 ## Progreso / evidencia
 - T1: tests de dominio 7/7 verdes (escritos junto a la implementación, sin RED aislado); api 195 pass / 173 skip; web 152 pass; typecheck y lint OK. Test de BD `business-categories.test.ts` se salta sin BD local.
+- T2: RED observado (CANCELAR, prompt acotado), GREEN; dominio 289, whatsapp 94, ai 149, worker 130/93 skip, api 196/173 skip, web 152. Ruta inline.

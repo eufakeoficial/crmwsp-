@@ -13,13 +13,17 @@ import {
   type Database,
   type Transaction,
 } from "@crmwsp/db";
+import { OPT_OUT_CONFIRMATION_TEXT } from "@crmwsp/domain";
 import { BSP_HEADER, type InboundWebhookResult, type NormalizedInboundMessage, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { UnrecoverableError, type Queue } from "bullmq";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import {
   AI_JOB_OPTIONS,
   AI_TURN_JOB,
+  SEND_MESSAGE_JOB,
+  SEND_MESSAGE_JOB_OPTIONS,
   aiTurnJobId,
+  type SendMessageJobData,
   type AiTurnJobData,
   type InboundJobData,
 } from "./queue.js";
@@ -31,6 +35,7 @@ import { STORE_MEDIA_JOB, STORE_MEDIA_JOB_OPTIONS, storeMediaJobId, type StoreMe
 import { enqueueOwnerCommand, ownerModeHook } from "./owner-mode/ingest-hook.js";
 import { enqueueOrderExtraction } from "./order-extraction/queue.js";
 import { isSubscriptionRestricted } from "./subscription-billing/index.js";
+import type { AlertMailer } from "./platform-alerts.js";
 
 /** Minimal publisher (ioredis satisfies it). */
 export interface EventPublisher {
@@ -56,6 +61,10 @@ export interface ProcessorDeps {
   ownerQueue?: Pick<Queue, "add">;
   /** `order-extraction` queue (F4); when absent, media messages are not scanned for orders. */
   orderExtractionQueue?: Pick<Queue, "add">;
+  /** `outbound` queue; when absent, the one-time opt-out confirmation stays queued in the inbox. */
+  outboundQueue?: Pick<Queue, "add">;
+  /** Mailer for platform-admin alerts (critical Meta events); absent = no e-mail. */
+  alertMailer?: AlertMailer;
 }
 
 export type InboxEventType = "message.received" | "message.created" | "message.status" | "conversation.updated";
@@ -83,6 +92,8 @@ interface IngestTxResult extends IngestMessageResult {
   attachmentId?: string | null;
   /** Mime type of that attachment (F4 order detection decides on it). */
   mediaMimeType?: string | null;
+  /** Outbound opt-out confirmation to send after commit (first opt-out only). */
+  confirmationMessageId?: string | null;
 }
 
 export interface IngestStatusResult {
@@ -103,7 +114,10 @@ function assertJobData(data: unknown): InboundJobData {
   return { eventId: d.eventId, tenantId: d.tenantId };
 }
 
-async function loadResult<K extends "message" | "status">(
+/** Validated inbound job data (shared by the account-event processor). */
+export const parseInboundJobData = (data: unknown): InboundJobData => assertJobData(data);
+
+export async function loadResult<K extends "message" | "status" | "account">(
   tx: Transaction,
   provider: WhatsAppProvider,
   eventId: string,
@@ -119,7 +133,7 @@ async function loadResult<K extends "message" | "status">(
   return { event, result };
 }
 
-async function markProcessed(tx: Transaction, eventId: string): Promise<void> {
+export async function markProcessed(tx: Transaction, eventId: string): Promise<void> {
   await tx.update(inboundEvents).set({ processedAt: new Date(), error: null }).where(eq(inboundEvents.id, eventId));
 }
 
@@ -213,7 +227,7 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       });
     }
     // "BAJA" / "STOP": revoke marketing consent (broadcast audiences exclude the contact).
-    await recordMarketingOptOut(tx, tenantId, contact.id, messageBody(m), m.externalId);
+    const optedOutNow = await recordMarketingOptOut(tx, tenantId, contact.id, messageBody(m), m.externalId);
 
     // Serialise conversation creation per (tenant, contact, connection): concurrent messages
     // from the same contact would otherwise race on conversations_one_unresolved_unique.
@@ -326,6 +340,27 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     // The contact replied: pending follow-ups of this conversation are no longer needed.
     await cancelFollowUpsForConversation(tx, conversation.id);
 
+    // First opt-out: confirm once (inside the 24 h window the customer just opened) and run no AI turn.
+    let confirmationMessageId: string | null = null;
+    if (optedOutNow) {
+      const [conf] = await tx
+        .insert(messages)
+        .values({
+          tenantId,
+          conversationId: conversation.id,
+          direction: "outbound",
+          type: "text",
+          body: OPT_OUT_CONFIRMATION_TEXT,
+          status: "queued",
+          author: "system",
+          // Keyed by the inbound message: a redelivery cannot create a second confirmation.
+          clientMessageId: inserted.id,
+        })
+        .onConflictDoNothing({ target: [messages.tenantId, messages.clientMessageId], where: sql`${messages.clientMessageId} is not null` })
+        .returning({ id: messages.id });
+      confirmationMessageId = conf?.id ?? null;
+    }
+
     // Inbox v2: open/reopen for a human and (auto-)assign when no automation owns the chat.
     await routeInbound(tx, {
       tenantId,
@@ -339,7 +374,7 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     // An AI turn is scheduled only when the conversation has AI enabled and the tenant has an
     // active LLM connection whose last connection test passed.
     let scheduleAiTurn = false;
-    if (deps.aiQueue && conversation.aiMode !== "off" && !(await contactAutomationsPaused(tx, contact.id, now))) {
+    if (deps.aiQueue && !optedOutNow && conversation.aiMode !== "off" && !(await contactAutomationsPaused(tx, contact.id, now))) {
       const [llm] = await tx
         .select({ id: llmConnections.id })
         .from(llmConnections)
@@ -350,9 +385,25 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
     }
 
     await markProcessed(tx, eventId);
-    return { conversationId: conversation.id, messageId: inserted.id, duplicate: false, scheduleAiTurn, attachmentId, mediaMimeType: m.media?.mimeType ?? null };
+    return {
+      conversationId: conversation.id,
+      messageId: inserted.id,
+      duplicate: false,
+      scheduleAiTurn,
+      attachmentId,
+      mediaMimeType: m.media?.mimeType ?? null,
+      confirmationMessageId,
+    };
   });
-  const { scheduleAiTurn, attachmentId, mediaMimeType, ...result } = out;
+  const { scheduleAiTurn, attachmentId, mediaMimeType, confirmationMessageId, ...result } = out;
+  if (confirmationMessageId && deps.outboundQueue) {
+    const data: SendMessageJobData = { tenantId, messageId: confirmationMessageId };
+    try {
+      await deps.outboundQueue.add(SEND_MESSAGE_JOB, data, { ...SEND_MESSAGE_JOB_OPTIONS, jobId: confirmationMessageId });
+    } catch (err) {
+      (deps.logger ?? silent).warn(`could not enqueue opt-out confirmation (${err instanceof Error ? err.name : "unknown"})`);
+    }
+  }
   if (result.reactedMessageId) {
     await publish(deps, tenantId, { type: "message.status", conversationId: result.conversationId, messageId: result.reactedMessageId });
     return result;

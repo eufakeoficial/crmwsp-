@@ -43,6 +43,8 @@ export * from "./broadcasts/index.js";
 export * from "./owner-mode/index.js";
 export * from "./order-extraction/index.js";
 export * from "./subscription-billing/index.js";
+export * from "./channel-quality.js";
+export * from "./platform-alerts.js";
 export { createInboundWorker } from "./worker.js";
 export type { InboundWorkerOptions } from "./worker.js";
 
@@ -82,6 +84,9 @@ function main(): void {
 
   const worker = createInboundWorker({
     connection,
+    // Producer only (opt-out confirmations); sends wait in the queue until the outbound worker runs.
+    outboundQueue: new Queue(OUTBOUND_QUEUE_NAME, { connection: createRedis(redisUrl) }),
+    alertMailer: createMailerFromEnv(),
     concurrency: Number.isInteger(concurrency) && concurrency > 0 ? concurrency : 5,
     db: db.db,
     provider: createDefaultWhatsAppProvider(),

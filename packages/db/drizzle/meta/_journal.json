@@ -490,6 +490,13 @@
       "when": 1792770000000,
       "tag": "0077_business_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1792780000000,
+      "tag": "0078_channel_quality_events",
+      "breakpoints": true
     }
   ]
 }

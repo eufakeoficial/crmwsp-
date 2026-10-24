@@ -59,6 +59,32 @@ function CategoryReviews() {
   );
 }
 
+/** Warning/critical Meta events on tenant numbers (quality drops, restrictions, paused templates). */
+function QualityAlerts() {
+  const state = useAsync(() => policiesPlatformApi.qualityAlerts(30), []);
+  return (
+    <section className="mb-6">
+      <h2 className="mb-2 text-[15px] font-extrabold">Alertas de calidad (30 días)</h2>
+      <p className="mb-2 text-[12px] text-muted">Solo llegan si el BSP reenvía los eventos de cuenta de Meta.</p>
+      <Loading state={state}>
+        <Table head={["Fecha", "Empresa", "Número", "Evento", "Motivo", "Gravedad", "Estado"]}>
+          {(state.data?.items ?? []).map((a) => (
+            <tr key={a.eventId}>
+              <td className={td}>{formatDate(a.createdAt)}</td>
+              <td className={td}>{a.tenantName}</td>
+              <td className={td}>…{a.phoneLast4} · {a.provider}</td>
+              <td className={td}>{a.field} · {a.event ?? a.quality ?? "—"}</td>
+              <td className={td}>{a.reason ?? "—"}</td>
+              <td className={td}>{a.severity === "critical" ? "Crítica" : "Advertencia"}</td>
+              <td className={td}>{a.accountStatus}</td>
+            </tr>
+          ))}
+        </Table>
+      </Loading>
+    </section>
+  );
+}
+
 /** Category rules (data-driven). Editing never re-evaluates existing tenants. */
 function CategoryRules() {
   const state = useAsync(() => policiesPlatformApi.categories(), []);
@@ -112,6 +138,7 @@ export function PoliciesPage() {
     <div>
       <PageHeader title="Políticas de WhatsApp" />
       <CategoryReviews />
+      <QualityAlerts />
       <CategoryRules />
     </div>
   );

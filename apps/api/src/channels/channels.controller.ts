@@ -12,6 +12,8 @@ import {
   createGupshupChannelRequestSchema,
   setPartnerCredentialsRequestSchema,
   submitTemplateRequestSchema,
+  templateLintRequestSchema,
+  type TemplateLintResponse,
   updateChannelRequestSchema,
   type Channel,
   type ChannelListResponse,
@@ -19,6 +21,7 @@ import {
   type MessageTemplateDto,
 } from "@crmwsp/contracts";
 import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, type ChannelConnection, type Transaction } from "@crmwsp/db";
+import { lintTemplate } from "@crmwsp/domain";
 import { generateWebhookToken, type Dialog360PartnerClient, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -87,6 +90,10 @@ export class ChannelsController {
       apiKeyHint: privileged ? (hint !== undefined ? hint : this.apiKeyHint(row)) : null,
       gupshupAppId: privileged ? row.gupshupAppId : null,
       partnerConfigured: row.gupshupAppId !== null && row.partnerTokenEncrypted !== null,
+      qualityRating: row.qualityRating ?? null,
+      accountStatus: row.accountStatus ?? "ok",
+      messagingLimit: row.messagingLimit ?? null,
+      qualityUpdatedAt: row.qualityUpdatedAt ? row.qualityUpdatedAt.toISOString() : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -292,6 +299,13 @@ export class ChannelsController {
     return this.toDto(row, true);
   }
 
+  /** Pre-submit linter (ADR 0021): errors block the submission, warnings are advice. */
+  @Post("templates/lint")
+  @HttpCode(200)
+  lint(@Body() body: unknown): TemplateLintResponse {
+    return lintTemplate(parseOrThrow(templateLintRequestSchema, body));
+  }
+
   @Post(":id/templates")
   @UseGuards(ActivationGuard)
   @Roles("owner", "admin")
@@ -303,6 +317,8 @@ export class ChannelsController {
   ): Promise<MessageTemplateDto> {
     if (!isUuid(id)) throw new NotFoundError();
     const input = parseOrThrow(submitTemplateRequestSchema, body);
+    const lint = lintTemplate({ category: input.category, body: input.body });
+    if (!lint.ok) throw new ValidationError("The template does not pass the policy linter", { details: { issues: lint.issues } });
     if (!this.cipher) throw new EncryptionNotConfiguredError();
 
     const channel = await db.run(async (tx) => {

@@ -6,6 +6,9 @@ import {
   businessCategoryKeySchema,
   categoryReviewDecisionRequestSchema,
   platformCategoryReviewQuerySchema,
+  platformQualityAlertQuerySchema,
+  type PlatformQualityAlert,
+  type PlatformQualityAlertList,
   upsertBusinessCategoryRequestSchema,
   uuidSchema,
   type PlatformBusinessCategoryList,
@@ -91,6 +94,31 @@ export class PlatformPoliciesService {
     };
   }
 
+  async qualityAlerts(actor: string, days: number | undefined): Promise<PlatformQualityAlertList> {
+    type Row = {
+      event_id: string; tenant_id: string; tenant_name: string; channel_id: string; provider: string; phone_last4: string; field: string;
+      event: string | null; quality: string | null; reason: string | null; severity: PlatformQualityAlert["severity"]; account_status: string; created_at: Date;
+    };
+    const rows = await this.handle.sql<Row[]>`select * from public.platform_channel_quality_alerts(${actor}, ${days ?? 30})`.catch(mapPlatformError);
+    return {
+      items: rows.map((r) => ({
+        eventId: r.event_id,
+        tenantId: r.tenant_id,
+        tenantName: r.tenant_name,
+        channelId: r.channel_id,
+        provider: r.provider,
+        phoneLast4: r.phone_last4,
+        field: r.field,
+        event: r.event,
+        quality: r.quality,
+        reason: r.reason,
+        severity: r.severity,
+        accountStatus: r.account_status,
+        createdAt: new Date(r.created_at).toISOString(),
+      })),
+    };
+  }
+
   async decide(actor: string, ip: string | null, tenantId: string, approve: boolean, reason: string | undefined): Promise<{ reviewStatus: string }> {
     const rows = await this.handle.sql<{ status: string }[]>`
       select public.platform_category_review_decide(${actor}, ${tenantId}, ${approve}, ${reason ?? null}, ${ip}::inet) as status`.catch(mapPlatformError);
@@ -113,6 +141,11 @@ export class PlatformPoliciesController {
   @HttpCode(204)
   upsert(@CurrentUser() user: RequestUser, @Req() req: HttpRequest, @Param("key") key: string, @Body() body: unknown): Promise<void> {
     return this.svc.upsertCategory(user.id, req.ip || null, key, body);
+  }
+
+  @Get("channel-quality-alerts")
+  qualityAlerts(@CurrentUser() user: RequestUser, @Query() query: unknown): Promise<PlatformQualityAlertList> {
+    return this.svc.qualityAlerts(user.id, parseOrThrow(platformQualityAlertQuerySchema, query).days);
   }
 
   @Get("category-reviews")

@@ -1,6 +1,45 @@
 import { z } from "zod";
 import { isoDateTimeSchema, uuidSchema } from "./common.js";
 
+// ---------- T2c: template linter ----------
+
+/** POST /channels/templates/lint. */
+export const templateLintRequestSchema = z.object({
+  category: z.enum(["marketing", "utility", "authentication"]),
+  body: z.string().trim().min(1).max(1024),
+});
+export type TemplateLintRequest = z.infer<typeof templateLintRequestSchema>;
+export const templateLintIssueSchema = z.object({
+  level: z.enum(["error", "warning"]),
+  code: z.string(),
+  message: z.string(),
+});
+export type TemplateLintIssueDto = z.infer<typeof templateLintIssueSchema>;
+export const templateLintResponseSchema = z.object({ ok: z.boolean(), issues: z.array(templateLintIssueSchema) });
+export type TemplateLintResponse = z.infer<typeof templateLintResponseSchema>;
+
+// ---------- T2d: channel quality alerts (backoffice) ----------
+
+export const platformQualityAlertQuerySchema = z.object({ days: z.coerce.number().int().min(1).max(365).optional() });
+export const platformQualityAlertSchema = z.object({
+  eventId: uuidSchema,
+  tenantId: uuidSchema,
+  tenantName: z.string(),
+  channelId: uuidSchema,
+  provider: z.string(),
+  phoneLast4: z.string(),
+  field: z.string(),
+  event: z.string().nullable(),
+  quality: z.string().nullable(),
+  reason: z.string().nullable(),
+  severity: z.enum(["info", "warning", "critical"]),
+  accountStatus: z.string(),
+  createdAt: isoDateTimeSchema,
+});
+export type PlatformQualityAlert = z.infer<typeof platformQualityAlertSchema>;
+export const platformQualityAlertListSchema = z.object({ items: z.array(platformQualityAlertSchema) });
+export type PlatformQualityAlertList = z.infer<typeof platformQualityAlertListSchema>;
+
 // ---------- T1: business category ("rubro") ----------
 
 export const businessCategoryKeySchema = z.string().trim().regex(/^[a-z0-9_]{2,64}$/, "invalid category");
