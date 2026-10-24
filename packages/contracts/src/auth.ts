@@ -25,6 +25,9 @@ export const signupRequestSchema = z.object({
   tenantSlug: tenantSlugSchema,
   /** Referral code from `/signup?ref=CODE` (ADR 0017); unknown codes are ignored. */
   referralCode: z.string().trim().max(32).regex(/^[A-Za-z0-9]*$/).optional(),
+  /** Business category (ADR 0021); optional: without it the panel asks for it later. */
+  businessCategory: z.string().trim().regex(/^[a-z0-9_]{2,64}$/).optional(),
+  businessCategoryDetail: z.string().trim().max(200).optional(),
 });
 export type SignupRequest = z.infer<typeof signupRequestSchema>;
 

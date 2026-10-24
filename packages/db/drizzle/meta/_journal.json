@@ -497,6 +497,27 @@
       "when": 1792760000000,
       "tag": "0076_support_email_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1792770000000,
+      "tag": "0077_business_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1792780000000,
+      "tag": "0078_channel_quality_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792790000000,
+      "tag": "0079_policy_monitor",
+      "breakpoints": true
     }
   ]
 }

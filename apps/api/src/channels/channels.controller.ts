@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import type { CipherBox } from "@crmwsp/crypto";
 import { redact } from "@crmwsp/crypto";
 import {
   ConflictError,
   EncryptionNotConfiguredError,
+  ForbiddenError,
   NotFoundError,
   ValidationError,
   GUPSHUP_PARTNER_TOKEN_PURPOSE,
@@ -11,6 +12,8 @@ import {
   createGupshupChannelRequestSchema,
   setPartnerCredentialsRequestSchema,
   submitTemplateRequestSchema,
+  templateLintRequestSchema,
+  type TemplateLintResponse,
   updateChannelRequestSchema,
   type Channel,
   type ChannelListResponse,
@@ -20,6 +23,7 @@ import {
   type SyncTemplatesResponse,
 } from "@crmwsp/contracts";
 import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, type ChannelConnection, type MessageTemplate, type Transaction } from "@crmwsp/db";
+import { lintTemplate } from "@crmwsp/domain";
 import { planTemplateSync } from "../templates/sync-plan.js";
 import { generateWebhookToken, type Dialog360PartnerClient, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
@@ -30,6 +34,7 @@ import type { TenantDb } from "../db/tenant-db.js";
 import { ActivationGuard } from "../billing/activation.guard.js";
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import { PG_UNIQUE_VIOLATION, pgCode, writeAudit } from "../inbox/audit.js";
+import { BusinessCategoryService, CATEGORY_REVIEW_BLOCKS_CHANNELS } from "../settings/business-category.service.js";
 import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_API_KEY_PURPOSE, webhookUrlFor } from "./channels.constants.js";
 
 function redactedHint(row: ChannelConnection, cipher: CipherBox): string | null {
@@ -70,7 +75,13 @@ export class ChannelsController {
     @Inject(CHANNEL_PROVIDER) private readonly provider: WhatsAppProvider,
     @Inject(DIALOG360_PARTNER) private readonly partner: Dialog360PartnerClient | null,
     @Inject(PlanLimitsService) private readonly limits: ChannelPlanLimits,
+    @Optional() @Inject(BusinessCategoryService) private readonly categories?: Pick<BusinessCategoryService, "assertCanConnect">,
   ) {}
+
+  /** ADR 0021: no new number while the business category review is pending or rejected (DB trigger too). */
+  private async assertCategory(db: TenantDb): Promise<void> {
+    if (this.categories) await this.categories.assertCanConnect(db);
+  }
 
   /** Every active (non-disabled) channel uses one `whatsapp_numbers` unit of the plan. */
   private async assertNumbers(tx: Transaction, tenantId: string, amount: number): Promise<void> {
@@ -98,6 +109,10 @@ export class ChannelsController {
       apiKeyHint: privileged ? (hint !== undefined ? hint : this.apiKeyHint(row)) : null,
       gupshupAppId: privileged ? row.gupshupAppId : null,
       partnerConfigured: row.gupshupAppId !== null && row.partnerTokenEncrypted !== null,
+      qualityRating: row.qualityRating ?? null,
+      accountStatus: row.accountStatus ?? "ok",
+      messagingLimit: row.messagingLimit ?? null,
+      qualityUpdatedAt: row.qualityUpdatedAt ? row.qualityUpdatedAt.toISOString() : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -108,6 +123,7 @@ export class ChannelsController {
   async createGupshup(@CurrentTenantDb() db: TenantDb, @Body() body: unknown, @Req() req: HttpRequest): Promise<Channel> {
     const input = parseOrThrow(createGupshupChannelRequestSchema, body);
     if (!this.cipher) throw new EncryptionNotConfiguredError();
+    await this.assertCategory(db);
     const credentials = this.cipher.encrypt(input.apiKey, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
     const partnerToken = input.partnerToken ? this.cipher.encrypt(input.partnerToken, { tenantId: db.tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE }) : null;
     try {
@@ -142,6 +158,7 @@ export class ChannelsController {
       return this.toDto(row, true, redact(input.apiKey));
     } catch (err) {
       if (pgCode(err) === PG_UNIQUE_VIOLATION) throw new ConflictError("A channel with this phone already exists");
+      if (pgCode(err) === "42501") throw new ForbiddenError(CATEGORY_REVIEW_BLOCKS_CHANNELS);
       throw err;
     }
   }
@@ -180,6 +197,7 @@ export class ChannelsController {
     const items: ChannelConnection[] = [...existing];
     const toCreate = channelIds.filter((id) => !known.has(id)).length;
     // Fail before any Partner API call: an API key must not be minted for a channel we cannot store.
+    if (toCreate > 0) await this.assertCategory(db);
     if (toCreate > 0) await db.run((tx) => this.limits.assert(db.tenantId, "whatsapp_numbers", toCreate, tx));
 
     for (const channelId of channelIds) {
@@ -300,6 +318,13 @@ export class ChannelsController {
     return this.toDto(row, true);
   }
 
+  /** Pre-submit linter (ADR 0021): errors block the submission, warnings are advice. */
+  @Post("templates/lint")
+  @HttpCode(200)
+  lint(@Body() body: unknown): TemplateLintResponse {
+    return lintTemplate(parseOrThrow(templateLintRequestSchema, body));
+  }
+
   @Post(":id/templates")
   @UseGuards(ActivationGuard)
   @Roles("owner", "admin")
@@ -311,6 +336,8 @@ export class ChannelsController {
   ): Promise<MessageTemplateDto> {
     if (!isUuid(id)) throw new NotFoundError();
     const input = parseOrThrow(submitTemplateRequestSchema, body);
+    const lint = lintTemplate({ category: input.category, body: input.body });
+    if (!lint.ok) throw new ValidationError("The template does not pass the policy linter", { details: { issues: lint.issues } });
     if (!this.cipher) throw new EncryptionNotConfiguredError();
 
     const channel = await db.run(async (tx) => {

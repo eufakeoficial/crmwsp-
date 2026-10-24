@@ -40,3 +40,4 @@ export * from "./site-assistant.js";
 export * from "./bookings.js";
 export * from "./support.js";
 export * from "./support-email.js";
+export * from "./policies.js";

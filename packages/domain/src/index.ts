@@ -23,3 +23,4 @@ export * from "./bookings/index.js";
 export * from "./signup/index.js";
 export * from "./support/index.js";
 export * from "./support-email/index.js";
+export * from "./policies/index.js";

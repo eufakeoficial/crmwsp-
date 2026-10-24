@@ -10,7 +10,7 @@ describe("admin nav", () => {
   it("lists only sections that have a page", () => {
     expect(ADMIN_ITEMS.map((i) => i.key)).toEqual([
       "home", "tenants", "approvals", "users", "channels", "finance", "payments", "plans", "coupons", "usage",
-      "support", "email", "canned", "audit", "settings",
+      "support", "email", "canned", "audit", "policies", "settings",
     ]);
   });
   it("searches ignoring accents and case", () => {

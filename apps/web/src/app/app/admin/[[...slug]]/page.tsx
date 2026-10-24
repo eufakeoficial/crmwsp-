@@ -8,6 +8,7 @@ import { EmailInbox } from "@/components/platform/EmailInbox";
 import { ChannelsPage } from "@/components/platform/ChannelsPage";
 import { PaymentsPage } from "@/components/platform/PaymentsPage";
 import { PlansPage } from "@/components/platform/PlansPage";
+import { PoliciesPage } from "@/components/platform/PoliciesPage";
 import { PlatformDashboard } from "@/components/platform/PlatformDashboard";
 import { PlatformSettingsPage } from "@/components/platform/PlatformSettingsPage";
 import { TenantDetail } from "@/components/platform/TenantDetail";
@@ -32,6 +33,7 @@ const SECTIONS: Record<string, () => React.JSX.Element> = {
   email: () => <EmailInbox />,
   canned: () => <CannedResponsesPage />,
   audit: () => <AuditPage />,
+  policies: () => <PoliciesPage />,
   settings: () => <PlatformSettingsPage />,
 };
 

@@ -74,9 +74,30 @@ export interface NormalizedStatusUpdate {
   error?: { code: string; message: string };
 }
 
+/**
+ * Meta account/number/template event (v3 `changes[].field`), forwarded by the BSP when it is
+ * subscribed. Only fields we act on are normalized; values are whitelisted (no raw payload).
+ */
+export interface NormalizedAccountEvent {
+  field: "phone_number_quality_update" | "account_update" | "message_template_status_update" | "message_template_quality_update";
+  /** Upper-case Meta event name (FLAGGED, DOWNGRADE, ACCOUNT_RESTRICTION, PAUSED, ...). */
+  event: string | null;
+  /** Template quality score (GREEN/YELLOW/RED/UNKNOWN) of message_template_quality_update. */
+  quality: string | null;
+  /** Messaging limit tier reported with a phone quality update. */
+  messagingLimit: string | null;
+  templateName: string | null;
+  templateLanguage: string | null;
+  /** Rejection reason, violation or restriction type, short and capped. */
+  reason: string | null;
+  /** Business phone of the event when Meta includes it (E.164). */
+  phone: string | null;
+}
+
 export type InboundWebhookResult =
   | { kind: "message"; dedupeKey: string; message: NormalizedInboundMessage }
   | { kind: "status"; dedupeKey: string; status: NormalizedStatusUpdate }
+  | { kind: "account"; dedupeKey: string; account: NormalizedAccountEvent }
   | { kind: "ignored"; reason: string };
 
 /** Decrypted per-channel credentials. Never logged nor embedded in errors. */

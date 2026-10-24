@@ -5,7 +5,8 @@ import { previousStatusesFor } from "../status.js";
 
 /**
  * Revokes the contact's marketing consent when the reply is an opt-out keyword (BAJA/STOP) and
- * skips its pending recipients of open campaigns. Returns whether an opt-out was recorded.
+ * skips its pending recipients of open campaigns. Returns true only when the consent was not
+ * already revoked (a repeated "STOP" is still recorded, but the caller confirms only once).
  */
 export async function recordMarketingOptOut(
   tx: Transaction,
@@ -17,6 +18,11 @@ export async function recordMarketingOptOut(
   if (!isOptOutMessage(body)) return false;
   const now = new Date();
   const evidence = { source: "whatsapp_opt_out_keyword", messageId: externalMessageId, text: (body ?? "").slice(0, 100) };
+  const [prev] = await tx
+    .select({ status: consents.status })
+    .from(consents)
+    .where(and(eq(consents.contactId, contactId), eq(consents.kind, "marketing")))
+    .limit(1);
   await tx
     .insert(consents)
     .values({ tenantId, contactId, kind: "marketing", status: "revoked", evidence, revokedAt: now, updatedAt: now })
@@ -39,7 +45,7 @@ export async function recordMarketingOptOut(
         ),
       ),
     );
-  return true;
+  return prev?.status !== "revoked";
 }
 
 /** Mirrors a BSP delivery status onto the broadcast recipient of that message (forward-only). */

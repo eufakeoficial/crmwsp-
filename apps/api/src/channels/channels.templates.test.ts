@@ -60,7 +60,7 @@ function make(provider?: Partial<WhatsAppProvider>, cipher: CipherBox | null = {
 }
 
 const req = { ip: "127.0.0.1" } as unknown as HttpRequest;
-const body = { name: "promo_otono", language: "es", category: "marketing", body: "Hola {{1}}", example: "Hola Ana" };
+const body = { name: "promo_otono", language: "es", category: "marketing", body: "Hola {{1}}, hay novedades. Responde BAJA para no recibir más.", example: "Hola Ana, hay novedades. Responde BAJA para no recibir más." };
 
 describe("POST /channels/:id/templates", () => {
   it("submits for a 360dialog channel without partner credentials", async () => {
@@ -79,7 +79,7 @@ describe("POST /channels/:id/templates", () => {
     const out = await controller.submitTemplate(db, CHANNEL, body, req);
     expect(submitTemplate).toHaveBeenCalledWith(
       { provider: "gupshup", apiKey: SECRET, appName: "DemoApp", sourcePhone: "+5491140000000", partnerAppId: "app-uuid-1", partnerToken: PARTNER },
-      { name: "promo_otono", language: "es", category: "marketing", body: "Hola {{1}}", example: "Hola Ana" },
+      { name: "promo_otono", language: "es", category: "marketing", body: "Hola {{1}}, hay novedades. Responde BAJA para no recibir más.", example: "Hola Ana, hay novedades. Responde BAJA para no recibir más." },
     );
     expect(cipher?.decrypt).toHaveBeenCalledWith(expect.any(Buffer), { tenantId: TENANT, purpose: "gupshup_api_key" });
     expect(out).toMatchObject({ name: "promo_otono", status: "pending", externalId: "tpl-9", channelConnectionId: CHANNEL, category: "marketing" });
@@ -87,6 +87,17 @@ describe("POST /channels/:id/templates", () => {
     expect(inserts[1]).toMatchObject({ tenantId: TENANT, action: "template.submitted", entity: "message_template" });
     expect(JSON.stringify(out) + JSON.stringify(inserts)).not.toContain(SECRET);
     expect(JSON.stringify(out) + JSON.stringify(inserts)).not.toContain(PARTNER);
+  });
+
+  it("400 when the policy linter finds an error, without reading the channel or calling the BSP", async () => {
+    const { controller, submitTemplate } = make();
+    const bad = { ...body, body: "Hola {{1}}, compra criptomonedas hoy. Responde BAJA para no recibir más.", example: "Hola Ana, compra criptomonedas hoy. Responde BAJA para no recibir más." };
+    await expect(controller.submitTemplate(fakeDb([]).db, CHANNEL, bad, req)).rejects.toBeInstanceOf(ValidationError);
+    expect(submitTemplate).not.toHaveBeenCalled();
+    expect(controller.lint({ category: "marketing", body: "Hola {{1}}, novedades de la semana para ti." })).toMatchObject({
+      ok: true,
+      issues: [{ level: "warning", code: "marketing_missing_opt_out" }],
+    });
   });
 
   it("404 for a malformed id or unknown channel", async () => {

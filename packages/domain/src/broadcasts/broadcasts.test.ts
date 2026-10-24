@@ -87,4 +87,12 @@ describe("template placeholders and opt-out keywords", () => {
     expect(isOptOutMessage("stop sending me the old price, I want the new one")).toBe(false);
     expect(isOptOutMessage(null)).toBe(false);
   });
+
+  it("detects CANCELAR / NO MÁS variants case- and accent-insensitively", () => {
+    expect(isOptOutMessage("Cancelar")).toBe(true);
+    expect(isOptOutMessage("CANCELÁR.")).toBe(true);
+    expect(isOptOutMessage("no mas!!")).toBe(true);
+    expect(isOptOutMessage("No quiero recibir más mensajes")).toBe(true);
+    expect(isOptOutMessage("quiero cancelar mi pedido")).toBe(false);
+  });
 });

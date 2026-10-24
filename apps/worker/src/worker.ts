@@ -1,11 +1,12 @@
 import { UnrecoverableError, Worker, type ConnectionOptions, type Job } from "bullmq";
+import { processIngestAccount } from "./channel-quality.js";
 import {
   processIngestMessage,
   processIngestStatus,
   recordFailure,
   type ProcessorDeps,
 } from "./processors.js";
-import { INBOUND_QUEUE_NAME, INGEST_MESSAGE_JOB, INGEST_STATUS_JOB } from "./queue.js";
+import { INBOUND_QUEUE_NAME, INGEST_ACCOUNT_JOB, INGEST_MESSAGE_JOB, INGEST_STATUS_JOB } from "./queue.js";
 
 export interface InboundWorkerOptions extends ProcessorDeps {
   connection: ConnectionOptions;
@@ -25,6 +26,8 @@ export function createInboundWorker(opts: InboundWorkerOptions): Worker {
             return await processIngestMessage(deps, job.data);
           case INGEST_STATUS_JOB:
             return await processIngestStatus(deps, job.data);
+          case INGEST_ACCOUNT_JOB:
+            return await processIngestAccount(deps, job.data);
           default:
             throw new UnrecoverableError("unknown job name");
         }

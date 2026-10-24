@@ -17,6 +17,7 @@ import {
 } from "./rate-limiter.js";
 import { SessionGuard } from "./session.guard.js";
 import { TenantGuard } from "./tenant.guard.js";
+import { BusinessCategoryService } from "../settings/business-category.service.js";
 
 const CLIENT_IP_HOOK = Symbol("CLIENT_IP_HOOK");
 
@@ -25,6 +26,7 @@ const CLIENT_IP_HOOK = Symbol("CLIENT_IP_HOOK");
   providers: [
     AuthRepository,
     AuthService,
+    BusinessCategoryService,
     SessionGuard,
     TenantGuard,
     { provide: SESSION_TTL_SECONDS, useFactory: sessionTtlSecondsFromEnv },
@@ -42,6 +44,6 @@ const CLIENT_IP_HOOK = Symbol("CLIENT_IP_HOOK");
     // Session required by default on every route; opt out with @Public().
     { provide: APP_GUARD, useExisting: SessionGuard },
   ],
-  exports: [AuthService, SessionGuard, TenantGuard, RATE_LIMIT_STORE, CLIENT_IP_HOOK],
+  exports: [AuthService, BusinessCategoryService, SessionGuard, TenantGuard, RATE_LIMIT_STORE, CLIENT_IP_HOOK],
 })
 export class AuthModule {}

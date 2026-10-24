@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useState } from "react";
-import { tenantSlugSchema } from "@crmwsp/contracts";
+import { type FormEvent, useEffect, useState } from "react";
+import { tenantSlugSchema, type BusinessCategoryOption } from "@crmwsp/contracts";
 import { AuthShell } from "@/components/AuthShell";
 import { Alert, Button, Input, Label, PasswordInput } from "@/components/ui";
 import { api } from "@/lib/api";
 import { routeAfterAuth } from "@/lib/after-auth";
 import { errorMessage } from "@/lib/messages";
 import { slugify } from "@/lib/slug";
+import { categoriesApi } from "@/lib/policies-api";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -19,6 +20,15 @@ export default function SignupPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [categories, setCategories] = useState<BusinessCategoryOption[]>([]);
+  const [category, setCategory] = useState("");
+  const [categoryDetail, setCategoryDetail] = useState("");
+  const chosen = categories.find((c) => c.key === category);
+
+  useEffect(() => {
+    // Best effort: without the catalog the signup still works and the panel asks later.
+    categoriesApi.list().then((r) => setCategories(r.items), () => setCategories([]));
+  }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -34,6 +44,8 @@ export default function SignupPage() {
     if (!tenantName.trim()) errors["tenantName"] = "Escribe el nombre de tu empresa.";
     if (!tenantSlugSchema.safeParse(slug).success)
       errors["slug"] = "Usa de 3 a 63 caracteres: minúsculas, números y guiones intermedios.";
+    if (categories.length > 0 && !category) errors["category"] = "Elige el rubro de tu negocio.";
+    if (chosen?.action === "block") errors["category"] = "Este rubro no está permitido por las políticas de WhatsApp Business.";
     setFieldErrors(errors);
     setError(undefined);
     if (Object.keys(errors).length > 0) return;
@@ -43,7 +55,9 @@ export default function SignupPage() {
       // Referral link `/signup?ref=CODE` (ADR 0017); ignored when malformed.
       const ref = new URLSearchParams(window.location.search).get("ref")?.trim() ?? "";
       const referralCode = /^[A-Za-z0-9]{1,32}$/.test(ref) ? ref : undefined;
-      const me = await api.signup({ email, name, password, tenantName: tenantName.trim(), tenantSlug: slug, referralCode });
+      const me = await api.signup({ email, name, password, tenantName: tenantName.trim(), tenantSlug: slug, referralCode,
+        ...(category ? { businessCategory: category, ...(categoryDetail.trim() ? { businessCategoryDetail: categoryDetail.trim() } : {}) } : {}),
+      });
       router.replace(routeAfterAuth(me));
     } catch (err) {
       setError(errorMessage(err, "signup"));
@@ -108,6 +122,53 @@ export default function SignupPage() {
           <p id="slug-help" className="text-xs text-muted">Se genera a partir del nombre; puedes editarlo.</p>
           <div aria-live="polite">{hint("slug")}</div>
         </div>
+        {categories.length > 0 ? (
+          <div className="space-y-1">
+            <Label htmlFor="category">Rubro del negocio</Label>
+            <select
+              id="category"
+              name="category"
+              required
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              aria-invalid={invalid("category")}
+              aria-describedby={fieldErrors["category"] ? "category-error" : "category-help"}
+              className="h-11 w-full rounded-xl border-[1.5px] border-ink bg-white px-3 text-sm text-ink"
+            >
+              <option value="">Elige una opción…</option>
+              {categories.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            {chosen?.action === "block" ? (
+              <p id="category-help" className="text-xs font-semibold text-danger">
+                Este rubro no está permitido por las políticas de WhatsApp Business, así que no podemos crear la cuenta.
+              </p>
+            ) : chosen?.action === "review" ? (
+              <p id="category-help" className="text-xs text-muted">
+                Este rubro requiere una revisión manual: podrás usar el panel, pero no conectar WhatsApp hasta que lo aprobemos.
+                {chosen.guidance ? ` ${chosen.guidance}` : ""}
+              </p>
+            ) : chosen?.guidance ? (
+              <p id="category-help" className="text-xs text-muted">{chosen.guidance}</p>
+            ) : (
+              <p id="category-help" className="text-xs text-muted">Lo usamos para cumplir las políticas de WhatsApp Business.</p>
+            )}
+            {chosen && (chosen.action === "review" || chosen.key === "otro") ? (
+              <Input
+                id="categoryDetail"
+                name="categoryDetail"
+                maxLength={200}
+                placeholder="Cuéntanos brevemente qué vendes"
+                value={categoryDetail}
+                onChange={(e) => setCategoryDetail(e.target.value)}
+              />
+            ) : null}
+            <div aria-live="polite">{hint("category")}</div>
+          </div>
+        ) : null}
         <Alert>{error}</Alert>
         <Button type="submit" variant="accent" size="lg" className="w-full" disabled={busy}>
           {busy ? "Creando cuenta…" : "Crear cuenta"}

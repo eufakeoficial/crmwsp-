@@ -60,6 +60,11 @@ export const channelSchema = z.object({
   gupshupAppId: z.string().nullable().optional(),
   /** True when a Partner app token is stored (templates can be submitted/synced). */
   partnerConfigured: z.boolean().optional(),
+  /** Number quality reported by Meta (ADR 0021); null = never reported (BSP may not forward it). */
+  qualityRating: z.enum(["GREEN", "YELLOW", "RED", "UNKNOWN"]).nullable().optional(),
+  accountStatus: z.enum(["ok", "flagged", "restricted", "disabled"]).optional(),
+  messagingLimit: z.string().nullable().optional(),
+  qualityUpdatedAt: isoDateTimeSchema.nullable().optional(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });

@@ -6,6 +6,7 @@ import type { BspProvider, InboundEventStore } from "./inbound-event-store.js";
 import {
   INBOUND_EVENT_STORE,
   INBOUND_QUEUE,
+  INGEST_ACCOUNT_JOB,
   INGEST_MESSAGE_JOB,
   INGEST_STATUS_JOB,
   WHATSAPP_PROVIDER,
@@ -65,7 +66,8 @@ export class WebhooksService {
       const data: InboundJobData = { eventId: res.eventId, tenantId: res.tenantId };
       // Enqueue also when the event already existed (inserted=false): if a previous enqueue failed
       // after the insert, the BSP retry recovers it; jobId=eventId keeps BullMQ from duplicating.
-      await this.queue.add(result.kind === "message" ? INGEST_MESSAGE_JOB : INGEST_STATUS_JOB, data, {
+      const job = result.kind === "message" ? INGEST_MESSAGE_JOB : result.kind === "account" ? INGEST_ACCOUNT_JOB : INGEST_STATUS_JOB;
+      await this.queue.add(job, data, {
         ...INBOUND_JOB_OPTIONS,
         jobId: res.eventId,
       });

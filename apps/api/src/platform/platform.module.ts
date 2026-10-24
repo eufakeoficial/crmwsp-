@@ -12,6 +12,7 @@ import { PlatformController, PlatformMeController } from "./platform.controller.
 import { PlatformCouponsController, PlatformCouponsService } from "./platform-coupons.js";
 import { NOWPAYMENTS_BALANCE_CLIENT, PlatformFinanceController, PlatformFinanceService, balanceClientFromEnv } from "./platform-finance.js";
 import { PlatformRepository } from "./platform.repository.js";
+import { PlatformPoliciesController, PlatformPoliciesService } from "./platform-policies.js";
 import { PLATFORM_MAILER, PlatformService } from "./platform.service.js";
 
 @Module({
@@ -24,6 +25,7 @@ import { PLATFORM_MAILER, PlatformService } from "./platform.service.js";
     PlatformFinanceController,
     PlatformSupportController,
     PlatformEmailController,
+    PlatformPoliciesController,
   ],
   providers: [
     PlatformRepository,
@@ -35,6 +37,7 @@ import { PLATFORM_MAILER, PlatformService } from "./platform.service.js";
     PlatformService,
     PlatformCouponsService,
     PlatformFinanceService,
+    PlatformPoliciesService,
     { provide: NOWPAYMENTS_BALANCE_CLIENT, useFactory: balanceClientFromEnv },
     PlatformAdminGuard,
     { provide: PLATFORM_MAILER, useFactory: () => createMailerFromEnv() },
