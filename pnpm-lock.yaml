@@ -346,6 +346,9 @@ importers:
         specifier: 10.1.7
         version: 10.1.7
     devDependencies:
+      '@crmwsp/billing':
+        specifier: workspace:*
+        version: link:../billing
       '@types/node':
         specifier: 22.20.5
         version: 22.20.5

@@ -1,5 +1,8 @@
 import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
+import { BRAND, renderTemplate, type EmailContext, type EmailData, type EmailKey } from "./templates/index.js";
+
+export * from "./templates/index.js";
 
 export interface MailMessage {
   to: string;
@@ -7,6 +10,8 @@ export interface MailMessage {
   text: string;
   html?: string;
   replyTo?: string;
+  /** Extra headers (e.g. RFC 8058 List-Unsubscribe for optional emails). */
+  headers?: Record<string, string>;
 }
 
 export interface Mailer {
@@ -71,6 +76,7 @@ export class SmtpMailer implements Mailer {
         text: message.text,
         ...(message.html ? { html: message.html } : {}),
         ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+        ...(message.headers && Object.keys(message.headers).length ? { headers: message.headers } : {}),
       })) as { messageId?: string };
       return { messageId: String(info.messageId ?? "") };
     } catch (err) {
@@ -139,4 +145,31 @@ export function renderEmail(input: EmailTemplateInput): { text: string; html: st
     : "";
   const html = `<!doctype html><html lang="es"><body style="font-family:Arial,sans-serif;color:#111;max-width:560px;margin:0 auto;padding:16px"><h2 style="margin:0 0 16px">${escapeHtml(input.title)}</h2>${paragraphs}${button}<p style="color:#666;font-size:12px;margin-top:24px">CRMWSP</p></body></html>`;
   return { text, html };
+}
+
+/** Public brand assets served by apps/web (apps/web/public/brand). Emails need an absolute https URL. */
+export const DEFAULT_EMAIL_ASSETS_URL = "https://www.vendemas.chat/brand";
+
+const trimSlash = (v: string) => v.replace(/\/+$/, "");
+
+/**
+ * Template context from env: links point to PUBLIC_WEB_URL (or the first WEB_ORIGINS entry,
+ * else the production site); the logo always loads from an absolute https URL
+ * (EMAIL_ASSETS_URL when it is https, else DEFAULT_EMAIL_ASSETS_URL).
+ */
+export function emailContextFromEnv(env: Record<string, string | undefined> = process.env): EmailContext {
+  const site = trimSlash((env.PUBLIC_WEB_URL ?? env.WEB_ORIGINS?.split(",")[0] ?? "").trim()) || BRAND.siteUrl;
+  const assets = trimSlash(env.EMAIL_ASSETS_URL?.trim() ?? "");
+  return { siteUrl: /^https?:\/\//i.test(site) ? site : BRAND.siteUrl, assetsUrl: /^https:\/\//i.test(assets) ? assets : DEFAULT_EMAIL_ASSETS_URL };
+}
+
+/** Joins the site URL and an absolute path. */
+export function siteLink(ctx: EmailContext, path: string): string {
+  return `${trimSlash(ctx.siteUrl)}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+/** Renders a branded template into a ready-to-send message. */
+export function templateMessage<K extends EmailKey>(to: string, key: K, data: EmailData<K>, ctx: EmailContext): MailMessage {
+  const email = renderTemplate(key, data, ctx);
+  return { to, subject: email.subject.slice(0, 200), text: email.text, html: email.html, ...(Object.keys(email.headers).length ? { headers: email.headers } : {}) };
 }
