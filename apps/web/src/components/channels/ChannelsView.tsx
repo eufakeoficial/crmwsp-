@@ -13,7 +13,9 @@ import { channelsApi } from "@/lib/inbox-api";
 import { api } from "@/lib/api";
 import { EMAIL_NOT_VERIFIED_TEXT, channelErrorMessage, errorMessage, isEmailNotVerified, isEncryptionNotConfigured } from "@/lib/messages";
 import { ChannelCard } from "./ChannelCard";
+import { ChannelsTabs, type ChannelsTabId } from "./ChannelsTabs";
 import { ConnectChannelPanel } from "./ConnectChannelPanel";
+import { GupshupGuide } from "./GupshupGuide";
 import { PartnerCredentialsPanel } from "./PartnerCredentialsPanel";
 
 export function ChannelsView() {
@@ -29,6 +31,7 @@ export function ChannelsView() {
   const [d360PartnerId, setD360PartnerId] = useState<string | null>(null);
   const { message, show } = useToast();
   const [resending, setResending] = useState(false);
+  const [tab, setTab] = useState<ChannelsTabId>("channels");
 
   const load = useCallback(async () => {
     try {
@@ -152,6 +155,21 @@ export function ChannelsView() {
           />
         </div>
       ) : null}
+      <ChannelsTabs
+        selected={tab}
+        onSelect={setTab}
+        panels={{
+          guide: (
+            <GupshupGuide
+              canConnect={canManage && !emailBlocked}
+              onConnect={() => {
+                setConnecting(true);
+                setTab("channels");
+              }}
+            />
+          ),
+          channels: (
+            <>
       {channels === null && !error ? (
         <p className="text-muted" aria-busy="true">Cargando canales…</p>
       ) : channels && channels.length === 0 ? (
@@ -208,6 +226,10 @@ export function ChannelsView() {
           ))}
         </div>
       )}
+            </>
+          ),
+        }}
+      />
       <Toast message={message} />
     </>
   );
