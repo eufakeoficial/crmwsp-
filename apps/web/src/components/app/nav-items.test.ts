@@ -83,7 +83,7 @@ describe("active helpers", () => {
 
 describe("SETTINGS_SECTIONS (F9)", () => {
   it("has the owner-mode section exactly once and no duplicated routes", () => {
-    expect(SETTINGS_SECTIONS.filter((s) => s.label === "Gestionar desde tu WhatsApp")).toHaveLength(1);
+    expect(SETTINGS_SECTIONS.filter((s) => s.label === "Control por WhatsApp")).toHaveLength(1);
     expect(new Set(SETTINGS_SECTIONS.map((s) => s.href)).size).toBe(SETTINGS_SECTIONS.length);
   });
 });

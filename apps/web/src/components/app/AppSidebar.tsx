@@ -37,7 +37,7 @@ export function SidebarLink({ item, active, count, onNavigate, compact = false }
       )}
     >
       <Icon aria-hidden className="size-4 flex-none" />
-      <span className="flex-1 whitespace-nowrap">{item.label}</span>
+      <span className="min-w-0 flex-1 leading-tight">{item.label}</span>
       {count ? (
         <span className="rounded-full bg-alert px-2 text-[12px] font-extrabold text-white">
           {formatCount(count)}
@@ -48,7 +48,7 @@ export function SidebarLink({ item, active, count, onNavigate, compact = false }
   );
 }
 
-const SUB_BOX = "ml-5 flex flex-col gap-0.5 border-l border-white/25 pl-2";
+const SUB_BOX = "ml-3 flex flex-col gap-0.5 border-l border-white/25 pl-1";
 
 /** Child links; an item that has its own children shows them while it or one of them is current. */
 function SubLinks({ items, activeHref, counts, onNavigate }: { items: readonly NavItem[]; activeHref: string | null; counts: NavCounts; onNavigate?: (() => void) | undefined }) {
@@ -96,7 +96,7 @@ function NavEntry({ group, activeHref, counts, onNavigate }: { group: NavGroup; 
         )}
       >
         <Icon aria-hidden className="size-4 flex-none" />
-        <span className="flex-1 whitespace-nowrap">{group.label}</span>
+        <span className="min-w-0 flex-1 leading-tight">{group.label}</span>
         {!open && total ? (
           <span className="rounded-full bg-alert px-2 text-[12px] font-extrabold text-white">
             {formatCount(total)}

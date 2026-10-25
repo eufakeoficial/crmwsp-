@@ -107,7 +107,7 @@ export function OwnerModeView() {
   useEffect(() => void load(), [load]);
 
   return (
-    <SettingsFrame title="Gestionar desde tu WhatsApp" subtitle="Gestiona el negocio desde tu propio WhatsApp">
+    <SettingsFrame title="Control por WhatsApp" subtitle="Gestiona el negocio desde tu propio WhatsApp">
       {({ role }) =>
         !canManageAi(role as Parameters<typeof canManageAi>[0]) ? (
           <Alert tone="info">Solo propietarios y administradores pueden usar el modo dueño.</Alert>
