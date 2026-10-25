@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, Plus } from "lucide-react";
+import { LifeBuoy, Menu, Plus } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -30,6 +30,9 @@ export function AppTopbar({ menuOpen, onToggleMenu, hideOnDesktop = false }: { m
         <Menu aria-hidden className="size-5" />
       </button>
       <NotificationBell triggerClassName="size-9 flex-none bg-white text-ink" />
+      <Link href="/app/support" aria-label="Soporte" title="Soporte" className={`${ROUND} bg-white text-ink no-underline hover:bg-ink/5`}>
+        <LifeBuoy aria-hidden className="size-5" />
+      </Link>
       <Link href="/app/quotes" className="hidden h-9 items-center gap-1.5 rounded-full bg-royal px-4 hover:bg-azure text-[13px] font-bold whitespace-nowrap text-white no-underline desk:flex">
         <Plus aria-hidden className="size-5" />
         Nuevo presupuesto
