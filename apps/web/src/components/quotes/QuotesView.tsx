@@ -1,13 +1,14 @@
 "use client";
 
 import type { Order, PaymentLinkResponse, Quote, QuoteActivityEvent, QuoteStatus } from "@crmwsp/contracts";
+import { cn } from "@/lib/cn";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { useSession } from "@/components/app/SessionProvider";
 import { ORDER_STATUS_LABELS } from "@/components/app/orders/order-meta";
-import { Alert, Button, Chip, Modal, StatusChip, Toast } from "@/components/ui";
+import { Alert, Button, CHIP_ROW, Chip, Modal, StatusChip, Toast } from "@/components/ui";
 import { formatMoneyMinor } from "@/lib/format";
 import { useToast } from "@/lib/hooks/use-toast";
 import { errorMessage } from "@/lib/messages";
@@ -56,7 +57,7 @@ export function QuotesView() {
         ) : null}
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por estado">
+      <div className={cn(CHIP_ROW, "mb-4")} role="group" aria-label="Filtrar por estado">
         <Chip active={status === "all"} onClick={() => setStatus("all")}>Todos</Chip>
         {QUOTE_STATUS_ORDER.map((s) => (
           <Chip key={s} active={status === s} onClick={() => setStatus(s)}>{QUOTE_STATUS_LABELS[s]}</Chip>

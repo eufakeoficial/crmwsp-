@@ -135,7 +135,7 @@ export function ConversationHeader({
       </div>
       <div className="flex items-center gap-3 px-4">
         <div role="tablist" aria-label="Canal">
-          <button type="button" role="tab" aria-selected="true" className="h-9 cursor-pointer border-0 border-b-2 border-ink bg-transparent px-1 text-[13px] font-extrabold text-ink">
+          <button type="button" role="tab" aria-selected="true" className="h-11 cursor-pointer border-0 border-b-2 border-royal bg-transparent px-2 text-sm font-semibold text-ink">
             WhatsApp
           </button>
         </div>
@@ -192,7 +192,7 @@ function TagMenu({
           onChange={(e) => setName(e.target.value)}
           className="h-8 min-w-0 flex-1 rounded-lg border border-line-2 bg-white px-2 text-[13px]"
         />
-        <button type="submit" disabled={busy || !name.trim()} className="h-8 cursor-pointer rounded-full bg-ink px-3 text-[12px] font-bold text-white disabled:opacity-50">Crear</button>
+        <button type="submit" disabled={busy || !name.trim()} className="h-9 cursor-pointer rounded-full bg-ink px-3 text-sm font-semibold text-white disabled:opacity-50">Crear</button>
       </form>
     </div>
   );
@@ -221,7 +221,7 @@ function ReminderMenu({ next, onPick }: { next: string | null; onPick: (r: Remin
           type="button"
           disabled={!future}
           onClick={() => iso && onPick({ preset: "custom", remindAt: iso })}
-          className="h-8 cursor-pointer rounded-full bg-ink text-[12px] font-bold text-white disabled:opacity-50"
+          className="h-9 cursor-pointer rounded-full bg-ink text-sm font-semibold text-white disabled:opacity-50"
         >
           Recordármelo
         </button>

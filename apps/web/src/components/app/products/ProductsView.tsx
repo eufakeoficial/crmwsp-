@@ -1,11 +1,12 @@
 "use client";
 
 import type { Product } from "@crmwsp/contracts";
+import { cn } from "@/lib/cn";
 import { Pencil, Plus } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { useSession } from "@/components/app/SessionProvider";
-import { Alert, Button, Card, Chip, SearchInput, StatusChip, Toast, type Tone } from "@/components/ui";
+import { Alert, Button, Card, CHIP_ROW, Chip, SearchInput, StatusChip, Toast, type Tone } from "@/components/ui";
 import { productsApi } from "@/lib/commerce-api";
 import { defaultCurrency, useCurrencySettings } from "@/lib/currency-api";
 import { formatMoneyMinor } from "@/lib/format";
@@ -92,7 +93,7 @@ export function ProductsView() {
       >
         <SearchInput label="Buscar productos" placeholder="Nombre, SKU o categoría" value={draftQuery} onChange={(e) => setDraftQuery(e.target.value)} />
       </form>
-      <div className="mb-4 flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por estado">
+      <div className={cn(CHIP_ROW, "mb-4")} role="group" aria-label="Filtrar por estado">
         <Chip active={status === "all"} onClick={() => setStatus("all")}>Activos y borradores</Chip>
         {(["active", "draft", "archived"] as const).map((s) => (
           <Chip key={s} active={status === s} onClick={() => setStatus(s)}>{STATUS_LABELS[s]}</Chip>

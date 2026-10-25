@@ -4,7 +4,7 @@ import type { SalesMetrics } from "@crmwsp/contracts";
 import { Bot, CircleDollarSign, MessageCircle, Percent, ShoppingBag, Trophy, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/app/EmptyState";
-import { Alert, Card, Chip, KpiCard, Spinner } from "@/components/ui";
+import { Alert, Card, CHIP_ROW, Chip, KpiCard, Spinner } from "@/components/ui";
 import { formatDate, formatMoneyMinor, formatNumber } from "@/lib/format";
 import { metricsApi } from "@/lib/metrics-api";
 import { BarChart } from "./BarChart";
@@ -50,7 +50,7 @@ export function SalesDashboard() {
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader title="Inicio" subtitle="El resumen de tu negocio: ventas por WhatsApp y qué hacer a continuación." />
-        <div role="group" aria-label="Rango de fechas" className="flex gap-2">
+        <div role="group" aria-label="Rango de fechas" className={CHIP_ROW}>
           {RANGE_OPTIONS.map((d) => (
             <Chip
               key={d}

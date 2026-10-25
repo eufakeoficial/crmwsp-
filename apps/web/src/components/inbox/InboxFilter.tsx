@@ -64,7 +64,7 @@ export function InboxFilter({ filter, onChange, info }: { filter: ContactFilter;
       label="Filtro de contactos"
       align="right"
       panelClassName="w-[min(560px,92vw)]"
-      triggerClassName={active ? "h-8 border border-ink bg-ink text-white hover:bg-ink-2" : "h-8 border border-line-2 bg-white font-semibold hover:bg-paper"}
+      triggerClassName={active ? "h-9 border-[1.5px] border-royal bg-royal font-semibold text-white" : "h-9 border-[1.5px] border-line-2 bg-paper font-medium hover:border-royal hover:bg-royal-soft"}
       trigger={
         <>
           {active ? <ListFilter aria-hidden className="size-4" /> : null}

@@ -7,7 +7,7 @@ import { AI_RUN_MODES, AI_RUN_OUTCOMES, type AiRunItem, type AiRunMode, type AiR
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { canManageAi, canViewAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
-import { Alert, Button, Card, Chip, StatusChip } from "@/components/ui";
+import { Alert, Button, Card, CHIP_ROW, Chip, StatusChip } from "@/components/ui";
 import { MODE_LABELS, OUTCOME_LABELS, OUTCOME_TONES, reasonLabel } from "@/lib/ai-runs";
 import { aiRunsApi } from "@/lib/ai-runs-api";
 import { STAGE_LABELS, objectionLabel, share } from "@/lib/playbook";
@@ -204,7 +204,7 @@ function Body({ showSummary }: { showSummary: boolean }) {
   return (
     <div className="flex flex-col gap-4">
       {showSummary ? <PlaybookSummary /> : null}
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtros">
+      <div className={CHIP_ROW} role="group" aria-label="Filtros">
         <Chip active={outcome === undefined} onClick={() => setOutcome(undefined)}>
           Todos los resultados
         </Chip>

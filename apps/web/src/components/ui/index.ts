@@ -9,7 +9,7 @@ export { Breadcrumbs } from "./Breadcrumbs";
 export { Button, buttonClasses, type ButtonVariant } from "./Button";
 export { Card } from "./Card";
 export { CheckBox } from "./CheckBox";
-export { Chip, PillSelect, chipClasses } from "./Chip";
+export { CHIP_ROW, Chip, PillSelect, chipClasses } from "./Chip";
 export { CodeInput } from "./CodeInput";
 export { DataCell, DataRow, DataTable, TableFrame } from "./DataTable";
 export { DateBlock } from "./DateBlock";
