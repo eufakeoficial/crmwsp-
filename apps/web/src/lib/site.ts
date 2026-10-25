@@ -24,6 +24,7 @@ export const PUBLIC_ROUTES = [
   { path: "/", changeFrequency: "weekly", priority: 1 },
   { path: "/signup", changeFrequency: "monthly", priority: 0.8 },
   { path: "/login", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/integraciones/woocommerce", changeFrequency: "monthly", priority: 0.6 },
 ] as const;
 
 /** Paths crawlers must not fetch: authenticated app, API proxy and one-off flows. */
