@@ -30,7 +30,13 @@ export function SourceList({ sources, canEdit, onDeleted, onError }: { sources: 
     }
   }
 
-  if (sources.length === 0) return <EmptyState title="Aún no hay fuentes">{canEdit ? "Sube tu lista de precios o pega tus preguntas frecuentes para empezar." : "Pide a un administrador que añada conocimiento."}</EmptyState>;
+  if (sources.length === 0) {
+    return (
+      <EmptyState title="Aún no hay fuentes">
+        {canEdit ? "Sube tu lista de precios o pega tus preguntas frecuentes para empezar." : "Pide a un administrador que añada conocimiento."}
+      </EmptyState>
+    );
+  }
   return (
     <section id="sources" aria-label="Fuentes de conocimiento">
       <ul className="m-0 flex list-none flex-col gap-2 p-0">

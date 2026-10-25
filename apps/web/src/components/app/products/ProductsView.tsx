@@ -106,7 +106,12 @@ export function ProductsView() {
         <p className="text-muted" aria-busy="true">Cargando productos…</p>
       ) : products.length === 0 && !error ? (
         <EmptyState title="Aún no hay productos">
-          {canManage ? "Primer paso: crea tu primer producto o servicio con el botón de arriba." : "Pide a un administrador que cree el catálogo."}
+          {canManage ? (
+            <>
+              Primer paso: crea tu primer producto o servicio para que la IA pueda cotizarlo.
+              <span className="mt-4 block"><Button variant="accent" size="sm" onClick={() => setEditing("new")}>Agregar producto</Button></span>
+            </>
+          ) : "Pide a un administrador que cree el catálogo."}
         </EmptyState>
       ) : (
         <div className="grid gap-3">
