@@ -82,9 +82,8 @@ function WooPluginBlock({ active }: { active: boolean }) {
       <h3 className="m-0 text-base">Opción recomendada: plugin de WordPress</h3>
       <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-sm">
         <li>
-          Instala el plugin «Vende+ para WooCommerce» en tu WordPress (
-          <a href="https://wordpress.org/plugins/vendemas-woocommerce/" target="_blank" rel="noopener noreferrer" className="underline">página del plugin</a>
-          ).
+          <a href="/downloads/vendemas-woocommerce.zip" download className="underline">Descarga el plugin «Vende+ para WooCommerce»</a>
+          {" "}y súbelo en tu WordPress: Plugins → Añadir nuevo → Subir plugin.
         </li>
         <li>Genera un código aquí.</li>
         <li>Pégalo en WooCommerce → Vende+ → Conectar.</li>
