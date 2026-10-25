@@ -44,15 +44,15 @@ export const AI_CAPABILITIES: readonly AiCapability[] = [
   { key: "knowledge", title: "Conocimiento y catálogo con citas", text: "Responde con tu catálogo y tus FAQ y cita la fuente de cada precio, stock o plazo.", href: "/app/settings/knowledge", linkLabel: "Gestionar conocimiento" },
   { key: "handoff", title: "Derivación a una persona", text: "Si no tiene una fuente o no está segura, pasa la conversación a tu equipo en vez de inventar.", href: "/app/ai/handoffs", linkLabel: "Ver derivaciones" },
   { key: "attention", title: "Conversaciones que necesitan atención", text: "Lista de chats que la IA derivó y que nadie ha respondido todavía.", href: "/app/ai/handoffs", linkLabel: "Ver pendientes" },
-  { key: "runs", title: "Ejecuciones", text: "Historial de lo que hizo la IA: qué respondió, en qué fuentes se apoyó y por qué derivó.", href: "/app/ai/runs", linkLabel: "Ver ejecuciones" },
-  { key: "playbook", title: "Playbook de ventas", text: "Etapas del embudo, respuestas a objeciones, estilo de cierre y seguimiento, siempre con técnicas honestas.", href: "/app/ai/playbook", linkLabel: "Configurar playbook" },
-  { key: "approvals", title: "Aprobaciones", text: "Descuentos, presupuestos grandes y otras acciones esperan tu visto bueno antes de ejecutarse.", href: "/app/settings/approvals", linkLabel: "Ver aprobaciones" },
+  { key: "runs", title: "Historial de la IA", text: "Historial de lo que hizo la IA: qué respondió, en qué fuentes se apoyó y por qué derivó.", href: "/app/ai/runs", linkLabel: "Ver historial" },
+  { key: "playbook", title: "Guion de ventas", text: "Etapas del embudo, respuestas a objeciones, estilo de cierre y seguimiento, siempre con técnicas honestas.", href: "/app/ai/playbook", linkLabel: "Configurar guion" },
+  { key: "approvals", title: "Aprobaciones de IA", text: "Descuentos, presupuestos grandes y otras acciones esperan tu visto bueno antes de ejecutarse.", href: "/app/settings/approvals", linkLabel: "Ver aprobaciones" },
   { key: "simulator", title: "Simulador", text: "Prueba el bot con conversaciones de ejemplo antes de activarlo con clientes reales.", href: "/app/settings/ai/simulator", linkLabel: "Probar la IA" },
   { key: "budget", title: "Presupuesto y consumo de IA", text: "Pon un tope mensual a tu proveedor de IA y consulta cuánto llevas gastado.", href: "/app/settings/ai", linkLabel: "Ver consumo" },
   { key: "voice", title: "Respuestas por voz (ElevenLabs)", text: "Contesta con notas de voz naturales usando tu propia cuenta de ElevenLabs.", href: "/app/settings/ai#voz", linkLabel: "Configurar voz" },
   { key: "improve", title: "Mejorar texto", text: "Reescribe tu mensaje en tono profesional, amable o más corto antes de enviarlo desde el inbox.", href: "/app/inbox", linkLabel: "Ir al inbox" },
   { key: "orders", title: "Pedidos desde audio, foto o PDF", text: "Convierte lo que envía el cliente en un pedido listo para que lo revises.", href: "/app/inbox", linkLabel: "Ver pedidos pendientes" },
-  { key: "owner", title: "Modo dueño por WhatsApp", text: "Consulta ventas y gestiona el CRM escribiendo desde tu propio WhatsApp.", href: "/app/settings/owner-mode", linkLabel: "Configurar modo dueño" },
+  { key: "owner", title: "Control por WhatsApp", text: "Consulta ventas y gestiona el CRM escribiendo desde tu propio WhatsApp.", href: "/app/settings/owner-mode", linkLabel: "Configurar" },
 ];
 
 /**
