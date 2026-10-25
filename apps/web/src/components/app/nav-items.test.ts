@@ -8,7 +8,7 @@ const PREVIOUS_HREFS = [
   "/app/payments/reviews", "/app/analytics", "/app/broadcasts", "/app/products", "/app/channels", "/app/templates", "/app/team",
   "/app/settings/ai", "/app/settings/integrations", "/app/settings/knowledge", "/app/settings/approvals", "/app/settings/templates",
   "/app/settings/currency", "/app/settings/plan", "/app/settings/ads", "/app/settings/developers", "/app/settings/owner-mode",
-  "/app/support",
+  "/app/support", "/app/onboarding",
 ];
 
 interface KeyedNav {
@@ -43,8 +43,8 @@ describe("NAV_GROUPS", () => {
     walk([...NAV_GROUPS, ...NAV_SECONDARY]);
     expect(new Set(keys).size).toBe(keys.length);
   });
-  it("shows Soporte as secondary entry", () => {
-    expect(NAV_SECONDARY.map((i) => i.key)).toEqual(["support"]);
+  it("shows Soporte and Puesta en marcha as secondary entries", () => {
+    expect(NAV_SECONDARY.map((i) => i.key)).toEqual(["support", "onboarding"]);
   });
   it("groups pages as designed", () => {
     const labels = (k: string) => NAV_GROUPS.find((g) => g.key === k)?.children?.map((c) => c.label);

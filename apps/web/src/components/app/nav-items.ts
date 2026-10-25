@@ -1,4 +1,4 @@
-import { AlertCircle, BookOpen, Bot, CalendarDays, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, MessageSquareText, Package, Plug, Settings, Users2, Workflow, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { AlertCircle, BookOpen, Bot, CalendarDays, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, MessageSquareText, Rocket, Package, Plug, Settings, Users2, Workflow, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -108,7 +108,10 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 ];
 
 /** Footer entries below the groups. */
-export const NAV_SECONDARY: readonly NavItem[] = [{ key: "support", label: "Soporte", href: "/app/support", icon: LifeBuoy }];
+export const NAV_SECONDARY: readonly NavItem[] = [
+  { key: "support", label: "Soporte", href: "/app/support", icon: LifeBuoy },
+  { key: "onboarding", label: "Puesta en marcha", href: "/app/onboarding", icon: Rocket },
+];
 
 /** Active item from the path: `/app` only matches exactly, the rest match by prefix. */
 export function isActive(pathname: string, href: string): boolean {

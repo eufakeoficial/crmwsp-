@@ -9,8 +9,19 @@ import { cn } from "@/lib/cn";
 import { UserMenu } from "./UserMenu";
 import { NAV_GROUPS, NAV_SECONDARY, type NavGroup, type NavItem, containsActive, getActiveHref, groupHref } from "./nav-items";
 
-/** Red counters per nav key, e.g. `{ inbox: 3 }`. Empty until real data exists. */
+/** Red counters per nav key, e.g. `{ inbox: 3 }`. */
 export type NavCounts = Readonly<Record<string, number>>;
+
+type Counted = { key: string; children?: readonly NavItem[] | undefined };
+
+/** Own counter plus the counters of every descendant (a group shows what its children hold). */
+export function totalCount(entry: Counted, counts: NavCounts): number {
+  return (counts[entry.key] ?? 0) + (entry.children ?? []).reduce((n, c) => n + totalCount(c, counts), 0);
+}
+
+function formatCount(n: number): string {
+  return n > 99 ? "99+" : String(n);
+}
 
 export function SidebarLink({ item, active, count, onNavigate, compact = false }: { item: Pick<NavItem, "href" | "label" | "icon"> & { key?: string }; active: boolean; count?: number | undefined; onNavigate?: (() => void) | undefined; compact?: boolean }) {
   const Icon = item.icon;
@@ -29,7 +40,7 @@ export function SidebarLink({ item, active, count, onNavigate, compact = false }
       <span className="flex-1 whitespace-nowrap">{item.label}</span>
       {count ? (
         <span className="rounded-full bg-alert px-2 text-[12px] font-extrabold text-white">
-          {count}
+          {formatCount(count)}
           <span className="sr-only"> sin leer</span>
         </span>
       ) : null}
@@ -61,7 +72,7 @@ function NavEntry({ group, activeHref, counts, onNavigate }: { group: NavGroup; 
   if (group.href) {
     return (
       <div className="flex flex-col gap-0.5">
-        <SidebarLink item={{ href: group.href, label: group.label, icon: group.icon }} active={activeHref === group.href} count={counts[group.key]} onNavigate={onNavigate} />
+        <SidebarLink item={{ href: group.href, label: group.label, icon: group.icon }} active={activeHref === group.href} count={totalCount(group, counts)} onNavigate={onNavigate} />
         {children && contains ? <SubLinks items={children} activeHref={activeHref} counts={counts} onNavigate={onNavigate} /> : null}
       </div>
     );
@@ -71,6 +82,7 @@ function NavEntry({ group, activeHref, counts, onNavigate }: { group: NavGroup; 
   const open = toggled !== contains; // manual toggle flips the automatic state
   const Icon = group.icon;
   const panelId = `nav-group-${group.key}`;
+  const total = totalCount(group, counts);
   return (
     <div className="flex flex-col gap-0.5">
       <button
@@ -85,6 +97,12 @@ function NavEntry({ group, activeHref, counts, onNavigate }: { group: NavGroup; 
       >
         <Icon aria-hidden className="size-4 flex-none" />
         <span className="flex-1 whitespace-nowrap">{group.label}</span>
+        {!open && total ? (
+          <span className="rounded-full bg-alert px-2 text-[12px] font-extrabold text-white">
+            {formatCount(total)}
+            <span className="sr-only"> pendientes</span>
+          </span>
+        ) : null}
         <ChevronDown aria-hidden className={cn("size-4 flex-none transition-transform", open ? "" : "-rotate-90")} />
       </button>
       {open && children ? (
@@ -135,8 +153,8 @@ function AppRail({ counts = {} }: { counts?: NavCounts }) {
   const pathname = usePathname();
   const activeHref = getActiveHref(pathname);
   const items = [
-    ...NAV_GROUPS.map((g) => ({ key: g.key, label: g.label, icon: g.icon, href: groupHref(g), active: containsActive(g, activeHref) })),
-    ...NAV_SECONDARY.map((i) => ({ key: i.key, label: i.label, icon: i.icon, href: i.href, active: activeHref === i.href })),
+    ...NAV_GROUPS.map((g) => ({ key: g.key, label: g.label, icon: g.icon, href: groupHref(g), active: containsActive(g, activeHref), entry: g as Counted })),
+    ...NAV_SECONDARY.map((i) => ({ key: i.key, label: i.label, icon: i.icon, href: i.href, active: activeHref === i.href, entry: undefined as Counted | undefined })),
   ];
   return (
     <nav
@@ -150,7 +168,7 @@ function AppRail({ counts = {} }: { counts?: NavCounts }) {
       {items.map((item) => {
         const Icon = item.icon;
         const active = item.active;
-        const count = counts[item.key];
+        const count = item.entry ? totalCount(item.entry, counts) : (counts[item.key] ?? 0);
         return (
           <Link
             key={item.key}
@@ -166,8 +184,8 @@ function AppRail({ counts = {} }: { counts?: NavCounts }) {
             <Icon aria-hidden className="size-5" />
             {count ? (
               <span className="absolute top-0.5 right-0.5 min-w-4 rounded-full bg-alert px-1 text-center text-[10px] leading-4 font-extrabold text-white">
-                {count}
-                <span className="sr-only"> sin leer</span>
+                {formatCount(count)}
+                <span className="sr-only"> pendientes</span>
               </span>
             ) : null}
           </Link>
