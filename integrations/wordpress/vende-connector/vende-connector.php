@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name:       Vende+ para WooCommerce
- * Plugin URI:        https://www.vendemas.chat
- * Description:       Conecta tu tienda WooCommerce con Vende+ (CRM de WhatsApp con IA) usando un código de conexión. Sin claves manuales.
+ * Plugin Name:       Vende+ Connector
+ * Plugin URI:        https://www.vendemas.chat/integraciones/woocommerce
+ * Description:       Connect your WooCommerce store to Vende+ (WhatsApp CRM with AI) using a one-time connection code. No manual API keys.
  * Version:           0.1.0
  * Requires at least: 6.2
  * Requires PHP:      7.4
@@ -11,8 +11,7 @@
  * Author URI:        https://www.vendemas.chat
  * License:           GPLv2 or later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       vendemas-woocommerce
- * Domain Path:       /languages
+ * Text Domain:       vende-connector
  *
  * @package Vendemas_WooCommerce
  */
@@ -28,7 +27,7 @@ if ( ! defined( 'VENDEMAS_API_BASE' ) ) {
 	define( 'VENDEMAS_API_BASE', 'https://api.vendemas.chat' );
 }
 
-require_once VENDEMAS_WC_DIR . 'includes/class-vendemas-connector.php';
+require_once VENDEMAS_WC_DIR . 'includes/class-vende-connector.php';
 require_once VENDEMAS_WC_DIR . 'includes/class-vendemas-admin.php';
 require_once VENDEMAS_WC_DIR . 'includes/class-vendemas-plugin.php';
 

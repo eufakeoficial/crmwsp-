@@ -30,8 +30,8 @@ class Vendemas_Admin {
 	public function menu() {
 		add_submenu_page(
 			'woocommerce',
-			__( 'Vende+', 'vendemas-woocommerce' ),
-			__( 'Vende+', 'vendemas-woocommerce' ),
+			__( 'Vende+', 'vende-connector' ),
+			__( 'Vende+', 'vende-connector' ),
 			'manage_woocommerce',
 			self::SLUG,
 			array( $this, 'render' )
@@ -40,7 +40,7 @@ class Vendemas_Admin {
 
 	public function action_links( $links ) {
 		$url = admin_url( 'admin.php?page=' . self::SLUG );
-		array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Ajustes', 'vendemas-woocommerce' ) . '</a>' );
+		array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Ajustes', 'vende-connector' ) . '</a>' );
 		return $links;
 	}
 
@@ -50,7 +50,7 @@ class Vendemas_Admin {
 
 	private function guard( $action ) {
 		if ( ! current_user_can( 'manage_woocommerce' ) ) {
-			wp_die( esc_html__( 'No tienes permisos para hacer esto.', 'vendemas-woocommerce' ), '', array( 'response' => 403 ) );
+			wp_die( esc_html__( 'No tienes permisos para hacer esto.', 'vende-connector' ), '', array( 'response' => 403 ) );
 		}
 		check_admin_referer( $action );
 	}
@@ -69,14 +69,14 @@ class Vendemas_Admin {
 		$raw  = isset( $_POST['vendemas_code'] ) ? wp_unslash( $_POST['vendemas_code'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized in normalize_code().
 		$code = $this->connector->normalize_code( $raw );
 		if ( false === $code ) {
-			$this->flash( 'error', __( 'El código no tiene el formato correcto (XXXX-XXXX-XX).', 'vendemas-woocommerce' ) );
+			$this->flash( 'error', __( 'El código no tiene el formato correcto (XXXX-XXXX-XX).', 'vende-connector' ) );
 			$this->back();
 		}
 		$result = $this->connector->connect( $code );
 		if ( is_wp_error( $result ) ) {
 			$this->flash( 'error', $result->get_error_message() );
 		} else {
-			$this->flash( 'success', __( 'Tienda conectada con Vende+.', 'vendemas-woocommerce' ) );
+			$this->flash( 'success', __( 'Tienda conectada con Vende+.', 'vende-connector' ) );
 		}
 		$this->back();
 	}
@@ -84,7 +84,7 @@ class Vendemas_Admin {
 	public function handle_disconnect() {
 		$this->guard( 'vendemas_disconnect' );
 		$this->connector->disconnect();
-		$this->flash( 'success', __( 'Tienda desconectada. Se eliminaron los webhooks y la clave de API.', 'vendemas-woocommerce' ) );
+		$this->flash( 'success', __( 'Tienda desconectada. Se eliminaron los webhooks y la clave de API.', 'vende-connector' ) );
 		$this->back();
 	}
 
@@ -94,7 +94,7 @@ class Vendemas_Admin {
 		if ( is_wp_error( $result ) ) {
 			$this->flash( 'error', $result->get_error_message() );
 		} else {
-			$this->flash( 'success', __( 'Todo en orden: los webhooks están activos y la clave de API existe.', 'vendemas-woocommerce' ) );
+			$this->flash( 'success', __( 'Todo en orden: los webhooks están activos y la clave de API existe.', 'vende-connector' ) );
 		}
 		$this->back();
 	}
@@ -111,7 +111,7 @@ class Vendemas_Admin {
 		$conn = $this->connector->get_connection();
 		?>
 		<div class="wrap">
-			<h1><?php echo esc_html__( 'Vende+ para WooCommerce', 'vendemas-woocommerce' ); ?></h1>
+			<h1><?php echo esc_html__( 'Vende+ Connector', 'vende-connector' ); ?></h1>
 
 			<?php if ( is_array( $notice ) ) : ?>
 				<div class="notice notice-<?php echo ( 'success' === $notice[0] ) ? 'success' : 'error'; ?> is-dismissible"><p><?php echo esc_html( $notice[1] ); ?></p></div>
@@ -130,46 +130,46 @@ class Vendemas_Admin {
 
 	private function render_disconnected() {
 		?>
-		<p><strong><?php echo esc_html__( 'Estado: No conectada', 'vendemas-woocommerce' ); ?></strong></p>
-		<p><?php echo esc_html__( 'En Vende+ ve a Integraciones, WooCommerce y genera un código de conexión. Pégalo aquí.', 'vendemas-woocommerce' ); ?></p>
+		<p><strong><?php echo esc_html__( 'Estado: No conectada', 'vende-connector' ); ?></strong></p>
+		<p><?php echo esc_html__( 'En Vende+ ve a Integraciones, WooCommerce y genera un código de conexión. Pégalo aquí.', 'vende-connector' ); ?></p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="vendemas_connect" />
 			<?php wp_nonce_field( 'vendemas_connect' ); ?>
 			<table class="form-table" role="presentation">
 				<tr>
-					<th scope="row"><label for="vendemas_code"><?php echo esc_html__( 'Código de conexión', 'vendemas-woocommerce' ); ?></label></th>
+					<th scope="row"><label for="vendemas_code"><?php echo esc_html__( 'Código de conexión', 'vende-connector' ); ?></label></th>
 					<td><input type="text" id="vendemas_code" name="vendemas_code" class="regular-text" placeholder="XXXX-XXXX-XX" maxlength="14" autocomplete="off" required /></td>
 				</tr>
 			</table>
-			<?php submit_button( __( 'Conectar', 'vendemas-woocommerce' ) ); ?>
+			<?php submit_button( __( 'Conectar', 'vende-connector' ) ); ?>
 		</form>
-		<p class="description"><?php echo esc_html__( 'Al conectar se crea una clave de solo lectura de WooCommerce y tres webhooks (pedidos y productos) que se envían a Vende+.', 'vendemas-woocommerce' ); ?></p>
+		<p class="description"><?php echo esc_html__( 'Al conectar se crea una clave de solo lectura de WooCommerce y tres webhooks (pedidos y productos) que se envían a Vende+.', 'vende-connector' ); ?></p>
 		<?php
 	}
 
 	private function render_connected( array $conn ) {
 		$since = ! empty( $conn['connected_at'] ) ? wp_date( get_option( 'date_format' ), (int) $conn['connected_at'] ) : '';
 		?>
-		<p><strong><?php echo esc_html__( 'Estado: Conectada', 'vendemas-woocommerce' ); ?></strong></p>
+		<p><strong><?php echo esc_html__( 'Estado: Conectada', 'vende-connector' ); ?></strong></p>
 		<table class="form-table" role="presentation">
 			<tr>
-				<th scope="row"><?php echo esc_html__( 'Cuenta Vende+', 'vendemas-woocommerce' ); ?></th>
+				<th scope="row"><?php echo esc_html__( 'Cuenta Vende+', 'vende-connector' ); ?></th>
 				<td><?php echo esc_html( $conn['tenant_name'] ); ?></td>
 			</tr>
 			<tr>
-				<th scope="row"><?php echo esc_html__( 'Conectada desde', 'vendemas-woocommerce' ); ?></th>
+				<th scope="row"><?php echo esc_html__( 'Conectada desde', 'vende-connector' ); ?></th>
 				<td><?php echo esc_html( $since ); ?></td>
 			</tr>
 		</table>
 
-		<h2><?php echo esc_html__( 'Webhooks', 'vendemas-woocommerce' ); ?></h2>
+		<h2><?php echo esc_html__( 'Webhooks', 'vende-connector' ); ?></h2>
 		<table class="widefat striped" style="max-width:640px">
-			<thead><tr><th><?php echo esc_html__( 'Evento', 'vendemas-woocommerce' ); ?></th><th><?php echo esc_html__( 'Estado', 'vendemas-woocommerce' ); ?></th></tr></thead>
+			<thead><tr><th><?php echo esc_html__( 'Evento', 'vende-connector' ); ?></th><th><?php echo esc_html__( 'Estado', 'vende-connector' ); ?></th></tr></thead>
 			<tbody>
 			<?php foreach ( $this->connector->webhook_statuses() as $row ) : ?>
 				<tr>
 					<td><?php echo esc_html( '' !== $row['topic'] ? $row['topic'] : '#' . $row['id'] ); ?></td>
-					<td><?php echo esc_html( 'missing' === $row['status'] ? __( 'eliminado', 'vendemas-woocommerce' ) : $row['status'] ); ?></td>
+					<td><?php echo esc_html( 'missing' === $row['status'] ? __( 'eliminado', 'vende-connector' ) : $row['status'] ); ?></td>
 				</tr>
 			<?php endforeach; ?>
 			</tbody>
@@ -179,12 +179,12 @@ class Vendemas_Admin {
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="vendemas_test" />
 				<?php wp_nonce_field( 'vendemas_test' ); ?>
-				<?php submit_button( __( 'Probar conexión', 'vendemas-woocommerce' ), 'secondary', 'submit', false ); ?>
+				<?php submit_button( __( 'Probar conexión', 'vende-connector' ), 'secondary', 'submit', false ); ?>
 			</form>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('<?php echo esc_js( __( '¿Desconectar la tienda de Vende+?', 'vendemas-woocommerce' ) ); ?>');">
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('<?php echo esc_js( __( '¿Desconectar la tienda de Vende+?', 'vende-connector' ) ); ?>');">
 				<input type="hidden" name="action" value="vendemas_disconnect" />
 				<?php wp_nonce_field( 'vendemas_disconnect' ); ?>
-				<?php submit_button( __( 'Desconectar', 'vendemas-woocommerce' ), 'delete', 'submit', false ); ?>
+				<?php submit_button( __( 'Desconectar', 'vende-connector' ), 'delete', 'submit', false ); ?>
 			</form>
 		</div>
 		<?php
