@@ -26,7 +26,7 @@ export function AppShell({ children, counts }: { children: ReactNode; counts?: N
       <AppTopbar hideOnDesktop={inbox} menuOpen={open} onToggleMenu={() => setOpen((v) => !v)} />
       <main id="app-content" tabIndex={-1} className={cn(
           "min-w-0 outline-none",
-          inbox ? "px-0 pt-[68px] pb-0 desk:pt-0 desk:pl-[72px]" : "px-[clamp(12px,3vw,28px)] pt-[68px] pb-24 desk:pl-[calc(220px+clamp(12px,3vw,28px))]",
+          inbox ? "px-0 pt-[68px] pb-0 desk:pt-0 desk:pl-[72px]" : "px-[clamp(12px,3vw,28px)] pt-[68px] pb-24 desk:pl-[calc(232px+clamp(12px,3vw,28px))]",
         )}>
         {children}
       </main>

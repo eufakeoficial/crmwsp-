@@ -89,13 +89,15 @@ export function NavLinks({ counts = {}, onNavigate }: { counts?: NavCounts; onNa
 /** AI assistant card: links to the AI settings, where the assist mode (draft, human sends) is chosen. */
 export function AssistantCard() {
   return (
-    <div className="mt-auto flex flex-col items-start gap-2 rounded-[18px] bg-white/10 p-3 text-white">
-      <span className="grid size-8 place-items-center rounded-lg bg-lime text-ink">
-        <Sparkles aria-hidden className="size-5" />
-      </span>
-      <b className="text-[13px]">Asistente de IA</b>
+    <div className="mt-auto flex flex-col items-start gap-1.5 rounded-[18px] bg-white/10 p-3 text-white">
+      <div className="flex items-center gap-2">
+        <span className="grid size-7 flex-none place-items-center rounded-lg bg-lime text-ink">
+          <Sparkles aria-hidden className="size-4" />
+        </span>
+        <b className="text-[13px]">Asistente de IA</b>
+      </div>
       <span className="text-[12px] text-subtle">Modo asistente: la IA redacta y tú envías.</span>
-      <Link href="/app/ai" className="text-[13px] font-bold text-lime no-underline hover:underline">
+      <Link href="/app/settings/ai" className="text-[13px] font-bold text-lime no-underline hover:underline">
         Configurar la IA
       </Link>
     </div>
@@ -151,8 +153,8 @@ function AppRail({ counts = {} }: { counts?: NavCounts }) {
 export function AppSidebar({ counts, rail = false }: { counts?: NavCounts; rail?: boolean }) {
   if (rail) return <AppRail {...(counts ? { counts } : {})} />;
   return (
-    <nav aria-label="Principal" className="fixed top-0 bottom-0 left-0 z-[25] hidden w-[220px] p-3 desk:block">
-      <div className="flex h-full flex-col gap-1 overflow-y-auto rounded-[22px] bg-brand-gradient px-2.5 py-3.5 text-white [scrollbar-color:rgba(255,255,255,0.35)_transparent] [scrollbar-width:thin]">
+    <nav aria-label="Principal" className="fixed top-0 bottom-0 left-0 z-[25] hidden w-[232px] p-3 desk:block">
+      <div className="flex h-full flex-col gap-1 overflow-hidden rounded-[22px] bg-brand-gradient px-2.5 py-3.5 text-white">
         <Logo href="/app" inverted className="px-2 pb-3" />
         <NavLinks {...(counts ? { counts } : {})} />
         <AssistantCard />
