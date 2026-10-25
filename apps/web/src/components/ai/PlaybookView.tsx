@@ -77,7 +77,7 @@ function Form({ initial, onSaved }: { initial: PlaybookConfig; onSaved: (c: Play
       <Card className="sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="m-0 text-[19px]">Playbook de ventas</h2>
+            <h2 className="m-0 text-[19px]">Guion de ventas</h2>
             <p className="mt-1 mb-0 text-sm text-ink-3">
               Técnicas de venta honestas para tu IA: escuchar, recomendar, resolver dudas y cerrar sin presionar. La IA nunca engaña, no inventa escasez ni urgencia y no se hace pasar por una persona.
             </p>

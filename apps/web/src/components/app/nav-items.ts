@@ -13,20 +13,20 @@ export const SETTINGS_SECTIONS: readonly NavItem[] = [
   { key: "settings-ai", label: "IA", href: "/app/settings/ai", icon: Sparkles },
   { key: "settings-integrations", label: "Integraciones", href: "/app/settings/integrations", icon: Plug },
   { key: "settings-knowledge", label: "Conocimiento", href: "/app/settings/knowledge", icon: BookOpen },
-  { key: "settings-approvals", label: "Aprobaciones", href: "/app/settings/approvals", icon: ClipboardCheck },
-  { key: "settings-templates", label: "Plantillas", href: "/app/settings/templates", icon: LayoutTemplate },
+  { key: "settings-approvals", label: "Aprobar respuestas de la IA", href: "/app/settings/approvals", icon: ClipboardCheck },
+  { key: "settings-templates", label: "Plantillas de negocio", href: "/app/settings/templates", icon: LayoutTemplate },
   { key: "settings-currency", label: "Moneda", href: "/app/settings/currency", icon: Coins },
   { key: "settings-plan", label: "Plan y uso", href: "/app/settings/plan", icon: CreditCard },
   { key: "settings-ads", label: "Anuncios", href: "/app/settings/ads", icon: Megaphone },
-  { key: "settings-developers", label: "Desarrolladores", href: "/app/settings/developers", icon: Code2 },
-  { key: "settings-owner-mode", label: "Modo dueño", href: "/app/settings/owner-mode", icon: Smartphone },
+  { key: "settings-developers", label: "Claves de API", href: "/app/settings/developers", icon: Code2 },
+  { key: "settings-owner-mode", label: "Gestionar desde tu WhatsApp", href: "/app/settings/owner-mode", icon: Smartphone },
 ];
 
 /** Subsections of IA, shown as sidebar sub-links. */
 export const AI_CHILDREN: readonly NavItem[] = [
-  { key: "ai-runs", label: "Ejecuciones", href: "/app/ai/runs", icon: Bot },
+  { key: "ai-runs", label: "Historial de la IA", href: "/app/ai/runs", icon: Bot },
   { key: "ai-handoffs", label: "Necesitan atención", href: "/app/ai/handoffs", icon: AlertCircle },
-  { key: "ai-playbook", label: "Playbook de ventas", href: "/app/ai/playbook", icon: Target },
+  { key: "ai-playbook", label: "Guion de ventas", href: "/app/ai/playbook", icon: Target },
 ];
 
 /** Tabs of the IA pages: the overview plus its subsections. */

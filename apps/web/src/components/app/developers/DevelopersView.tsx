@@ -315,7 +315,7 @@ function WebhooksCard({ canEdit }: { canEdit: boolean }) {
 export function DevelopersView() {
   const { tenant } = useSession();
   return (
-    <SettingsFrame title="Desarrolladores" subtitle="Claves de API y webhooks para conectar tus sistemas.">
+    <SettingsFrame title="Claves de API" subtitle="Claves de API y webhooks para conectar tus sistemas.">
       {() => {
         const canEdit = canManageAi(tenant?.role);
         return (

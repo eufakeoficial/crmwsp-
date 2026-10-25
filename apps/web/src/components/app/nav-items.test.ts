@@ -34,13 +34,13 @@ describe("isActive", () => {
   it("lists the sales playbook as a child of IA, in the sidebar and in the IA tabs", () => {
     expect(NAV_MAIN.find((i) => i.key === "ai")?.children).toBe(AI_CHILDREN);
     expect(AI_CHILDREN.map((i) => i.href)).toContain("/app/ai/playbook");
-    expect(AI_SECTIONS.map((i) => i.label)).toEqual(["Resumen", "Ejecuciones", "Necesitan atención", "Playbook de ventas"]);
+    expect(AI_SECTIONS.map((i) => i.label)).toEqual(["Resumen", "Historial de la IA", "Necesitan atención", "Guion de ventas"]);
   });
 });
 
 describe("SETTINGS_SECTIONS (F9)", () => {
-  it("has Modo dueño exactly once and no duplicated routes", () => {
-    expect(SETTINGS_SECTIONS.filter((s) => s.label === "Modo dueño")).toHaveLength(1);
+  it("has the owner-mode section exactly once and no duplicated routes", () => {
+    expect(SETTINGS_SECTIONS.filter((s) => s.label === "Gestionar desde tu WhatsApp")).toHaveLength(1);
     expect(new Set(SETTINGS_SECTIONS.map((s) => s.href)).size).toBe(SETTINGS_SECTIONS.length);
   });
 });
