@@ -1,4 +1,4 @@
-=== Vende+ para WooCommerce ===
+=== Vende+ Connector ===
 Contributors: vendemas
 Tags: woocommerce, whatsapp, crm, chatbot, ai
 Requires at least: 6.2
@@ -31,7 +31,7 @@ Este plugin depende del servicio externo Vende+ (https://www.vendemas.chat, API 
 == Installation ==
 
 1. Instala y activa WooCommerce.
-2. Sube la carpeta `vendemas-woocommerce` a `/wp-content/plugins/` o instálalo desde Plugins, Añadir nuevo.
+2. Sube la carpeta `vendemas-connector` a `/wp-content/plugins/` o instálalo desde Plugins, Añadir nuevo.
 3. Activa el plugin.
 4. En Vende+ ve a Integraciones, WooCommerce y genera un código de conexión (formato XXXX-XXXX-XX, vence en 15 minutos).
 5. En WordPress ve a WooCommerce, Vende+, pega el código y pulsa "Conectar".

@@ -1,4 +1,4 @@
-# Vende+ para WooCommerce (plugin)
+# Vende+ Connector (plugin)
 
 Dev notes. User-facing text lives in `readme.txt` (WordPress.org format).
 
@@ -10,11 +10,11 @@ No build step. Syntax check every PHP file:
 
 ## Zip for submission
 
-The folder name must be `vendemas-woocommerce`. From `integrations/wordpress/`:
+The folder name must be `vendemas-connector`. From `integrations/wordpress/`:
 
-    zip -r vendemas-woocommerce.zip vendemas-woocommerce -x@vendemas-woocommerce/.distignore
+    zip -r vendemas-connector.zip vendemas-connector -x@vendemas-connector/.distignore
 
-(or `wp dist-archive vendemas-woocommerce`, which honors `.distignore`).
+(or `wp dist-archive vendemas-connector`, which honors `.distignore`).
 
 ## Point to a local API
 
