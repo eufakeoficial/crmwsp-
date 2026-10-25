@@ -174,7 +174,12 @@ export function ChannelsView() {
         <p className="text-muted" aria-busy="true">Cargando canales…</p>
       ) : channels && channels.length === 0 ? (
         panelOpen ? null : <EmptyState title="Aún no hay canales">
-          {canManage ? "Primer paso: conecta tu número de WhatsApp con el botón de arriba para empezar a recibir mensajes." : "Pide a un administrador que conecte un número de WhatsApp."}
+          {canManage ? (
+            <>
+              Primer paso: conecta tu número de WhatsApp para empezar a recibir mensajes.
+              <span className="mt-4 block"><Button variant="whatsapp" size="sm" disabled={emailBlocked} onClick={() => setConnecting(true)}>Conectar WhatsApp</Button></span>
+            </>
+          ) : "Pide a un administrador que conecte un número de WhatsApp."}
         </EmptyState>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

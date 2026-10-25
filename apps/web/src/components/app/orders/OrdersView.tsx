@@ -88,8 +88,8 @@ export function OrdersView() {
       {orders === null ? (
         <p className="text-muted" aria-busy="true">Cargando pedidos…</p>
       ) : orders.length === 0 && !error ? (
-        <EmptyState title="Aún no hay pedidos">
-          {status === "all" || mode === "board" ? "Los pedidos creados por tu equipo o por la IA aparecerán aquí." : "No hay pedidos con este estado."}
+        <EmptyState title="Aún no hay pedidos" {...(status === "all" || mode === "board" ? { action: { href: "/app/quotes", label: "Ver presupuestos" } } : {})}>
+          {status === "all" || mode === "board" ? "Los pedidos nacen de un presupuesto aceptado: crea o acepta uno y aparecerá aquí." : "No hay pedidos con este estado."}
         </EmptyState>
       ) : mode === "list" ? (
         <OrdersList orders={orders} />

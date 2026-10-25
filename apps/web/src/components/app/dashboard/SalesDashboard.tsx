@@ -1,10 +1,13 @@
 "use client";
 
 import type { SalesMetrics } from "@crmwsp/contracts";
+import Link from "next/link";
 import { Bot, CircleDollarSign, MessageCircle, Percent, ShoppingBag, Trophy, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/app/EmptyState";
-import { Alert, Card, CHIP_ROW, Chip, KpiCard, Spinner } from "@/components/ui";
+import { canManageAi } from "@/components/app/roles";
+import { useSession } from "@/components/app/SessionProvider";
+import { Alert, buttonClasses, Card, CHIP_ROW, Chip, KpiCard, Spinner } from "@/components/ui";
 import { formatDate, formatMoneyMinor, formatNumber } from "@/lib/format";
 import { metricsApi } from "@/lib/metrics-api";
 import { BarChart } from "./BarChart";
@@ -22,6 +25,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export function SalesDashboard() {
+  const { tenant } = useSession();
   const [days, setDays] = useState<RangeDays>(30);
   const [data, setData] = useState<SalesMetrics | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -65,6 +69,12 @@ export function SalesDashboard() {
           ))}
         </div>
       </div>
+      {canManageAi(tenant?.role) ? (
+        <Card className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-sm font-semibold">Probar la IA antes de activarla</span>
+          <Link href="/app/settings/ai/simulator" className={buttonClasses("outline", undefined, "sm")}>Probar la IA</Link>
+        </Card>
+      ) : null}
       <Alert>{error ? "No pudimos cargar las métricas. Inténtalo de nuevo." : null}</Alert>
       {!data && !error ? <Spinner /> : null}
       {data && t ? (

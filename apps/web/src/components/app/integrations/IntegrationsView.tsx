@@ -196,6 +196,7 @@ function MercadoPagoCard({ canEdit }: { canEdit: boolean }) {
         <div className="flex flex-col gap-1">
           <Label htmlFor="mercadopago-url">URL del webhook</Label>
           <Input id="mercadopago-url" readOnly value={conn.webhookUrl} onFocus={(e) => e.currentTarget.select()} />
+          <span className="text-xs text-muted">Pégala en Mercado Pago → Tus integraciones → tu aplicación → Webhooks, en modo producción.</span>
         </div>
       )}
       {error && <Alert>{error}</Alert>}
@@ -205,10 +206,12 @@ function MercadoPagoCard({ canEdit }: { canEdit: boolean }) {
           <div className="flex flex-col gap-1">
             <Label htmlFor="mercadopago-token">Access token (APP_USR-…)</Label>
             <Input id="mercadopago-token" type="password" autoComplete="off" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
+            <span className="text-xs text-muted">En Mercado Pago → Tus integraciones → tu aplicación → Credenciales de producción.</span>
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="mercadopago-secret">Clave secreta del webhook</Label>
             <Input id="mercadopago-secret" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} />
+            <span className="text-xs text-muted">En Mercado Pago → Tus integraciones → tu aplicación → Webhooks, al configurar la URL de producción.</span>
           </div>
           <div>
             <Button type="submit" disabled={busy}>{conn ? "Actualizar" : "Conectar"}</Button>
@@ -245,7 +248,7 @@ function Body({ canEdit }: { canEdit: boolean }) {
       ))}
       <h2 className="m-0 mt-2 text-[17px]">Pagos</h2>
       <MercadoPagoCard canEdit={canEdit} />
-      <p className="m-0 text-xs text-muted">Mercado Libre: pendiente (requiere OAuth por vendedor; ver roadmap).</p>
+      <p className="m-0 text-xs text-muted">Mercado Libre: Próximamente.</p>
     </div>
   );
 }

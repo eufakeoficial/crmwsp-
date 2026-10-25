@@ -47,11 +47,12 @@ export function PartnerCredentialsPanel({ channel, onClose, onSaved, onNoKeys }:
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="pc-app">ID de app de Gupshup</Label>
           <Input id="pc-app" autoComplete="off" value={appId} onChange={(e) => setAppId(e.target.value)} required />
+          <span className="text-xs text-muted">En la consola de Gupshup, dentro de tu app de WhatsApp: aparece como App ID en los detalles de la app.</span>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="pc-token">Token de Partner</Label>
           <Input id="pc-token" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} required />
-          <span className="text-xs text-muted">Se guarda cifrado y no se vuelve a mostrar.</span>
+          <span className="text-xs text-muted">En el portal de Partner de Gupshup, en la sección de tokens de tu cuenta. Se guarda cifrado y no se vuelve a mostrar.</span>
         </div>
         <Alert>{error}</Alert>
         <div className="flex justify-end gap-2">

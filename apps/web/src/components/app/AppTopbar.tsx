@@ -15,7 +15,7 @@ const ROUND = "grid size-9 flex-none place-items-center rounded-full";
 export function AppTopbar({ menuOpen, onToggleMenu, hideOnDesktop = false }: { menuOpen: boolean; onToggleMenu: () => void; hideOnDesktop?: boolean }) {
   const { tenant } = useSession();
   return (
-    <header className={cn("fixed inset-x-0 top-0 z-20 flex items-center gap-2 bg-paper px-[clamp(12px,3vw,28px)] py-2.5 desk:left-[220px]", hideOnDesktop && "desk:hidden")}>
+    <header className={cn("fixed inset-x-0 top-0 z-20 flex items-center gap-2 bg-paper px-[clamp(12px,3vw,28px)] py-2.5 desk:left-[232px]", hideOnDesktop && "desk:hidden")}>
       <Avatar name={tenant?.name ?? "?"} round size="md" className="max-[479px]:hidden" />
       <TenantSwitcher />
       <span aria-hidden className="flex-1" />

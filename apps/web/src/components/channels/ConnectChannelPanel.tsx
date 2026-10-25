@@ -106,20 +106,22 @@ export function ConnectChannelPanel({ onClose, onCreated, onNoKeys }: { onClose:
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="ch-app">Nombre de la app en Gupshup</Label>
                   <Input id="ch-app" autoComplete="off" placeholder="MiEmpresaApp" value={appName} onChange={(e) => setAppName(e.target.value)} required />
+                  <span className="text-xs text-muted">En la consola de Gupshup, dentro de tu app de WhatsApp: es el nombre que le diste al crearla.</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="ch-key">API key de Gupshup</Label>
                   <Input id="ch-key" type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
-                  <span className="text-xs text-muted">Se guarda cifrada y no se vuelve a mostrar.</span>
+                  <span className="text-xs text-muted">En la consola de Gupshup, dentro de tu app de WhatsApp, en la sección de API key. Se guarda cifrada y no se vuelve a mostrar.</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="ch-partner-app">ID de app de Gupshup (opcional)</Label>
+                  <Label htmlFor="ch-partner-app">ID de app de Gupshup (opcional, necesario para plantillas)</Label>
                   <Input id="ch-partner-app" autoComplete="off" value={partnerAppId} onChange={(e) => setPartnerAppId(e.target.value)} />
+                  <span className="text-xs text-muted">En la consola de Gupshup, dentro de tu app de WhatsApp: aparece como App ID en los detalles de la app.</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="ch-partner-token">Token de Partner (opcional)</Label>
+                  <Label htmlFor="ch-partner-token">Token de Partner (opcional, necesario para plantillas)</Label>
                   <Input id="ch-partner-token" type="password" autoComplete="off" value={partnerToken} onChange={(e) => setPartnerToken(e.target.value)} />
-                  <span className="text-xs text-muted">Necesarios para crear y sincronizar plantillas de WhatsApp. Se guarda cifrado y no se vuelve a mostrar. Puedes agregarlos después.</span>
+                  <span className="text-xs text-muted">En el portal de Partner de Gupshup, en la sección de tokens de tu cuenta. Se guarda cifrado y no se vuelve a mostrar. Puedes agregarlo después.</span>
                 </div>
                 <Alert>{error}</Alert>
                 <div className="flex justify-end gap-2">

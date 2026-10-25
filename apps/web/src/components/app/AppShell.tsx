@@ -1,16 +1,27 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { AppMenuSheet } from "./AppMenuSheet";
 import { cn } from "@/lib/cn";
 import { AppSidebar, type NavCounts } from "./AppSidebar";
 import { AppTopbar } from "./AppTopbar";
 import { isActive } from "./nav-items";
+import { canViewAi } from "./roles";
+import { useSession } from "./SessionProvider";
+import { useNavCounts } from "@/lib/hooks/use-nav-counts";
 
 /** `/app` shell: floating black sidebar, `paper` top bar and a mobile menu sheet. */
-export function AppShell({ children, counts }: { children: ReactNode; counts?: NavCounts }) {
+export function AppShell({ children, counts: baseCounts }: { children: ReactNode; counts?: NavCounts }) {
   const pathname = usePathname();
+  const { tenant } = useSession();
+  const listCounts = useNavCounts({ reviews: tenant !== undefined, handoffs: canViewAi(tenant?.role) });
+  const counts = useMemo<NavCounts>(() => {
+    const merged: Record<string, number> = { ...baseCounts };
+    if (listCounts["payment-reviews"] > 0) merged["payment-reviews"] = listCounts["payment-reviews"];
+    if (listCounts["ai-handoffs"] > 0) merged["ai-handoffs"] = listCounts["ai-handoffs"];
+    return merged;
+  }, [baseCounts, listCounts]);
   const [open, setOpen] = useState(false);
   // The inbox is a full-bleed workspace: icon rail, no top bar on desktop, no page padding.
   const inbox = isActive(pathname, "/app/inbox");
@@ -22,15 +33,15 @@ export function AppShell({ children, counts }: { children: ReactNode; counts?: N
       <a href="#app-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[70] focus:rounded-full focus:bg-royal focus:px-4 focus:py-3 focus:font-bold focus:text-white">
         Saltar al contenido
       </a>
-      <AppSidebar rail={inbox} {...(counts ? { counts } : {})} />
+      <AppSidebar rail={inbox} counts={counts} />
       <AppTopbar hideOnDesktop={inbox} menuOpen={open} onToggleMenu={() => setOpen((v) => !v)} />
       <main id="app-content" tabIndex={-1} className={cn(
           "min-w-0 outline-none",
-          inbox ? "px-0 pt-[68px] pb-0 desk:pt-0 desk:pl-[72px]" : "px-[clamp(12px,3vw,28px)] pt-[68px] pb-24 desk:pl-[calc(220px+clamp(12px,3vw,28px))]",
+          inbox ? "px-0 pt-[68px] pb-0 desk:pt-0 desk:pl-[72px]" : "px-[clamp(12px,3vw,28px)] pt-[68px] pb-24 desk:pl-[calc(232px+clamp(12px,3vw,28px))]",
         )}>
         {children}
       </main>
-      {open ? <AppMenuSheet onClose={() => setOpen(false)} {...(counts ? { counts } : {})} /> : null}
+      {open ? <AppMenuSheet onClose={() => setOpen(false)} counts={counts} /> : null}
     </>
   );
 }

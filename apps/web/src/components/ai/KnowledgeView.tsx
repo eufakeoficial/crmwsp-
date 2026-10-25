@@ -69,7 +69,7 @@ function Body({ canEdit }: { canEdit: boolean }) {
       {sources === null && !error ? (
         <p className="text-muted" aria-busy="true">Cargando fuentes…</p>
       ) : (
-        <SourceList sources={sources ?? []} canEdit={canEdit} onDeleted={() => { show("Fuente borrada"); void load(); }} onError={setError} />
+        <SourceList sources={sources ?? []} canEdit={canEdit} onDeleted={() => { show("Fuente borrada"); void load(); }} onError={setError} onAdd={() => setTextOpen(true)} />
       )}
       {textOpen ? <TextSourceForm onClose={() => setTextOpen(false)} onCreated={() => { setTextOpen(false); show("Texto añadido"); void load(); }} /> : null}
       <Toast message={message} />
