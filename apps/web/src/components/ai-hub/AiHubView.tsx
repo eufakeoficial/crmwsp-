@@ -14,13 +14,14 @@ import { voiceApi } from "@/lib/voice-api";
 import { AiCapabilities } from "./AiCapabilities";
 import { OrdersMock, OwnerMock, QuoteMock, SimulatorMock, SourcesMock, VoiceMock } from "./Mocks";
 
-const FEATURES: readonly { key: HubFeatureKey; title: string; text: string; href: string; mock: () => JSX.Element }[] = [
-  { key: "sources", title: "Respuestas con fuentes", text: "Responde 24/7 con tu catálogo y FAQ, y cita de dónde sale cada precio.", href: "/app/settings/knowledge", mock: SourcesMock },
-  { key: "quotes", title: "Cotiza y cobra", text: "Arma presupuestos y links de pago, con tu aprobación antes de enviarlos.", href: "/app/settings/ai", mock: QuoteMock },
-  { key: "orders", title: "Pedidos desde audio, foto o PDF", text: "Convierte lo que te envía el cliente en un pedido listo para revisar.", href: "/app/settings/ai", mock: OrdersMock },
-  { key: "voice", title: "Respuestas por voz", text: "Contesta con notas de voz naturales usando tu cuenta de ElevenLabs.", href: "/app/settings/ai#voz", mock: VoiceMock },
-  { key: "simulator", title: "Simulador", text: "Prueba el bot en conversaciones de ejemplo antes de activarlo.", href: "/app/settings/ai/simulator", mock: SimulatorMock },
-  { key: "owner", title: "Modo dueño por WhatsApp", text: "Consulta ventas y gestiona el CRM desde tu propio WhatsApp.", href: "/app/settings/owner-mode", mock: OwnerMock },
+// Each card gets its own tinted preview so the grid reads as six distinct features, not a gray wall.
+const FEATURES: readonly { key: HubFeatureKey; title: string; text: string; href: string; mock: () => JSX.Element; tint: string }[] = [
+  { key: "sources", title: "Respuestas con fuentes", text: "Responde 24/7 con tu catálogo y FAQ, y cita de dónde sale cada precio.", href: "/app/settings/knowledge", mock: SourcesMock, tint: "bg-royal-soft" },
+  { key: "quotes", title: "Cotiza y cobra", text: "Arma presupuestos y links de pago, con tu aprobación antes de enviarlos.", href: "/app/settings/ai", mock: QuoteMock, tint: "bg-lime-soft" },
+  { key: "orders", title: "Pedidos desde audio, foto o PDF", text: "Convierte lo que te envía el cliente en un pedido listo para revisar.", href: "/app/settings/ai", mock: OrdersMock, tint: "bg-gold-soft" },
+  { key: "voice", title: "Respuestas por voz", text: "Contesta con notas de voz naturales usando tu cuenta de ElevenLabs.", href: "/app/settings/ai#voz", mock: VoiceMock, tint: "bg-info-soft" },
+  { key: "simulator", title: "Simulador", text: "Prueba el bot en conversaciones de ejemplo antes de activarlo.", href: "/app/settings/ai/simulator", mock: SimulatorMock, tint: "bg-success-soft" },
+  { key: "owner", title: "Modo dueño por WhatsApp", text: "Consulta ventas y gestiona el CRM desde tu propio WhatsApp.", href: "/app/settings/owner-mode", mock: OwnerMock, tint: "bg-[#dff8e9]" },
 ];
 
 const ok = <T,>(r: PromiseSettledResult<T>): T | undefined => (r.status === "fulfilled" ? r.value : undefined);
@@ -64,10 +65,10 @@ export function AiHubView() {
         <h2 className="m-0 mb-3 text-[19px]">Empieza por aquí</h2>
       </div>
       <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 md:grid-cols-2 desk:grid-cols-3">
-        {FEATURES.map(({ key, title, text, href, mock: Mock }) => (
+        {FEATURES.map(({ key, title, text, href, mock: Mock, tint }) => (
           <li key={key} className="flex">
             <Card className="flex w-full flex-col gap-3 p-3">
-              <div aria-hidden className="flex h-[132px] flex-col justify-center rounded-xl bg-paper p-3">
+              <div aria-hidden className={`flex h-[132px] flex-col justify-center rounded-xl p-3 ${tint}`}>
                 <Mock />
               </div>
               <div className="flex flex-1 flex-col gap-1.5 px-1">
@@ -76,7 +77,7 @@ export function AiHubView() {
                   {status ? <StatusChip label={status[key] ? "Activo" : "Sin configurar"} tone={status[key] ? "success" : "paper"} /> : null}
                 </div>
                 <p className="m-0 line-clamp-2 text-[13px] text-muted">{text}</p>
-                <Link href={href} className="mt-auto pt-1 text-[13px] font-bold text-ink underline-offset-2 hover:underline">
+                <Link href={href} className="mt-auto inline-flex w-fit items-center gap-1 rounded-full bg-ink px-3.5 py-1.5 text-[13px] font-bold text-white no-underline hover:bg-royal">
                   Configurar →
                 </Link>
               </div>

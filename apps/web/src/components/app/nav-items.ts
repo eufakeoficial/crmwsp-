@@ -22,13 +22,13 @@ export const SETTINGS_SECTIONS: readonly NavItem[] = [
   { key: "settings-ai", label: "IA", href: "/app/settings/ai", icon: Sparkles },
   { key: "settings-integrations", label: "Integraciones", href: "/app/settings/integrations", icon: Plug },
   { key: "settings-knowledge", label: "Conocimiento", href: "/app/settings/knowledge", icon: BookOpen },
-  { key: "settings-approvals", label: "Aprobar respuestas de la IA", href: "/app/settings/approvals", icon: ClipboardCheck },
+  { key: "settings-approvals", label: "Aprobaciones de IA", href: "/app/settings/approvals", icon: ClipboardCheck },
   { key: "settings-templates", label: "Plantillas de negocio", href: "/app/settings/templates", icon: LayoutTemplate },
   { key: "settings-currency", label: "Moneda", href: "/app/settings/currency", icon: Coins },
   { key: "settings-plan", label: "Plan y uso", href: "/app/settings/plan", icon: CreditCard },
   { key: "settings-ads", label: "Anuncios", href: "/app/settings/ads", icon: Megaphone },
   { key: "settings-developers", label: "Claves de API", href: "/app/settings/developers", icon: Code2 },
-  { key: "settings-owner-mode", label: "Gestionar desde tu WhatsApp", href: "/app/settings/owner-mode", icon: Smartphone },
+  { key: "settings-owner-mode", label: "Control por WhatsApp", href: "/app/settings/owner-mode", icon: Smartphone },
 ];
 
 /** Subsections of IA, shown as sidebar sub-links. */
@@ -83,7 +83,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { key: "ai", label: "IA", href: "/app/ai", icon: Sparkles, children: AI_NAV_CHILDREN },
       { key: "settings-ai", label: "Ajustes de la IA", href: "/app/settings/ai", icon: Sparkles },
       { key: "settings-knowledge", label: "Conocimiento", href: "/app/settings/knowledge", icon: BookOpen },
-      { key: "settings-approvals", label: "Aprobar respuestas de la IA", href: "/app/settings/approvals", icon: ClipboardCheck },
+      { key: "settings-approvals", label: "Aprobaciones de IA", href: "/app/settings/approvals", icon: ClipboardCheck },
       { key: "broadcasts", label: "Campañas", href: "/app/broadcasts", icon: Megaphone },
       { key: "wa-templates", label: "Plantillas de WhatsApp", href: "/app/templates", icon: MessageSquareText },
     ],
@@ -102,7 +102,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { key: "settings-templates", label: "Plantillas de negocio", href: "/app/settings/templates", icon: LayoutTemplate },
       { key: "settings-developers", label: "Claves de API", href: "/app/settings/developers", icon: Code2 },
       { key: "settings-ads", label: "Anuncios", href: "/app/settings/ads", icon: Megaphone },
-      { key: "settings-owner-mode", label: "Gestionar desde tu WhatsApp", href: "/app/settings/owner-mode", icon: Smartphone },
+      { key: "settings-owner-mode", label: "Control por WhatsApp", href: "/app/settings/owner-mode", icon: Smartphone },
     ],
   },
 ];
