@@ -33,7 +33,7 @@ export default async function WooCommercePluginPage() {
             Conecta tu tienda WooCommerce con Vende+, el CRM de WhatsApp con IA, sin copiar claves a mano. Generas un código en Vende+, lo pegas en el plugin y listo.
           </p>
           <div className="flex flex-wrap gap-3">
-            <a href="/downloads/vendemas-connector.zip" download className="inline-flex h-11 items-center rounded-full bg-ink px-6 font-bold text-white no-underline hover:bg-royal">
+            <a href="/downloads/vende-connector.zip" download className="inline-flex h-11 items-center rounded-full bg-ink px-6 font-bold text-white no-underline hover:bg-royal">
               Descargar plugin (.zip)
             </a>
             <Link href="/signup" className="inline-flex h-11 items-center rounded-full border border-line px-6 font-bold text-ink no-underline hover:border-ink">

@@ -82,7 +82,7 @@ function WooPluginBlock({ active }: { active: boolean }) {
       <h3 className="m-0 text-base">Opción recomendada: plugin de WordPress</h3>
       <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-sm">
         <li>
-          <a href="/downloads/vendemas-connector.zip" download className="underline">Descarga el plugin «Vende+ Connector»</a>
+          <a href="/downloads/vende-connector.zip" download className="underline">Descarga el plugin «Vende+ Connector»</a>
           {" "}y súbelo en tu WordPress: Plugins → Añadir nuevo → Subir plugin.
         </li>
         <li>Genera un código aquí.</li>

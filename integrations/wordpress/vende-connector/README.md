@@ -10,11 +10,11 @@ No build step. Syntax check every PHP file:
 
 ## Zip for submission
 
-The folder name must be `vendemas-connector`. From `integrations/wordpress/`:
+The folder name must be `vende-connector`. From `integrations/wordpress/`:
 
-    zip -r vendemas-connector.zip vendemas-connector -x@vendemas-connector/.distignore
+    zip -r vende-connector.zip vende-connector -x@vende-connector/.distignore
 
-(or `wp dist-archive vendemas-connector`, which honors `.distignore`).
+(or `wp dist-archive vende-connector`, which honors `.distignore`).
 
 ## Point to a local API
 
