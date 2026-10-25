@@ -1,0 +1,8 @@
+.git
+.gitignore
+.distignore
+README.md
+node_modules
+*.zip
+*.log
+.DS_Store

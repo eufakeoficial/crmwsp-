@@ -13,6 +13,9 @@ import { CommerceWebhookService, PgCommerceWebhookResolver } from "./commerce-we
 import { COMMERCE_FETCH, COMMERCE_LEDGER, COMMERCE_WEBHOOK_RESOLVER } from "./integrations.constants.js";
 import { IntegrationsController } from "./integrations.controller.js";
 import { PgCommerceLedger } from "./pg-commerce-ledger.js";
+import { CONNECT_CODE_REPOSITORY, PgConnectCodeRepository } from "./connect-code.repository.js";
+import { WooConnectController } from "./woo-connect.controller.js";
+import { WooConnectService, wooConnectCounterStoreProvider } from "./woo-connect.service.js";
 
 const BODY_LIMIT_HOOK = Symbol("INTEGRATIONS_BODY_LIMIT_HOOK");
 
@@ -20,12 +23,12 @@ interface FastifyLike {
   addHook(name: "onRoute", fn: (route: { url: string; bodyLimit?: number }) => void): unknown;
 }
 
-/** Same 1 MiB streaming cap as the other public webhooks. */
+/** Same 1 MiB streaming cap as the other public webhooks (and the public WooCommerce exchange). */
 function installBodyLimit(host: HttpAdapterHost): true {
   const instance = host.httpAdapter?.getInstance?.() as Partial<FastifyLike> | undefined;
   if (typeof instance?.addHook !== "function") throw new Error("IntegrationsModule requires the Fastify adapter");
   instance.addHook("onRoute", (route) => {
-    if (route.url.includes("/webhooks/commerce")) {
+    if (route.url.includes("/webhooks/commerce") || route.url.includes("/public/woocommerce")) {
       route.bodyLimit = Math.min(route.bodyLimit ?? WEBHOOK_BODY_LIMIT, WEBHOOK_BODY_LIMIT);
     }
   });
@@ -43,14 +46,17 @@ const timedFetch: FetchLike = (url, init) =>
 
 @Module({
   imports: [AuthModule, ChannelsModule],
-  controllers: [IntegrationsController, CommerceWebhookController],
+  controllers: [IntegrationsController, CommerceWebhookController, WooConnectController],
   providers: [
     { provide: BODY_LIMIT_HOOK, useFactory: installBodyLimit, inject: [HttpAdapterHost] },
     { provide: COMMERCE_LEDGER, useFactory: (h: DbHandle) => new PgCommerceLedger(h.db), inject: [DB_HANDLE] },
     { provide: COMMERCE_WEBHOOK_RESOLVER, useFactory: (h: DbHandle) => new PgCommerceWebhookResolver(h.sql), inject: [DB_HANDLE] },
     { provide: COMMERCE_FETCH, useValue: timedFetch },
     { provide: WEBHOOK_RATE_LIMITER, useValue: new WebhookRateLimiter(DEFAULT_RATE_LIMIT) },
+    { provide: CONNECT_CODE_REPOSITORY, useFactory: (h: DbHandle) => new PgConnectCodeRepository(h.db), inject: [DB_HANDLE] },
+    wooConnectCounterStoreProvider,
     CommerceWebhookService,
+    WooConnectService,
     WebhookGuardMiddleware,
   ],
 })

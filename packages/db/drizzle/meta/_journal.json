@@ -560,6 +560,13 @@
       "when": 1792950000000,
       "tag": "0095_email_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1792960000000,
+      "tag": "0096_woocommerce_connect_codes",
+      "breakpoints": true
     }
   ]
 }

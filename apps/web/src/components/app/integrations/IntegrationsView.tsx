@@ -1,7 +1,7 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
-import type { CommerceConnectionView, CommerceProviderId, MercadoPagoConnection } from "@crmwsp/contracts";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
+import type { CommerceConnectionView, CommerceProviderId, MercadoPagoConnection, WooConnectCodeResponse } from "@crmwsp/contracts";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { SettingsFrame } from "@/components/ai/AccessGate";
@@ -29,6 +29,99 @@ const PROVIDERS: ProviderInfo[] = [
   { id: "gumroad", name: "Gumroad", secretLabel: "Seller ID", help: "En Gumroad → Settings → Advanced → Ping, pega la URL. Gumroad no firma los avisos." },
   { id: "payhip", name: "Payhip", secretLabel: "API key", help: "En Payhip → Settings → Developer, pega la URL del webhook." },
 ];
+
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const mm = String(Math.floor(total / 60)).padStart(2, "0");
+  const ss = String(total % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+function WooPluginBlock({ active }: { active: boolean }) {
+  const [code, setCode] = useState<WooConnectCodeResponse>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [copyNote, setCopyNote] = useState<string>();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!code) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [code]);
+
+  async function generate() {
+    setBusy(true);
+    setError(undefined);
+    setCopyNote(undefined);
+    try {
+      setCode(await integrationsApi.createWooConnectCode());
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy() {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code.code);
+      setCopyNote("Código copiado.");
+    } catch {
+      setCopyNote("No se pudo copiar automáticamente; selecciónalo y cópialo a mano.");
+    }
+  }
+
+  const remaining = code ? new Date(code.expiresAt).getTime() - now : 0;
+  const expired = !!code && remaining <= 0;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-line p-4">
+      <h3 className="m-0 text-base">Opción recomendada: plugin de WordPress</h3>
+      <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-sm">
+        <li>
+          Instala el plugin «Vende+ para WooCommerce» en tu WordPress (
+          <a href="https://wordpress.org/plugins/vendemas-woocommerce/" target="_blank" rel="noopener noreferrer" className="underline">página del plugin</a>
+          ).
+        </li>
+        <li>Genera un código aquí.</li>
+        <li>Pégalo en WooCommerce → Vende+ → Conectar.</li>
+      </ol>
+      {active && <p className="m-0 text-sm text-muted">Tienda conectada mediante plugin o manualmente.</p>}
+      {error && <Alert>{error}</Alert>}
+      {code && !expired && (
+        <div className="flex flex-col gap-2">
+          <div className="select-all rounded-md bg-paper px-4 py-3 text-center font-mono text-[22px] tracking-widest" aria-label="Código de conexión">{code.code}</div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" onClick={() => void copy()}>Copiar</Button>
+            <span className="text-sm text-muted" role="timer">Vence en {formatCountdown(remaining)}</span>
+          </div>
+          {copyNote && <p className="m-0 text-sm" role="status">{copyNote}</p>}
+        </div>
+      )}
+      {expired && <p className="m-0 text-sm" role="status">Código vencido</p>}
+      {(!code || expired) && (
+        <div>
+          <Button variant={active ? "outline" : "primary"} disabled={busy} onClick={() => void generate()}>
+            {busy ? "Generando…" : active ? "Generar código para otra tienda" : "Generar código de conexión"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ManualWrapper({ enabled, children }: { enabled: boolean; children: ReactNode }) {
+  if (!enabled) return <>{children}</>;
+  return (
+    <details className="rounded-lg border border-line p-4">
+      <summary className="cursor-pointer text-sm font-medium">Conectar manualmente (avanzado)</summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  );
+}
 
 function ProviderCard({ info, conn, canEdit, onChanged }: { info: ProviderInfo; conn: CommerceConnectionView | undefined; canEdit: boolean; onChanged: () => void }) {
   const [secret, setSecret] = useState("");
@@ -90,7 +183,9 @@ function ProviderCard({ info, conn, canEdit, onChanged }: { info: ProviderInfo; 
       )}
       {error && <Alert>{error}</Alert>}
       {notice && <p className="m-0 text-sm" role="status">{notice}</p>}
+      {canEdit && info.id === "woocommerce" && <WooPluginBlock active={active} />}
       {canEdit && (
+        <ManualWrapper enabled={info.id === "woocommerce"}>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <Label htmlFor={`${info.id}-secret`}>{info.secretLabel}</Label>
@@ -138,6 +233,7 @@ function ProviderCard({ info, conn, canEdit, onChanged }: { info: ProviderInfo; 
             )}
           </div>
         </form>
+        </ManualWrapper>
       )}
       {conn?.lastSyncedAt && <p className="m-0 text-xs text-muted">Última sincronización: {new Date(conn.lastSyncedAt).toLocaleString("es")}</p>}
     </Card>
