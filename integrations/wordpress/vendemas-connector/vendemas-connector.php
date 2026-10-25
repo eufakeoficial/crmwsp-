@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       Vende+ Connector
- * Plugin URI:        https://www.vendemas.chat
+ * Plugin URI:        https://www.vendemas.chat/integraciones/woocommerce
  * Description:       Conecta tu tienda WooCommerce con Vende+ (CRM de WhatsApp con IA) usando un código de conexión. Sin claves manuales.
  * Version:           0.1.0
  * Requires at least: 6.2
