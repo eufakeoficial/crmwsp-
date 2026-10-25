@@ -5,7 +5,7 @@ import { Lock, MailCheck, Plug } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { useSession } from "@/components/app/SessionProvider";
-import { Alert, Banner, Button, Modal, Toast } from "@/components/ui";
+import { Alert, Banner, Button, Toast } from "@/components/ui";
 import { canManageChannels } from "@/components/app/roles";
 import { useToast } from "@/lib/hooks/use-toast";
 import { buildDialog360ConnectUrl, DIALOG360_STATE_KEY } from "@/lib/dialog360";
@@ -13,15 +13,16 @@ import { channelsApi } from "@/lib/inbox-api";
 import { api } from "@/lib/api";
 import { EMAIL_NOT_VERIFIED_TEXT, channelErrorMessage, errorMessage, isEmailNotVerified, isEncryptionNotConfigured } from "@/lib/messages";
 import { ChannelCard } from "./ChannelCard";
-import { ConnectChannelDialog } from "./ConnectChannelDialog";
-import { PartnerCredentialsDialog } from "./PartnerCredentialsDialog";
+import { ConnectChannelPanel } from "./ConnectChannelPanel";
+import { PartnerCredentialsPanel } from "./PartnerCredentialsPanel";
 
 export function ChannelsView() {
   const { me, tenant } = useSession();
   const canManage = canManageChannels(tenant?.role);
   const [channels, setChannels] = useState<Channel[] | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [connecting, setConnecting] = useState(false);
+  // null = follow the default (panel open only while there are no channels).
+  const [connecting, setConnecting] = useState<boolean | null>(null);
   const [confirmRotate, setConfirmRotate] = useState<Channel | null>(null);
   const [partnerFor, setPartnerFor] = useState<Channel | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -91,6 +92,7 @@ export function ChannelsView() {
   const isOwner = tenant?.role === "owner";
   // Connecting WhatsApp waits for the owner's verified email (API: 403 EMAIL_NOT_VERIFIED).
   const emailBlocked = (isOwner && me.user.emailVerified === false) || isEmailNotVerified(error);
+  const panelOpen = canManage && !emailBlocked && (connecting ?? channels?.length === 0);
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -102,8 +104,8 @@ export function ChannelsView() {
                 <Plug aria-hidden className="size-5" />Conectar con 360dialog (mantén tu WhatsApp Business)
               </Button>
             ) : null}
-            <Button variant={d360PartnerId ? "outline" : "whatsapp"} disabled={emailBlocked} onClick={() => setConnecting(true)}>
-              <Plug aria-hidden className="size-5" />Conectar WhatsApp (Gupshup)
+            <Button variant={d360PartnerId ? "outline" : "whatsapp"} disabled={emailBlocked} aria-expanded={panelOpen} onClick={() => setConnecting(!panelOpen)}>
+              <Plug aria-hidden className="size-5" />{panelOpen ? "Cerrar guía de conexión" : channels && channels.length > 0 ? "Conectar otro número" : "Conectar WhatsApp (Gupshup)"}
             </Button>
           </div>
         ) : null}
@@ -134,10 +136,26 @@ export function ChannelsView() {
       ) : error ? (
         <div className="mb-4"><Alert>{channelErrorMessage(error)}</Alert></div>
       ) : null}
+      {panelOpen ? (
+        <div className="mb-4">
+          <ConnectChannelPanel
+            onClose={() => setConnecting(false)}
+            onNoKeys={(err) => {
+              setConnecting(false);
+              setError(err);
+            }}
+            onCreated={(c) => {
+              setChannels((list) => [...(list ?? []), c]);
+              setConnecting(true); // keep the panel mounted to show the webhook URL
+              setError(null);
+            }}
+          />
+        </div>
+      ) : null}
       {channels === null && !error ? (
         <p className="text-muted" aria-busy="true">Cargando canales…</p>
       ) : channels && channels.length === 0 ? (
-        <EmptyState title="Aún no hay canales">
+        panelOpen ? null : <EmptyState title="Aún no hay canales">
           {canManage ? "Primer paso: conecta tu número de WhatsApp con el botón de arriba para empezar a recibir mensajes." : "Pide a un administrador que conecte un número de WhatsApp."}
         </EmptyState>
       ) : (
@@ -151,62 +169,45 @@ export function ChannelsView() {
               onRotate={() => setConfirmRotate(c)}
               onPartner={() => setPartnerFor(c)}
               onToggle={() => void act(c.id, () => channelsApi.setStatus(c.id, c.status === "disabled" ? "active" : "disabled"), c.status === "disabled" ? "Canal activado" : "Canal desactivado")}
-            />
+            >
+              {confirmRotate?.id === c.id ? (
+                <div role="alertdialog" aria-label="Confirmar rotación del token" className="flex flex-col gap-3 rounded-2xl bg-warning-soft p-4">
+                  <p className="m-0 text-sm"><b>¿Rotar el token del webhook?</b> La URL actual <b>dejará de funcionar</b> de inmediato. Tendrás que pegar la nueva URL en Gupshup → Callback URL, o no llegarán mensajes nuevos al Inbox.</p>
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setConfirmRotate(null)}>Cancelar</Button>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => {
+                        setConfirmRotate(null);
+                        void act(c.id, () => channelsApi.rotateWebhookToken(c.id), "Token rotado: pega la nueva URL en Gupshup");
+                      }}
+                    >
+                      Confirmar
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              {partnerFor?.id === c.id ? (
+                <PartnerCredentialsPanel
+                  channel={c}
+                  onClose={() => setPartnerFor(null)}
+                  onNoKeys={(err) => {
+                    setPartnerFor(null);
+                    setError(err);
+                  }}
+                  onSaved={(updated) => {
+                    replace(updated);
+                    setPartnerFor(null);
+                    setError(null);
+                    show("Credenciales de plantillas guardadas");
+                  }}
+                />
+              ) : null}
+            </ChannelCard>
           ))}
         </div>
       )}
-      {connecting ? (
-        <ConnectChannelDialog
-          onClose={() => setConnecting(false)}
-          onNoKeys={(err) => {
-            setConnecting(false);
-            setError(err);
-          }}
-          onCreated={(c) => {
-            setChannels((list) => [...(list ?? []), c]);
-            setError(null);
-          }}
-        />
-      ) : null}
-      {partnerFor ? (
-        <PartnerCredentialsDialog
-          channel={partnerFor}
-          onClose={() => setPartnerFor(null)}
-          onNoKeys={(err) => {
-            setPartnerFor(null);
-            setError(err);
-          }}
-          onSaved={(c) => {
-            replace(c);
-            setPartnerFor(null);
-            setError(null);
-            show("Credenciales de plantillas guardadas");
-          }}
-        />
-      ) : null}
-      {confirmRotate ? (
-        <Modal
-          title="¿Rotar el token del webhook?"
-          onClose={() => setConfirmRotate(null)}
-          footer={
-            <>
-              <Button variant="outline" onClick={() => setConfirmRotate(null)}>Cancelar</Button>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  const c = confirmRotate;
-                  setConfirmRotate(null);
-                  void act(c.id, () => channelsApi.rotateWebhookToken(c.id), "Token rotado: pega la nueva URL en Gupshup");
-                }}
-              >
-                Rotar token
-              </Button>
-            </>
-          }
-        >
-          <p className="m-0">La URL actual <b>dejará de funcionar</b> de inmediato. Tendrás que pegar la nueva URL en Gupshup → Callback URL, o no llegarán mensajes nuevos al Inbox.</p>
-        </Modal>
-      ) : null}
       <Toast message={message} />
     </>
   );
