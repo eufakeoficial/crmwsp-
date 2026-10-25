@@ -1,6 +1,7 @@
 "use client";
 
 import type { Channel } from "@crmwsp/contracts";
+import type { ReactNode } from "react";
 import { FileText, KeyRound, Power, RefreshCw } from "lucide-react";
 import { Button, Card, StatusChip, type Tone } from "@/components/ui";
 import { WebhookUrlBox } from "./WebhookUrlBox";
@@ -31,6 +32,7 @@ export function ChannelCard({
   onRotate,
   onToggle,
   onPartner,
+  children,
 }: {
   channel: Channel;
   canManage: boolean;
@@ -38,6 +40,8 @@ export function ChannelCard({
   onRotate: () => void;
   onToggle: () => void;
   onPartner: () => void;
+  /** Inline area below the actions (rotate confirmation, partner credentials form). */
+  children?: ReactNode;
 }) {
   const st = STATUS[channel.status];
   const disabled = channel.status === "disabled";
@@ -102,6 +106,7 @@ export function ChannelCard({
           </Button>
         </div>
       ) : null}
+      {children}
     </Card>
   );
 }
