@@ -162,7 +162,7 @@ export function Composer({
             aria-selected={mode === m}
             onClick={() => setMode(m)}
             className={cn(
-              "-mb-px h-9 cursor-pointer border-0 border-b-2 bg-transparent px-1 text-[13px]",
+              "-mb-px h-11 cursor-pointer border-0 border-b-2 bg-transparent px-2 text-sm focus-visible:outline-2 focus-visible:outline-royal",
               mode === m ? (m === "note" ? "border-gold font-extrabold text-ink" : "border-ink font-extrabold text-ink") : "border-transparent font-semibold text-muted hover:text-ink",
             )}
           >

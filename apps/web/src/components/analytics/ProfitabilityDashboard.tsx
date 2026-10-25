@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/app/EmptyState";
 import { BarChart } from "@/components/app/dashboard/BarChart";
 import { RANGE_OPTIONS, formatBp, rangeFor, type RangeDays } from "@/components/app/dashboard/dashboard-utils";
-import { Alert, Card, Chip, DataCell, DataRow, DataTable, KpiCard, Spinner } from "@/components/ui";
+import { Alert, Card, CHIP_ROW, Chip, DataCell, DataRow, DataTable, KpiCard, Spinner } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { analyticsApi } from "@/lib/analytics-api";
 import { formatMoneyMinor, formatNumber } from "@/lib/format";
@@ -58,7 +58,7 @@ export function ProfitabilityDashboard() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader title="Rentabilidad" subtitle="Ingresos verificados frente a lo que cuesta cada cliente, venta o anuncio." />
         <div className="flex flex-wrap gap-2">
-          <div role="group" aria-label="Rango de fechas" className="flex gap-2">
+          <div role="group" aria-label="Rango de fechas" className={CHIP_ROW}>
             {RANGE_OPTIONS.map((d) => (
               <Chip key={d} active={d === days} onClick={() => setDays(d)}>
                 {d} días
@@ -66,7 +66,7 @@ export function ProfitabilityDashboard() {
             ))}
           </div>
           {data && currencyChoices.length > 1 ? (
-            <div role="group" aria-label="Moneda" className="flex gap-2">
+            <div role="group" aria-label="Moneda" className={CHIP_ROW}>
               {currencyChoices.map((c) => (
                 <Chip key={c} active={c === cur} onClick={() => setCurrency(c)}>
                   {c}
@@ -104,7 +104,7 @@ export function ProfitabilityDashboard() {
           <Card>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-extrabold">Margen {GROUPS.find((g) => g.key === groupBy)?.label.toLowerCase()}<Est /></h2>
-              <div role="group" aria-label="Agrupar" className="flex gap-2">
+              <div role="group" aria-label="Agrupar" className={CHIP_ROW}>
                 {GROUPS.map((g) => (
                   <Chip key={g.key} active={g.key === groupBy} onClick={() => setGroupBy(g.key)}>
                     {g.label}

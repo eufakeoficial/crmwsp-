@@ -31,7 +31,7 @@ export function Tabs({ items, label }: { items: TabItem[]; label: string }) {
 
   return (
     <div>
-      <div role="tablist" aria-label={label} className="no-scrollbar flex gap-1.5 overflow-x-auto">
+      <div role="tablist" aria-label={label} className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 py-1">
         {items.map((item, i) => (
           <button
             key={item.id}

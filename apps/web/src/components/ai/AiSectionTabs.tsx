@@ -9,7 +9,7 @@ import { chipClasses } from "@/components/ui/Chip";
 export function AiSectionTabs() {
   const pathname = usePathname();
   return (
-    <nav aria-label="IA" className="no-scrollbar mb-5 flex gap-1.5 overflow-x-auto">
+    <nav aria-label="IA" className="no-scrollbar -mx-1 mb-5 flex gap-2 overflow-x-auto px-1 py-1">
       {AI_SECTIONS.map((s) => (
         <Link key={s.key} href={s.href} aria-current={pathname === s.href ? "page" : undefined} className={chipClasses(pathname === s.href, "no-underline")}>
           {s.label}
