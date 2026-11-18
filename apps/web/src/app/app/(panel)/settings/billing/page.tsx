@@ -13,13 +13,15 @@ import {
   type SubscriptionChargeDto,
 } from "@crmwsp/contracts";
 import { SettingsFrame } from "@/components/ai/AccessGate";
+import { CardBillingPanel } from "@/components/app/billing/CardBillingPanel";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { Alert, Button, Card, Spinner } from "@/components/ui";
 import { request } from "@/lib/api";
 import { errorMessage } from "@/lib/messages";
 
-// Subscription payment in crypto through NOWPayments (ADR 0013). The page never decides that a
+// Subscription payment in crypto through NOWPayments (ADR 0013) and, when enabled, by card with
+// automatic renewal through Stripe Billing (ADR 0022; CardBillingPanel). The page never decides that a
 // payment is complete: it only shows what the server reports after the IPN / reconciliation.
 
 const api = {
@@ -234,9 +236,10 @@ function Body() {
           ) : (
             <p className="m-0 mt-2 text-sm text-ink-3">El pago en línea de la suscripción no está habilitado. Contacta con soporte.</p>
           )}
-          <p className="m-0 mt-2 text-[13px] text-ink-3">Cada pago suma 30 días (o 365 si es anual) desde el final del período actual. No hay cobros automáticos: para renovar, paga otra vez.</p>
+          <p className="m-0 mt-2 text-[13px] text-ink-3">Cada pago suma 30 días (o 365 si es anual) desde el final del período actual. Los pagos en cripto no se renuevan solos: para renovar, paga otra vez. Con tarjeta, la renovación es automática.</p>
         </Card>
       ) : null}
+      <CardBillingPanel />
       {pending ? <PendingCharge charge={pending} /> : null}
       {charges.length > 0 ? (
         <Card>
@@ -264,7 +267,7 @@ function Body() {
 export default function Page() {
   const { tenant } = useSession();
   return (
-    <SettingsFrame title="Suscripción" subtitle="Paga tu plan con criptomonedas (USDT).">
+    <SettingsFrame title="Suscripción" subtitle="Paga tu plan con criptomonedas (USDT) o con tarjeta.">
       {() => (canManageAi(tenant?.role) ? <Body /> : <Alert>Solo propietarios y administradores gestionan la suscripción.</Alert>)}
     </SettingsFrame>
   );
