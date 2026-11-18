@@ -4,6 +4,8 @@ import { z } from "zod";
 export const SUBSCRIPTION_BILLING_QUEUE_NAME = "subscription-billing";
 /** Job: settle one persisted NOWPayments event. Data: `{ eventId, tenantId }`. */
 export const SETTLE_SUBSCRIPTION_EVENT_JOB = "settle-subscription-event";
+/** Job: apply one persisted, verified Stripe billing event (card billing, ADR 0022). Data: `{ eventId, tenantId }`. */
+export const SETTLE_STRIPE_BILLING_EVENT_JOB = "settle-stripe-billing-event";
 
 /** IPN body fields used for ingestion (the full verified body is stored as-is). */
 export const nowPaymentsIpnSchema = z
@@ -259,3 +261,38 @@ export const platformFinanceSchema = z.object({
 });
 export type PlatformFinance = z.infer<typeof platformFinanceSchema>;
 export const platformFinanceQuerySchema = z.object({ refresh: z.enum(["0", "1"]).optional() });
+
+// ---- Card billing with Stripe Billing (ADR 0022) ----
+
+/** `POST /billing/card/checkout`: starts a Stripe Checkout session in subscription mode. */
+export const startCardCheckoutRequestSchema = z
+  .object({ plan: z.enum(["start", "pro"]), period: billingPeriodSchema.default("monthly") })
+  .strict();
+export type StartCardCheckoutRequest = z.infer<typeof startCardCheckoutRequestSchema>;
+
+/** Hosted page (Checkout or customer portal) the browser must be sent to. */
+export const billingRedirectSchema = z.object({ url: z.string().url() });
+export type BillingRedirect = z.infer<typeof billingRedirectSchema>;
+
+export const cardSubscriptionStatusSchema = z.enum(["none", "incomplete", "trialing", "active", "past_due", "unpaid", "canceled", "paused"]);
+
+/**
+ * `GET /billing/card`. `enabled: false` when Stripe is not configured on this deployment (the UI
+ * hides the card option). `subscription` mirrors Stripe and is informational: access follows the
+ * paid periods shown in "Plan y uso".
+ */
+export const cardBillingSchema = z.object({
+  enabled: z.boolean(),
+  /** Plan/period combinations with a configured Stripe price. */
+  available: z.array(z.object({ plan: z.enum(["start", "pro"]), period: billingPeriodSchema })),
+  subscription: z
+    .object({
+      status: cardSubscriptionStatusSchema,
+      plan: z.enum(["start", "pro"]).nullable(),
+      period: billingPeriodSchema.nullable(),
+      cancelAtPeriodEnd: z.boolean(),
+      currentPeriodEnd: z.string().nullable(),
+    })
+    .nullable(),
+});
+export type CardBilling = z.infer<typeof cardBillingSchema>;

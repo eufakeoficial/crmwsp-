@@ -141,3 +141,4 @@ export * from "./subscription.js";
 export * from "./lifecycle.js";
 export * from "./coupons.js";
 export * from "./notifications.js";
+export * from "./stripe.js";

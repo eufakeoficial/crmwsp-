@@ -80,7 +80,7 @@ export const subscriptionCharges = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
     plan: text("plan", { enum: tenantPlanIds }).notNull(),
-    provider: text("provider", { enum: ["nowpayments"] }).notNull().default("nowpayments"),
+    provider: text("provider", { enum: ["nowpayments", "stripe"] }).notNull().default("nowpayments"),
     priceAmount: numeric("price_amount", { precision: 12, scale: 2 }).notNull(),
     priceCurrency: text("price_currency").notNull(),
     payCurrency: text("pay_currency").notNull(),
@@ -116,7 +116,7 @@ export const subscriptionCharges = pgTable(
     index("subscription_charges_tenant_created_idx").on(t.tenantId, t.createdAt),
     index("subscription_charges_status_created_idx").on(t.status, t.createdAt),
     check("subscription_charges_plan_check", sql`${t.plan} IN ('start', 'pro')`),
-    check("subscription_charges_provider_check", sql`${t.provider} IN ('nowpayments')`),
+    check("subscription_charges_provider_check", sql`${t.provider} IN ('nowpayments', 'stripe')`),
     check("subscription_charges_price_check", sql`${t.priceAmount} > 0 OR (${t.priceAmount} = 0 AND ${t.verifiedBy} = 'coupon')`),
     check(
       "subscription_charges_period_days_check",
@@ -205,3 +205,40 @@ export const couponRedemptions = pgTable(
 );
 export type Coupon = typeof coupons.$inferSelect;
 export type CouponRedemption = typeof couponRedemptions.$inferSelect;
+
+export const stripeBillingStatuses = ["none", "incomplete", "trialing", "active", "past_due", "unpaid", "canceled", "paused"] as const;
+export type StripeBillingStatus = (typeof stripeBillingStatuses)[number];
+
+/**
+ * Stripe customer and subscription mirror of a tenant (card billing, ADR 0022, migration 0081).
+ * READ-ONLY for the app role (own tenant, RLS): written only by `stripe_billing_account_attach`
+ * (API, once) and `stripe_billing_subscription_sync` (worker). Informational: access follows
+ * paid periods (`subscription_payments`), never this row.
+ */
+export const subscriptionBillingAccounts = pgTable(
+  "subscription_billing_accounts",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    stripeCustomerId: text("stripe_customer_id").notNull(),
+    stripeSubscriptionId: text("stripe_subscription_id"),
+    plan: text("plan", { enum: tenantPlanIds }),
+    period: text("period", { enum: ["monthly", "annual"] }),
+    status: text("status", { enum: stripeBillingStatuses }).notNull().default("none"),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    /** Stripe `created` of the last applied event (reordered older events are ignored). */
+    statusEventAt: timestamp("status_event_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("subscription_billing_accounts_tenant_unique").on(t.tenantId),
+    unique("subscription_billing_accounts_customer_unique").on(t.stripeCustomerId),
+    unique("subscription_billing_accounts_subscription_unique").on(t.stripeSubscriptionId),
+  ],
+);
+
+export type SubscriptionBillingAccount = typeof subscriptionBillingAccounts.$inferSelect;

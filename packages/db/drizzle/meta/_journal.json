@@ -525,6 +525,13 @@
       "when": 1792800000000,
       "tag": "0080_message_templates_rejection_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1792810000000,
+      "tag": "0081_stripe_subscription_billing",
+      "breakpoints": true
     }
   ]
 }
