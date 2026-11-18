@@ -1,6 +1,7 @@
 import { Inject, Module, Optional, type OnApplicationShutdown } from "@nestjs/common";
 import { SUBSCRIPTION_BILLING_QUEUE_NAME } from "@crmwsp/contracts";
-import { NowPaymentsProvider, nowPaymentsOptionsFromEnv } from "@crmwsp/payments";
+import { stripePriceMapFromEnv } from "@crmwsp/billing";
+import { NowPaymentsProvider, StripeBillingClient, nowPaymentsOptionsFromEnv, stripeBillingOptionsFromEnv } from "@crmwsp/payments";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { AuthModule } from "../auth/auth.module.js";
@@ -8,17 +9,36 @@ import { DB_HANDLE, type DbHandle } from "../common/http.js";
 import { BillingController } from "./billing.controller.js";
 import { NowPaymentsIpnController } from "./nowpayments-ipn.controller.js";
 import { ActivationGuard } from "./activation.guard.js";
+import { STRIPE_BILLING_CLIENT, STRIPE_BILLING_EVENT_STORE, STRIPE_BILLING_PRICES, STRIPE_BILLING_WEBHOOK_SECRET } from "./card-billing.constants.js";
+import { CardBillingService, PgStripeBillingEventStore } from "./card-billing.service.js";
+import { StripeBillingWebhookController } from "./stripe-billing-webhook.controller.js";
 import { PlanLimitsService } from "./plan-limits.service.js";
 import { NOWPAYMENTS_IPN_SECRET, NOWPAYMENTS_PROVIDER, SUBSCRIPTION_EVENT_STORE, SUBSCRIPTION_QUEUE } from "./subscription.constants.js";
 import { PgSubscriptionEventStore, SubscriptionService } from "./subscription.service.js";
 
 @Module({
   imports: [AuthModule],
-  controllers: [BillingController, NowPaymentsIpnController],
+  controllers: [BillingController, NowPaymentsIpnController, StripeBillingWebhookController],
   providers: [
     PlanLimitsService,
     ActivationGuard,
     SubscriptionService,
+    CardBillingService,
+    {
+      // Card billing (ADR 0022): null when STRIPE_SECRET_KEY is unset; the feature is then off.
+      provide: STRIPE_BILLING_CLIENT,
+      useFactory: (): StripeBillingClient | null => {
+        const opts = stripeBillingOptionsFromEnv(process.env);
+        return opts ? new StripeBillingClient(opts) : null;
+      },
+    },
+    { provide: STRIPE_BILLING_PRICES, useFactory: () => stripePriceMapFromEnv(process.env) },
+    { provide: STRIPE_BILLING_WEBHOOK_SECRET, useFactory: (): string | null => process.env["STRIPE_WEBHOOK_SECRET"] || null },
+    {
+      provide: STRIPE_BILLING_EVENT_STORE,
+      useFactory: (handle: DbHandle) => new PgStripeBillingEventStore(handle.sql),
+      inject: [DB_HANDLE],
+    },
     {
       // Null when NOWPAYMENTS_API_KEY is unset: charge creation answers 502, nothing else breaks.
       provide: NOWPAYMENTS_PROVIDER,
