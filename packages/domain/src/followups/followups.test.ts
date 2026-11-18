@@ -44,6 +44,17 @@ describe("24h window", () => {
       reason: "window_closed_no_template",
     });
   });
+  it.each(["pending", "rejected", "paused", "disabled"])("never sends a %s template outside the window", (status) => {
+    const t = { id: "tpl", body: "Hi", status };
+    expect(decideDispatch(base({ lastInboundAt: h(30), approvedTemplate: t, consent: "granted" }))).toEqual({
+      action: "skip",
+      reason: "window_closed_template_not_approved",
+    });
+  });
+  it("sends an approved template when status is reported", () => {
+    const t = { id: "tpl", body: "Hi", status: "approved" };
+    expect(decideDispatch(base({ lastInboundAt: h(30), approvedTemplate: t, consent: "granted" }))).toMatchObject({ action: "send_template" });
+  });
   it("uses the template outside the window only with granted consent", () => {
     const t = { id: "tpl", body: "Hi {{1}}" };
     expect(decideDispatch(base({ lastInboundAt: h(30), approvedTemplate: t }))).toEqual({

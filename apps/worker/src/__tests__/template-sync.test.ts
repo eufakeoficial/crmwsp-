@@ -41,7 +41,7 @@ describe("planTemplateSync", () => {
       ],
       [remote({ name: "a", status: "rejected" }), remote({ name: "b" }), remote({ name: "console_made" })],
     );
-    expect(plan.updates).toEqual([{ id: "1", status: "rejected", externalId: "ext-a" }]);
+    expect(plan.updates).toEqual([{ id: "1", status: "rejected", externalId: "ext-a", rejectionReason: null }]);
     expect(plan.inserts.map((t) => t.name)).toEqual(["console_made"]);
   });
 

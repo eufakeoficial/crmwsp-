@@ -518,6 +518,13 @@
       "when": 1792790000000,
       "tag": "0079_policy_monitor",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1792800000000,
+      "tag": "0080_message_templates_rejection_reason",
+      "breakpoints": true
     }
   ]
 }

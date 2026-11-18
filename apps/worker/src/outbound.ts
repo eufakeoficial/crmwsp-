@@ -1,5 +1,5 @@
 import type { CipherBox } from "@crmwsp/crypto";
-import { shouldSendVoiceReply, validateTemplateParams } from "@crmwsp/domain";
+import { shouldSendVoiceReply, templateSendIssue, validateTemplateParams } from "@crmwsp/domain";
 import {
   attachments,
   broadcastRecipients,
@@ -134,7 +134,7 @@ export async function dispatchOutbound(
   if (msg.type === "template") {
     const t = msg.template;
     if (!t) throw new UnrecoverableError("template message without template");
-    if (t.status !== "approved") throw new UnrecoverableError("template is not approved");
+    if (templateSendIssue(t)) throw new UnrecoverableError("template is not approved");
     if (!t.externalId) throw new UnrecoverableError("template has no external id");
     const params = msg.params ?? resolveTemplateParams(Array.isArray(t.variables) ? t.variables : [], { contactName: msg.contactName });
     return provider.sendTemplate(conn, to, t.externalId, params);

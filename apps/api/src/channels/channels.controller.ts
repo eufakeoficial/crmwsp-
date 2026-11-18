@@ -23,8 +23,7 @@ import {
   type SyncTemplatesResponse,
 } from "@crmwsp/contracts";
 import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, type ChannelConnection, type MessageTemplate, type Transaction } from "@crmwsp/db";
-import { lintTemplate } from "@crmwsp/domain";
-import { planTemplateSync } from "../templates/sync-plan.js";
+import { lintTemplate, normalizeRejectionReason, planTemplateSync } from "@crmwsp/domain";
 import { generateWebhookToken, type Dialog360PartnerClient, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -56,6 +55,7 @@ function toTemplateDto(row: MessageTemplate): MessageTemplateDto {
     status: row.status,
     body: row.body,
     externalId: row.externalId,
+    rejectionReason: row.rejectionReason,
     syncedAt: row.syncedAt ? row.syncedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -425,19 +425,7 @@ export class ChannelsController {
         });
         return created;
       });
-      return {
-        id: row.id,
-        channelConnectionId: row.channelConnectionId,
-        name: row.name,
-        language: row.language,
-        category: row.category,
-        status: row.status,
-        body: row.body,
-        externalId: row.externalId,
-        syncedAt: row.syncedAt ? row.syncedAt.toISOString() : null,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      };
+      return toTemplateDto(row);
     } catch (err) {
       if (pgCode(err) === PG_UNIQUE_VIOLATION) throw new ConflictError("A template with this name and language already exists on this channel");
       throw err;
@@ -501,7 +489,7 @@ export class ChannelsController {
       const local = await tx.select().from(messageTemplates).where(eq(messageTemplates.channelConnectionId, id));
       const plan = planTemplateSync(local, remote);
       for (const u of plan.updates) {
-        await tx.update(messageTemplates).set({ status: u.status, externalId: u.externalId, syncedAt: now, updatedAt: now }).where(eq(messageTemplates.id, u.id));
+        await tx.update(messageTemplates).set({ status: u.status, externalId: u.externalId, rejectionReason: u.rejectionReason, syncedAt: now, updatedAt: now }).where(eq(messageTemplates.id, u.id));
       }
       if (plan.inserts.length > 0) {
         await tx
@@ -516,6 +504,7 @@ export class ChannelsController {
               status: r.status,
               body: r.body,
               externalId: r.externalId,
+              rejectionReason: normalizeRejectionReason(r.status, r.reason),
               syncedAt: now,
             })),
           )

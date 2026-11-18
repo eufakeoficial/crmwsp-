@@ -1,5 +1,5 @@
 import { channelConnections, channelQualityEvents, messageTemplates, notifications, withTenant } from "@crmwsp/db";
-import { assessAccountEvent, templateStatusFromEvent, type AccountEventSeverity } from "@crmwsp/domain";
+import { assessAccountEvent, normalizeRejectionReason, templateStatusFromEvent, type AccountEventSeverity } from "@crmwsp/domain";
 import { UnrecoverableError } from "bullmq";
 import { and, eq } from "drizzle-orm";
 import { notifyPlatformAdmins } from "./platform-alerts.js";
@@ -70,7 +70,7 @@ export async function processIngestAccount(deps: ProcessorDeps, data: unknown): 
     if (tplStatus && a.templateName) {
       await tx
         .update(messageTemplates)
-        .set({ status: tplStatus, updatedAt: now })
+        .set({ status: tplStatus, rejectionReason: normalizeRejectionReason(tplStatus, a.reason), updatedAt: now })
         .where(
           and(
             eq(messageTemplates.channelConnectionId, channelId),

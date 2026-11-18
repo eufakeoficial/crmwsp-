@@ -28,7 +28,7 @@ import {
   sql,
   type Transaction,
 } from "@crmwsp/db";
-import { canTransitionBroadcast, countTemplatePlaceholders } from "@crmwsp/domain";
+import { canTransitionBroadcast, countTemplatePlaceholders, templateSendIssue } from "@crmwsp/domain";
 import { CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { ActivationGuard } from "../billing/activation.guard.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -82,7 +82,7 @@ async function loadApprovedTemplate(tx: Transaction, templateId: string): Promis
     .from(messageTemplates)
     .where(eq(messageTemplates.id, templateId));
   if (!t) throw new NotFoundError();
-  if (t.status !== "approved" || !t.externalId) throw new ValidationError("template must be approved by WhatsApp");
+  if (templateSendIssue(t, { requireExternalId: true })) throw new ValidationError("template must be approved by WhatsApp");
   return { channelConnectionId: t.channel, placeholders: countTemplatePlaceholders(t.body) };
 }
 

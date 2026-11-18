@@ -14,7 +14,7 @@ export interface DueFollowUp {
   conversationResolved: boolean;
   consent: ConsentState;
   /** Approved template on the conversation's channel, or null (missing / not approved / other channel). */
-  approvedTemplate: { id: string; body: string } | null;
+  approvedTemplate: { id: string; body: string; status?: string } | null;
   orderStatus: string | null;
   quoteStatus?: string | null;
   quoteValidUntil?: Date | null;
