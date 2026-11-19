@@ -334,8 +334,25 @@ export class GupshupProvider implements WhatsAppProvider {
     }
     if (!res.ok) {
       const retryable = res.status >= 500 || res.status === 429 || res.status === 408;
-      throw new GupshupProviderError(`Gupshup responded with HTTP ${res.status}`, retryable, res.status);
+      const detail = await gupshupErrorDetail(res);
+      throw new GupshupProviderError(`Gupshup responded with HTTP ${res.status}${detail ? `: ${detail}` : ""}`, retryable, res.status);
     }
     return res;
+  }
+}
+
+/**
+ * Gupshup's own short error text (e.g. "Authentication Failed", "Invalid App Details") so a failed
+ * send says WHY. Only the `message` field of a JSON body, stripped to safe characters and capped:
+ * the response never carries our apikey, and arbitrary bodies are not echoed.
+ */
+async function gupshupErrorDetail(res: Response): Promise<string> {
+  try {
+    const body: unknown = JSON.parse(await res.text());
+    const msg = typeof body === "object" && body !== null ? (body as Record<string, unknown>)["message"] : undefined;
+    if (typeof msg !== "string") return "";
+    return msg.replace(/[^\p{L}\p{N} .,:_'()-]/gu, "").trim().slice(0, 120);
+  } catch {
+    return "";
   }
 }
