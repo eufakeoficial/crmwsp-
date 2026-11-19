@@ -91,10 +91,7 @@ test.describe("Conectar canal de WhatsApp (Gupshup)", () => {
   });
 
   test("«Hacerlo con IA: configurar el webhook» no copia la API key ni el token del webhook", async ({ page, api, context }) => {
-    // The webhook token is a secret (security review): the prompt must ask the user to paste the URL
-    // instead of embedding it. Current main still embeds the URL, so this stays fixme until the
-    // pending prompt fix (separate PR, buildWebhookPrompt in lib/ai-assist-prompts.ts) merges.
-    test.fixme(true, "Pendiente del PR que quita la URL/token del prompt de webhook; quitar fixme al fusionarlo");
+    // The webhook token is a secret (security review): the prompt asks the user to paste the URL instead.
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     mockChannels(api, [channelFixture()]);
     await page.goto("/app/channels");
