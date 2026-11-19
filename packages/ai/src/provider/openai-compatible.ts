@@ -60,8 +60,8 @@ const embedResponseSchema = z.object({
 
 const transcribeResponseSchema = z.object({ text: z.string(), duration: z.number().nonnegative().optional() });
 
-/** 0.1 s of 8 kHz mono 16-bit silence, used by `testConnection`. */
-function tinyWav(): Uint8Array {
+/** 0.1 s of 8 kHz mono 16-bit silence, used by `testConnection` and the transcription-only probe (ADR 0024). */
+export function tinyWav(): Uint8Array {
   const samples = 800;
   const buf = new ArrayBuffer(44 + samples * 2);
   const v = new DataView(buf);

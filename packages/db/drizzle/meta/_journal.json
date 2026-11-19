@@ -588,6 +588,13 @@
       "when": 1792990000000,
       "tag": "0099_notification_channel_credentials_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1793000000000,
+      "tag": "0100_llm_connection_purpose",
+      "breakpoints": true
     }
   ]
 }
