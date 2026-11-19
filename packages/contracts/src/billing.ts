@@ -261,3 +261,26 @@ export const platformFinanceSchema = z.object({
 });
 export type PlatformFinance = z.infer<typeof platformFinanceSchema>;
 export const platformFinanceQuerySchema = z.object({ refresh: z.enum(["0", "1"]).optional() });
+
+/** SaaS-credit AI usage at or above this percent of the plan cap triggers a warning. */
+export const AI_USAGE_WARN_PERCENT = 80;
+
+export interface AiUsageWarning {
+  used: number;
+  limit: number;
+  percent: number;
+  /** Cap already reached: the AI stops answering until the next period or a plan upgrade. */
+  exhausted: boolean;
+}
+
+/**
+ * Warning for `ai_messages` usage from `GET /billing/plan`. Null when there is nothing to warn about:
+ * no cap (null = BYOK/unlimited), plan without AI (0) or usage under {@link AI_USAGE_WARN_PERCENT}.
+ */
+export function aiUsageWarning(usage: BillingPlanResponse["usage"]): AiUsageWarning | null {
+  const item = usage.find((u) => u.key === "ai_messages");
+  if (!item || item.limit === null || item.limit <= 0) return null;
+  const percent = Math.floor((item.used / item.limit) * 100);
+  if (percent < AI_USAGE_WARN_PERCENT) return null;
+  return { used: item.used, limit: item.limit, percent, exhausted: item.used >= item.limit };
+}
