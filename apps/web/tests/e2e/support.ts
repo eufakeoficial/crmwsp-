@@ -115,7 +115,7 @@ async function installApiMock(page: Page): Promise<ApiMock> {
       return respond(route, 404, { code: "NOT_FOUND", message: "not mocked" });
     }
     const out = handler(mock.requests[mock.requests.length - 1]!);
-    return respond(route, out.status ?? 200, out.json ?? {});
+    return respond(route, out.status ?? 200, "json" in out ? out.json : {});
   });
   return mock;
 }
