@@ -15,6 +15,7 @@ export function notificationHref(n: Pick<Notification, "kind" | "entity" | "enti
   if (n.kind === "payment_review") return "/app/payments/reviews";
   if (n.kind === "channel_quality") return "/app/channels";
   if (n.kind === "ai_credentials") return "/app/settings/ai";
+  if (n.kind === "channel_credentials") return "/app/channels";
   if (n.entity === "order" && n.entityId) return `/app/orders/${n.entityId}`;
   if (n.kind === "approval_requested") return "/app/settings/approvals";
   if (n.conversationId) return `/app/inbox?conversation=${n.conversationId}`;
