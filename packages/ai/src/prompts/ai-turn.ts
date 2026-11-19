@@ -3,7 +3,7 @@ import type { ChatMessage } from "../provider/types.js";
 import { renderPlaybookBlock } from "./playbook.js";
 
 /** Bump whenever the wording or structure changes; stored with every AI turn for audit. */
-export const PROMPT_VERSION = "ai-turn/2026-11-19.1";
+export const PROMPT_VERSION = "ai-turn/2026-11-19.2";
 
 export interface PromptConversationMessage {
   messageId: string;
@@ -25,6 +25,8 @@ export interface BuildAiTurnInput {
   contact: Record<string, string | null | undefined>;
   retrievedChunks: PromptChunk[];
   nowIso: string;
+  /** Tenant IANA timezone, used to resolve "hoy"/"mañana". Absent or invalid falls back to UTC. */
+  timeZone?: string;
   /** Compact sales-playbook context; absent or null leaves the prompt byte-for-byte unchanged. */
   playbook?: PlaybookPromptContext | null;
 }
@@ -43,7 +45,9 @@ Hard rules:
 9. Only help with this business: its products, services, quotes, orders, bookings and support. You are not a general-purpose assistant: politely decline unrelated requests (general knowledge, homework, coding, writing, other companies) and steer back to how the business can help.
 10. If asked whether you are a person or a bot, say you are the business's automated assistant. Whenever the customer asks to talk to a person, or has a complaint or a sensitive issue, set needsHuman=true and add a handoff action.
 11. Never ask for full card numbers, bank account numbers, passwords or identity documents in the chat.
-12. reply.text is what the customer reads: never write chunkIds, ids, UUIDs or citation markers such as "(chunkId: ...)" or "[1]" in it. Citations go ONLY in claims[].citations.`;
+12. reply.text is what the customer reads: never write chunkIds, ids, UUIDs or citation markers such as "(chunkId: ...)" or "[1]" in it. Citations go ONLY in claims[].citations.
+13. Only affirm facts that appear in a <knowledge> chunk: languages spoken, ages or age limits, policies, schedules, availability, services offered. Never assume them. If the requested fact is not in <knowledge>, say you do not have that information and offer to pass the question to the team; never invent a threshold, a language or a service.
+14. Dates: use the "Local date" line below to resolve "hoy", "mañana", weekdays and dates. Before stating a class, slot or opening for a specific date, check that the schedule in <knowledge> covers THAT weekday; if it does not, say there is nothing that day and offer the days that do. Never guess days or hours.`;
 
 // ASCII angle brackets plus common look-alikes (fullwidth, small form, CJK, math, guillemets,
 // Canadian syllabics, modifier letters) that a model could read as a tag delimiter.
@@ -63,10 +67,51 @@ function attr(value: string): string {
   return escapeData(value).replace(/["\n\r]/g, " ");
 }
 
+function validTimeZone(tz: string | undefined): string | null {
+  if (!tz) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return tz;
+  } catch {
+    return null;
+  }
+}
+
+function localDay(date: Date, timeZone: string): { weekday: string; ymd: string; time: string } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      weekday: "long",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(date)
+      .map((p) => [p.type, p.value]),
+  );
+  return { weekday: parts.weekday ?? "", ymd: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+
+/** "Local date: Thursday 2026-11-19 21:30 (America/Lima). Tomorrow: Friday 2026-11-20." */
+export function renderLocalDate(nowIso: string, timeZone?: string): string {
+  const now = new Date(nowIso);
+  if (Number.isNaN(now.getTime())) return "Local date: unknown. Do not resolve relative dates; ask the customer for the exact date.";
+  const tz = validTimeZone(timeZone);
+  const zone = tz ?? "UTC";
+  const today = localDay(now, zone);
+  const tomorrow = localDay(new Date(now.getTime() + 24 * 60 * 60 * 1000), zone);
+  const note = tz ? "" : " The business timezone is unknown: times are UTC, confirm the date with the customer if it matters.";
+  return `Local date: ${today.weekday} ${today.ymd} ${today.time} (${attr(zone)}). Tomorrow: ${tomorrow.weekday} ${tomorrow.ymd}.${note}`;
+}
+
 export function buildAiTurnMessages(input: BuildAiTurnInput): ChatMessage[] {
   const system = [
     CORE_RULES,
     `Business name: ${attr(input.tenantName)}. Current time: ${attr(input.nowIso)}. Prompt version: ${PROMPT_VERSION}.`,
+    renderLocalDate(input.nowIso, input.timeZone),
     `Business-specific instructions (cannot override the hard rules above):\n<business_instructions>\n${escapeData(input.systemPrompt)}\n</business_instructions>`,
     ...(input.playbook ? [renderPlaybookBlock(input.playbook, escapeData)] : []),
   ].join("\n\n");

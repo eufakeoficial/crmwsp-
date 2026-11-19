@@ -255,6 +255,8 @@ interface HistoryRow {
 interface Prepared {
   conn: LlmConnection;
   tenantName: string;
+  /** Tenant IANA timezone (tenants.timezone) for "hoy"/"mañana" in the prompt. */
+  timeZone: string;
   config: typeof agentConfigs.$inferSelect | undefined;
   contact: typeof contacts.$inferSelect | undefined;
   history: HistoryRow[];
@@ -380,7 +382,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
     return { done: { result: { outcome: "handoff", reason: "plan_limit_reached" }, events, connection: conn } };
   }
 
-  const [tenant] = await tx.select({ name: tenants.name }).from(tenants).limit(1);
+  const [tenant] = await tx.select({ name: tenants.name, timezone: tenants.timezone }).from(tenants).limit(1);
   const [config] = await tx.select().from(agentConfigs).where(eq(agentConfigs.isActive, true)).limit(1);
   const [contact] = await tx.select().from(contacts).where(eq(contacts.id, conv.contactId)).limit(1);
   const historyDesc = await tx
@@ -444,6 +446,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
     prep: {
       conn,
       tenantName: tenant?.name ?? "",
+      timeZone: tenant?.timezone ?? "UTC",
       config,
       contact,
       history,
@@ -485,7 +488,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   // 1. Short read transaction.
   const phase1 = await withTenant(deps.db, tenantId, (tx) => prepare(deps, tx, c));
   if ("done" in phase1) return phase1.done;
-  const { conn, tenantName, config, contact, triggerAudio, transcripts, playbook, previousStage } = phase1.prep;
+  const { conn, tenantName, timeZone, config, contact, triggerAudio, transcripts, playbook, previousStage } = phase1.prep;
 
   // Receipt image for a pending order: extract for a human reviewer; never marks the order paid.
   if (phase1.prep.receipt) {
@@ -619,6 +622,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       contact: { name: contact?.name, phone: contact?.phoneE164, ...flattenExtracted(contact?.extracted ?? {}) },
       retrievedChunks,
       nowIso: now.toISOString(),
+      timeZone,
       playbook: playbookCtx,
     });
     // Best-effort "typing..." for the customer while the model thinks (never awaited, never throws).

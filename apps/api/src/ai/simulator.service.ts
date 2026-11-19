@@ -102,10 +102,10 @@ export class SimulatorService {
   async simulate(db: TenantDb, req: SimulateRequest, now = new Date()): Promise<SimulationResult> {
     const ctx = await db.run(async (tx) => {
       const [conn] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)).limit(1);
-      const [tenant] = await tx.select({ name: tenants.name }).from(tenants).limit(1);
+      const [tenant] = await tx.select({ name: tenants.name, timezone: tenants.timezone }).from(tenants).limit(1);
       const [config] = await tx.select().from(agentConfigs).where(eq(agentConfigs.isActive, true)).limit(1);
       const budget = conn ? await readBudget(tx, conn) : undefined;
-      return { conn, tenantName: tenant?.name ?? "", config, budgetExceeded: budget?.exceeded === true };
+      return { conn, tenantName: tenant?.name ?? "", timeZone: tenant?.timezone ?? "UTC", config, budgetExceeded: budget?.exceeded === true };
     });
     const conn = ctx.conn;
     if (!conn || !conn.apiKeyEncrypted) throw new ValidationError("Connect and test an AI provider before simulating");
@@ -153,6 +153,7 @@ export class SimulatorService {
           return { chunkId: h.id, content: h.content, ...(title ? { title } : {}) };
         }),
         nowIso: now.toISOString(),
+        timeZone: ctx.timeZone,
       });
       await callModel(provider, conn, chatMessages, calls);
 
