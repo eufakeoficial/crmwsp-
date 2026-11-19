@@ -4,9 +4,9 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
 import { auditEvents, channelConnections, contacts, conversations, createDb, eq, inArray, messages, tenants, users, type DbHandle } from "@crmwsp/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Test } from "@nestjs/testing";
+import { NestFactory } from "@nestjs/core";
 import { AppModule } from "../app.module.js";
-import { GUPSHUP_VERIFIER } from "../channels/channels.constants.js";
+import { ChannelsController, type GupshupCredentialVerifier } from "../channels/channels.controller.js";
 
 const hasEnv = Boolean(process.env["DATABASE_URL"] && process.env["DATABASE_URL_MIGRATOR"] && process.env["REDIS_URL"]);
 
@@ -49,14 +49,12 @@ describe.skipIf(!hasEnv)("channel credentials edit and health (e2e)", () => {
     process.env["PUBLIC_API_URL"] = "https://api.example.test/";
     migrator = createDb(process.env["DATABASE_URL_MIGRATOR"] as string, { max: 2 });
     // Never reach the real Gupshup API from tests.
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(GUPSHUP_VERIFIER)
-      .useValue(async (apiKey: string, appName: string) => {
-        verifyCalls.push([apiKey, appName]);
-        return { status: verdict };
-      })
-      .compile();
-    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter(), { logger: false });
+    // (Test.createTestingModule cannot be used: WebhooksModule needs the Fastify adapter at compile time.)
+    app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { logger: false });
+    (app.get(ChannelsController) as unknown as { verifyGupshup: GupshupCredentialVerifier }).verifyGupshup = async (apiKey, appName) => {
+      verifyCalls.push([apiKey, appName]);
+      return { status: verdict };
+    };
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
     const a = await signup(accounts.a);
