@@ -117,6 +117,12 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Flips the global require_approval flag, so it must not overlap with any other test file.
+      - name: Platform e2e (serial)
+        run: pnpm --filter @crmwsp/api exec vitest run
+        env:
+          PLATFORM_E2E_ONLY: "1"
+
   # Browser E2E for the web app. The API is mocked at the network layer, so no services are needed.
   e2e-web:
     name: e2e-web
