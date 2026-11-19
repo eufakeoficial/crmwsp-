@@ -80,7 +80,7 @@ describe.skipIf(!hasEnv)("PATCH /tenant (e2e)", () => {
   it("owner renames the company (trimmed), slug untouched, audited", async () => {
     const res = await patch("owner", tenantT, { name: "  Nueva Empresa  " });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ id: tenantT, name: "Nueva Empresa" });
+    expect(res.json()).toMatchObject({ id: tenantT, name: "Nueva Empresa" });
     const [row] = await migrator.db.select({ name: tenants.name, slug: tenants.slug }).from(tenants).where(eq(tenants.id, tenantT));
     expect(row).toEqual({ name: "Nueva Empresa", slug: accounts.owner.tenantSlug });
     const [ev] = await migrator.db
@@ -108,5 +108,27 @@ describe.skipIf(!hasEnv)("PATCH /tenant (e2e)", () => {
     expect([403, 404]).toContain(res.statusCode);
     const [row] = await migrator.db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantRival));
     expect(row?.name).toBe("Tenant rival");
+  });
+  it("owner changes the time zone; audited from/to; GET /tenant reflects it", async () => {
+    const res = await patch("owner", tenantT, { timezone: "America/Lima" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ id: tenantT, timezone: "America/Lima" });
+    const [row] = await migrator.db.select({ tz: tenants.timezone }).from(tenants).where(eq(tenants.id, tenantT));
+    expect(row?.tz).toBe("America/Lima");
+    const got = (await app.inject({ method: "GET", url: "/tenant", headers: { cookie: cookies.agent, "x-tenant-id": tenantT } })) as unknown as InjectResult;
+    expect(got.statusCode).toBe(200);
+    expect(got.json()).toMatchObject({ id: tenantT, timezone: "America/Lima" });
+    const evs = await migrator.db.select({ diff: auditEvents.diff }).from(auditEvents).where(and(eq(auditEvents.tenantId, tenantT), eq(auditEvents.action, "tenant.updated")));
+    expect(evs.map((e) => e.diff)).toContainEqual({ timezone: { from: "Europe/Madrid", to: "America/Lima" } });
+  });
+
+  it("rejects invalid zone, empty body and extra keys with 400; agent gets 403; other tenant untouched", async () => {
+    expect((await patch("owner", tenantT, { timezone: "Mars/Olympus" })).statusCode).toBe(400);
+    expect((await patch("owner", tenantT, {})).statusCode).toBe(400);
+    expect((await patch("owner", tenantT, { timezone: "America/Lima", id: "x" })).statusCode).toBe(400);
+    expect((await patch("agent", tenantT, { timezone: "America/Bogota" })).statusCode).toBe(403);
+    await patch("owner", tenantRival, { timezone: "Asia/Tokyo" });
+    const [row] = await migrator.db.select({ tz: tenants.timezone }).from(tenants).where(eq(tenants.id, tenantRival));
+    expect(row?.tz).toBe("Europe/Madrid");
   });
 });

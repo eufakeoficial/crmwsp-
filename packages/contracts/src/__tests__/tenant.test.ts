@@ -15,3 +15,19 @@ describe("updateTenantRequestSchema", () => {
     expect(updateTenantRequestSchema.safeParse({ name: "Acme", slug: "acme" }).success).toBe(false);
   });
 });
+
+describe("updateTenantRequestSchema timezone", () => {
+  it("accepts name only, timezone only or both", () => {
+    expect(updateTenantRequestSchema.safeParse({ name: "Acme" }).success).toBe(true);
+    expect(updateTenantRequestSchema.safeParse({ timezone: "America/Lima" }).success).toBe(true);
+    expect(updateTenantRequestSchema.safeParse({ name: "Acme", timezone: "Europe/Madrid" }).success).toBe(true);
+  });
+  it("requires at least one key", () => {
+    expect(updateTenantRequestSchema.safeParse({}).success).toBe(false);
+  });
+  it("rejects unknown zones, long zones and extra keys", () => {
+    expect(updateTenantRequestSchema.safeParse({ timezone: "Mars/Olympus" }).success).toBe(false);
+    expect(updateTenantRequestSchema.safeParse({ timezone: "A".repeat(65) }).success).toBe(false);
+    expect(updateTenantRequestSchema.safeParse({ timezone: "America/Lima", slug: "x" }).success).toBe(false);
+  });
+});
