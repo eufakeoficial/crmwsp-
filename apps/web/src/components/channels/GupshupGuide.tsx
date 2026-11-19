@@ -2,7 +2,8 @@
 
 import { ExternalLink, Plug } from "lucide-react";
 import type { ReactNode } from "react";
-import { Accordion, type AccordionItem, Alert, Button, Card } from "@/components/ui";
+import { Accordion, type AccordionItem, AiAssistButton, Alert, Button, Card } from "@/components/ui";
+import { buildApiKeyPrompt, buildPartnerCredentialsPrompt } from "@/lib/ai-assist-prompts";
 import { GUPSHUP_SIGNUP_URL } from "./ConnectChannelPanel";
 
 interface GuideStep {
@@ -72,6 +73,10 @@ const STEPS: GuideStep[] = [
           <li><b>ID de app (opcional):</b> el identificador de tu app; en la sección de tu app busca &quot;App ID&quot;.</li>
           <li><b>Token de Partner (opcional):</b> en los detalles de tu app busca el token de la app (&quot;App token&quot;). Junto con el ID de app permite crear y sincronizar plantillas; completa los dos o ninguno.</li>
         </ul>
+        <div className="flex flex-wrap gap-2">
+          <AiAssistButton prompt={buildApiKeyPrompt({})} label="Hacerlo con IA: API key" />
+          <AiAssistButton prompt={buildPartnerCredentialsPrompt({})} label="Hacerlo con IA: ID de app y token" />
+        </div>
         <p className="m-0 text-muted">Los nombres exactos de los menús pueden cambiar. Si no ves un dato, busca en los ajustes o detalles de tu app, o consulta el soporte de Gupshup.</p>
       </>
     ),

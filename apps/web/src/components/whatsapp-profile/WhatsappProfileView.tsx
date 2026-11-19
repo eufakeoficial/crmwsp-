@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { canManageChannels } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
-import { Alert, CHIP_ROW, Chip, Toast, buttonClasses } from "@/components/ui";
+import { AiAssistButton, Alert, CHIP_ROW, Card, Chip, Toast, buttonClasses } from "@/components/ui";
+import { buildProfilePrompt } from "@/lib/ai-assist-prompts";
 import { cn } from "@/lib/cn";
 import { useToast } from "@/lib/hooks/use-toast";
 import { channelsApi } from "@/lib/inbox-api";
@@ -62,11 +63,15 @@ export function WhatsappProfileView() {
           <Link href="/app/channels" className={buttonClasses("accent", "mt-3", "sm")}>Ir a Canales</Link>
         </EmptyState>
       ) : channel && !channel.partnerConfigured ? (
-        <MissingCredentialsCard phone={channel.phoneE164} />
+        <MissingCredentialsCard phone={channel.phoneE164} appName={channel.appName} />
       ) : channel ? (
         <div className="flex flex-col gap-4">
           <ProfileEditor key={channel.id} channelId={channel.id} onSaved={show} />
-          <DisplayNameCard key={`dn-${channel.id}`} channelId={channel.id} onSent={show} />
+          <DisplayNameCard key={`dn-${channel.id}`} channelId={channel.id} phone={channel.phoneE164} onSent={show} />
+          <Card className="flex flex-col items-start gap-2">
+            <p className="m-0 text-sm text-muted">¿Algo del perfil no se puede cambiar desde aquí? Pide a tu asistente de IA que lo complete por ti en Meta.</p>
+            <AiAssistButton prompt={buildProfilePrompt({ phone: channel.phoneE164, appName: channel.appName })} label="Hacerlo con IA: completar el perfil" />
+          </Card>
         </div>
       ) : null}
       <Toast message={message} />

@@ -1,11 +1,12 @@
 import { Lock } from "lucide-react";
 import Link from "next/link";
-import { Card, buttonClasses } from "@/components/ui";
+import { AiAssistButton, Card, buttonClasses } from "@/components/ui";
+import { buildPartnerCredentialsPrompt } from "@/lib/ai-assist-prompts";
 
 export const GUPSHUP_PARTNER_PORTAL_URL = "https://partner.gupshup.io";
 
 /** Shown when the channel has no Gupshup Partner "ID de app" + "Token de Partner" yet. */
-export function MissingCredentialsCard({ phone }: { phone: string }) {
+export function MissingCredentialsCard({ phone, appName }: { phone: string; appName?: string | null }) {
   return (
     <Card className="flex flex-col items-start gap-3">
       <p className="m-0 flex items-center gap-2 font-bold"><Lock aria-hidden className="size-4" />Falta conectar el perfil de {phone}</p>
@@ -24,6 +25,7 @@ export function MissingCredentialsCard({ phone }: { phone: string }) {
         <li>En la misma app, genera o copia el <b>Token de Partner</b>.</li>
         <li>Vuelve a Canales y pégalos en «Configurar plantillas» de tu número.</li>
       </ol>
+      <AiAssistButton prompt={buildPartnerCredentialsPrompt({ appName })} label="Hacerlo con IA: conseguir ID de app y token" />
       <Link href="/app/channels" className={buttonClasses("accent", "mt-1", "sm")}>Ir a Canales</Link>
     </Card>
   );
