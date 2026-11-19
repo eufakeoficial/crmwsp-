@@ -147,7 +147,7 @@ export function ChannelHealthLines({ health }: { health: ChannelHealth }) {
       </p>
       {t.invalidCredentials ? (
         <p className="m-0" data-testid="channel-health-credentials">
-          <StatusChip label="Credenciales inválidas" tone="danger" />
+          <StatusChip label="Credenciales invÃ¡lidas" tone="danger" />
         </p>
       ) : null}
       {out ? (
