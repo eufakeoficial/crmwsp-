@@ -782,18 +782,25 @@ export class ChannelsController {
     const input = parseOrThrow(updateGupshupCredentialsRequestSchema, body);
     if (!this.cipher) throw new EncryptionNotConfiguredError();
     const current = await db.run(async (tx) => {
-      const [ch] = await tx.select({ provider: channelConnections.provider }).from(channelConnections).where(eq(channelConnections.id, id));
+      const [ch] = await tx.select({ provider: channelConnections.provider, appName: channelConnections.externalAppId }).from(channelConnections).where(eq(channelConnections.id, id));
       return ch;
     });
     if (!current) throw new NotFoundError();
     if (current.provider !== "gupshup") throw new ValidationError("Solo los canales de Gupshup tienen API key editable.");
+    // The partner app id and token belong to the old app: drop them when the app changes (the request carries no partner credentials).
+    const partnerCleared = current.appName !== input.appName;
     await this.assertGupshupCredentials(input.apiKey, input.appName);
     const credentials = this.cipher.encrypt(input.apiKey, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
     try {
       const row = await db.run(async (tx) => {
         const [updated] = await tx
           .update(channelConnections)
-          .set({ externalAppId: input.appName, credentialsEncrypted: credentials, updatedAt: new Date() })
+          .set({
+            externalAppId: input.appName,
+            credentialsEncrypted: credentials,
+            ...(partnerCleared ? { gupshupAppId: null, partnerTokenEncrypted: null } : {}),
+            updatedAt: new Date(),
+          })
           .where(eq(channelConnections.id, id))
           .returning();
         if (!updated) throw new NotFoundError();
@@ -803,7 +810,7 @@ export class ChannelsController {
           entity: "channel_connection",
           entityId: id,
           action: "channel.credentials_updated",
-          diff: { appName: input.appName },
+          diff: { appName: input.appName, ...(partnerCleared ? { partnerCleared: true } : {}) },
           ip: req.ip,
         });
         return updated;

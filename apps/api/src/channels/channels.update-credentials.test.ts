@@ -53,4 +53,40 @@ describe("PATCH /channels/:id/credentials", () => {
     expect(verify).toHaveBeenCalledWith(BODY.apiKey, BODY.appName);
     expect(cipher.encrypt).toHaveBeenCalledWith(BODY.apiKey, { tenantId: "t1", purpose: "gupshup_api_key" });
   });
+
+  describe("partner credentials on app change", () => {
+    async function runUpdate(currentApp: string | undefined) {
+      const sets: Record<string, unknown>[] = [];
+      const audits: unknown[] = [];
+      const row = { id: ID, provider: "gupshup", status: "active", externalAppId: BODY.appName, gupshupAppId: null, partnerTokenEncrypted: null };
+      const tx = {
+        update: () => ({ set: (v: Record<string, unknown>) => (sets.push(v), { where: () => ({ returning: async () => [row] }) }) }),
+        insert: () => ({ values: async (v: unknown) => (audits.push(v), undefined) }),
+      };
+      let calls = 0;
+      const run = vi.fn(async (fn: (t: unknown) => unknown) => {
+        calls += 1;
+        return calls === 1 ? { provider: "gupshup", appName: currentApp } : fn(tx);
+      });
+      const cipher = { encrypt: vi.fn(() => Buffer.from("c")), decrypt: vi.fn() } as unknown as CipherBox;
+      const db = { tenantId: "t1", userId: "u1", run } as unknown as TenantDb;
+      const controller = new ChannelsController(cipher, {} as WhatsAppProvider, null, {} as never, undefined, valid);
+      await controller.updateCredentials(db, ID, BODY, req).catch(() => undefined);
+      return { sets, audits };
+    }
+
+    it("clears the partner app id and token when the app name changes", async () => {
+      const { sets, audits } = await runUpdate("OldApp");
+      expect(sets[0]).toMatchObject({ externalAppId: BODY.appName, gupshupAppId: null, partnerTokenEncrypted: null });
+      expect(JSON.stringify(audits)).toContain("partnerCleared");
+      expect(JSON.stringify(audits)).not.toContain(BODY.apiKey);
+    });
+
+    it("keeps them when only the key changes", async () => {
+      const { sets, audits } = await runUpdate(BODY.appName);
+      expect(sets[0]).not.toHaveProperty("gupshupAppId");
+      expect(sets[0]).not.toHaveProperty("partnerTokenEncrypted");
+      expect(JSON.stringify(audits)).not.toContain("partnerCleared");
+    });
+  });
 });
