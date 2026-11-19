@@ -3,6 +3,7 @@ import {
   PROMPT_VERSION,
   aiTurnResponseFormat,
   buildAiTurnMessages,
+  sanitizeTurnReply,
   estimateCost,
   type ChatResult,
   type LLMProvider,
@@ -255,6 +256,8 @@ interface HistoryRow {
 interface Prepared {
   conn: LlmConnection;
   tenantName: string;
+  /** Tenant IANA timezone (tenants.timezone) for "hoy"/"mañana" in the prompt. */
+  timeZone: string;
   config: typeof agentConfigs.$inferSelect | undefined;
   contact: typeof contacts.$inferSelect | undefined;
   history: HistoryRow[];
@@ -380,7 +383,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
     return { done: { result: { outcome: "handoff", reason: "plan_limit_reached" }, events, connection: conn } };
   }
 
-  const [tenant] = await tx.select({ name: tenants.name }).from(tenants).limit(1);
+  const [tenant] = await tx.select({ name: tenants.name, timezone: tenants.timezone }).from(tenants).limit(1);
   const [config] = await tx.select().from(agentConfigs).where(eq(agentConfigs.isActive, true)).limit(1);
   const [contact] = await tx.select().from(contacts).where(eq(contacts.id, conv.contactId)).limit(1);
   const historyDesc = await tx
@@ -444,6 +447,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
     prep: {
       conn,
       tenantName: tenant?.name ?? "",
+      timeZone: tenant?.timezone ?? "UTC",
       config,
       contact,
       history,
@@ -485,7 +489,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   // 1. Short read transaction.
   const phase1 = await withTenant(deps.db, tenantId, (tx) => prepare(deps, tx, c));
   if ("done" in phase1) return phase1.done;
-  const { conn, tenantName, config, contact, triggerAudio, transcripts, playbook, previousStage } = phase1.prep;
+  const { conn, tenantName, timeZone, config, contact, triggerAudio, transcripts, playbook, previousStage } = phase1.prep;
 
   // Receipt image for a pending order: extract for a human reviewer; never marks the order paid.
   if (phase1.prep.receipt) {
@@ -537,6 +541,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   // 2. Provider calls, outside any transaction (no pooled connection held while the LLM thinks).
   let calls: ModelCall[];
   let hits: ChunkHit[] = [];
+  let customerText = "";
   /** Objection ids offered in this turn's prompt: the only ones the model may report back. */
   let offeredObjectionIds: string[] = [];
   let queryEmbeddingTokens: { model: string; tokens: number } | undefined;
@@ -576,6 +581,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       m.type === "audio" && !m.body?.trim() && transcripts.has(m.id) ? { ...m, body: `[voice note] ${transcripts.get(m.id)}` } : m,
     );
     const query = buildQuery(history);
+    customerText = query;
     let sourceTitles = new Map<string, string>();
     if (query !== "") {
       let vector: { embedding: number[]; model: string; dims: number } | undefined;
@@ -617,6 +623,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       contact: { name: contact?.name, phone: contact?.phoneE164, ...flattenExtracted(contact?.extracted ?? {}) },
       retrievedChunks,
       nowIso: now.toISOString(),
+      timeZone,
       playbook: playbookCtx,
     });
     // Best-effort "typing..." for the customer while the model thinks (never awaited, never throws).
@@ -653,6 +660,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       hits,
       contextIds,
       confidenceThreshold,
+      customerText,
       queryEmbeddingTokens,
       playbook: { enabled: playbook.enabled, offeredObjectionIds },
     }),
@@ -754,6 +762,8 @@ interface PersistInput {
   hits: ChunkHit[];
   contextIds: Set<string>;
   confidenceThreshold: number;
+  /** Customer text of this turn: tells a courtesy handoff from a request for a person (ADR 0023). */
+  customerText: string;
   queryEmbeddingTokens: { model: string; tokens: number } | undefined;
   /** Sales playbook state of the turn: detection is stored only while it is enabled. */
   playbook: { enabled: boolean; offeredObjectionIds: string[] };
@@ -789,7 +799,8 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
 
   const handoff = handoffWriter(tx, c, events);
   const final = p.calls[p.calls.length - 1]!;
-  const output = final.result.parsed as AiTurnOutput;
+  // Bare chunk UUIDs and "[n]" markers are stripped against the chunks the model actually saw.
+  const output = sanitizeTurnReply(final.result.parsed as AiTurnOutput, { chunkIds: p.hits.map((h) => h.id) });
   const modelUsed = final.model;
   const detected = p.playbook.enabled ? sanitizeDetectedPlaybook(output, p.playbook.offeredObjectionIds) : {};
   // Auto only when nobody (human or handoff) owns the conversation; otherwise drafts.
@@ -808,6 +819,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
     policies: toTenantPolicies(p.config?.policies ?? {}),
     now,
     mode,
+    customerText: p.customerText,
   });
 
   const actionIds: string[] = [];

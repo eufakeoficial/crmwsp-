@@ -33,6 +33,22 @@ describe("dryRunTurn", () => {
     expect(checks.map((c) => c.passed)).toEqual([true, false]);
   });
 
+  it("grounded answer with a courtesy handoff is sent AND handed off (ADR 0023)", () => {
+    const output = {
+      reply: { text: "Cuesta 50 EUR.", claims: [{ kind: "price" as const, text: "50 EUR", citations: [{ chunkId: "c1" }] }] },
+      needsHuman: true,
+      actions: [{ type: "handoff" as const, reason: "seguimiento" }],
+    };
+    const r = dryRunTurn(base(output, { customerText: "¿Cuánto cuesta el servicio básico?" }));
+    expect(r.reply!.outcome).toBe("send");
+    expect(r.handoff).toBe(true);
+    expect(checkExpectations(r, ["must_reply", "must_cite_price", "must_handoff"]).every((c) => c.passed)).toBe(true);
+    // The customer asked for a person: same output stays blocked.
+    const blocked = dryRunTurn(base(output, { customerText: "Quiero hablar con una persona" }));
+    expect(blocked.reply!.outcome).toBe("blocked");
+    expect(blocked.handoff).toBe(true);
+  });
+
   it("maps decisions to verdicts: discount needs approval, 70% blocked, quote on unknown chunk blocked", () => {
     const r = dryRunTurn(
       base({
