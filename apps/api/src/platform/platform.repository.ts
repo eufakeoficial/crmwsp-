@@ -128,7 +128,7 @@ export class PlatformRepository {
     const rows = await this.sql<PaymentRow[]>`
       select payment_id, tenant_id, tenant_name, amount_minor, currency, period_start::text as period_start,
              period_end::text as period_end, method, reference, notes, recorded_by_email, created_at
-      from public.platform_list_payments(${actor}, ${f.tenantId ?? null}, ${f.from ?? null}, ${f.to ?? null})`;
+      from public.platform_list_payments(${actor}, ${f.tenantId ?? null}, ${f.from?.toISOString() ?? null}::timestamptz, ${f.to?.toISOString() ?? null}::timestamptz)`;
     return rows.map((r) => ({
       id: r.payment_id,
       tenantId: r.tenant_id,
@@ -329,7 +329,7 @@ export class PlatformRepository {
         total_count: string;
       }[]
     >`select event_id, actor_email, action, tenant_id, tenant_name, diff, created_at, total_count
-      from public.platform_audit_search(${actor}, ${f.actor}, ${f.action}, ${f.tenantId}, ${f.from}, ${f.to}, ${f.limit}, ${f.offset})`;
+      from public.platform_audit_search(${actor}, ${f.actor}, ${f.action}, ${f.tenantId}, ${f.from?.toISOString() ?? null}::timestamptz, ${f.to?.toISOString() ?? null}::timestamptz, ${f.limit}, ${f.offset})`;
     return {
       total: rows[0] ? Number(rows[0].total_count) : 0,
       items: rows.map((r) => ({
