@@ -36,6 +36,9 @@ export interface TypingDeps {
  * Best-effort "typing..." indicator before an automatic AI reply. Never throws: any failure is logged
  * (error class only, no credentials) and swallowed. Skips unless the AI will auto-reply, the 24 h
  * window is open, the inbound has a provider id and the channel has what the BSP needs.
+ *
+ * Note: by design this also marks the inbound message as read. Gupshup requires status "read"
+ * together with typing_indicator, so there is no way to show "typing..." without the read receipt.
  */
 export async function sendTypingIndicator(deps: TypingDeps): Promise<boolean> {
   try {
