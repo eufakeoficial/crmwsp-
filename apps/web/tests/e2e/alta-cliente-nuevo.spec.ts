@@ -75,7 +75,8 @@ test.describe("1. Registro", () => {
     await page.getByLabel("Rubro del negocio").selectOption("servicios");
     await page.getByRole("button", { name: "Crear cuenta" }).click();
 
-    await expect(page).toHaveURL(/\/app\/inbox$/);
+    // First visit compiles the route in `next dev`, which can exceed the default timeout.
+    await expect(page).toHaveURL(/\/app\/inbox$/, { timeout: 30_000 });
     const sent = api.requests.find((r) => r.method === "POST" && r.path === "/auth/signup");
     expect(sent?.body).toMatchObject({
       email: "ana@example.test",
@@ -159,7 +160,7 @@ test.describe("3. Primeros pasos", () => {
     await expect(card.getByRole("link", { name: "Prefiero un asistente paso a paso" })).toHaveAttribute("href", "/app/onboarding");
 
     await card.getByRole("link", { name: "Probar", exact: true }).click();
-    await expect(page).toHaveURL(/\/app\/settings\/ai\/simulator$/);
+    await expect(page).toHaveURL(/\/app\/settings\/ai\/simulator$/, { timeout: 30_000 });
   });
 
   test("«Ya lo hice» marca el simulador y el contador sube a 3 de 4", async ({ page, api }) => {
