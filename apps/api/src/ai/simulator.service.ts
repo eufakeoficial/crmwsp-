@@ -33,6 +33,7 @@ import {
   usageLedger,
   type ChunkHit,
   type LlmConnection,
+  isActiveChatConnection,
 } from "@crmwsp/db";
 import { dryRunTurn, toTenantPolicies, type SimulatedChunk } from "@crmwsp/domain";
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
@@ -102,7 +103,7 @@ export class SimulatorService {
 
   async simulate(db: TenantDb, req: SimulateRequest, now = new Date()): Promise<SimulationResult> {
     const ctx = await db.run(async (tx) => {
-      const [conn] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)).limit(1);
+      const [conn] = await tx.select().from(llmConnections).where(isActiveChatConnection).limit(1);
       const [tenant] = await tx.select({ name: tenants.name, timezone: tenants.timezone }).from(tenants).limit(1);
       const [config] = await tx.select().from(agentConfigs).where(eq(agentConfigs.isActive, true)).limit(1);
       const budget = conn ? await readBudget(tx, conn) : undefined;

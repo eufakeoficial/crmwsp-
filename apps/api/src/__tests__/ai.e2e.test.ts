@@ -7,6 +7,7 @@ import {
   aiActionItemListSchema,
   aiConnectionSchema,
   aiTestResultSchema,
+  aiTranscriptionStatusSchema,
   aiUsageSchema,
   errorResponseSchema,
   knowledgeConflictListSchema,
@@ -291,6 +292,71 @@ describe.skipIf(!hasEnv)("AI settings, knowledge and approvals (e2e, real Postgr
       const del = await asB("DELETE", "/ai/connection");
       expect(del.statusCode).toBe(204);
       expect((await asB("GET", "/ai/connection")).json()).toBeNull();
+      expect(aiConnectionSchema.safeParse((await asA("GET", "/ai/connection")).json()).success).toBe(true);
+    });
+  });
+
+  // ------------------------------------------------- transcription (ADR 0024)
+
+  describe("transcription connection", () => {
+    const TR_KEY = `sk-audio-${randomUUID()}`;
+    const url = "/ai/transcription-connection";
+
+    it("agents get 403 on writes; GET reports no dedicated connection yet", async () => {
+      expect((await asAgent("PUT", url, { apiKey: TR_KEY })).statusCode).toBe(403);
+      expect((await asAgent("POST", `${url}/test`)).statusCode).toBe(403);
+      expect((await asAgent("DELETE", url)).statusCode).toBe(403);
+      expect(aiTranscriptionStatusSchema.parse((await asA("GET", url)).json()).connection).toBeNull();
+      expect((await asA("PUT", url, {})).statusCode).toBe(400);
+    });
+
+    it("saves a second connection next to the chat one, encrypted and never returned", async () => {
+      const res = await asA("PUT", url, { apiKey: TR_KEY, baseUrl: "https://evil.example.com/v1" });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toContain(TR_KEY);
+      expect(res.json()).toMatchObject({ provider: "openai", baseUrl: "https://api.openai.com/v1", model: "whisper-1" });
+      const rows = await migrator.db.select().from(llmConnections).where(eq(llmConnections.tenantId, s.tenantA));
+      expect(rows.filter((r) => r.isActive).map((r) => r.purpose).sort()).toEqual(["chat", "transcription"]);
+      const tr = rows.find((r) => r.purpose === "transcription")!;
+      expect(tr.apiKeyEncrypted!.toString("utf8")).not.toContain(TR_KEY);
+      expect(aiConnectionSchema.parse((await asA("GET", "/ai/connection")).json()).purpose).toBe("chat");
+      expect((await asAgent("GET", url)).json()).toMatchObject({ connection: { apiKeyHint: null } });
+    });
+
+    it("rejects an unsafe custom base URL", async () => {
+      const res = await asA("PUT", url, { provider: "custom", baseUrl: "http://127.0.0.1/v1", apiKey: TR_KEY });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("test transcribes a tiny clip with the stored key and activates audios", async () => {
+      const seen: string[] = [];
+      factory.fetchImpl = async (input, init) => {
+        seen.push(`${String(input)} ${new Headers(init?.headers).get("authorization")}`);
+        return String(input).endsWith("/audio/transcriptions") ? jsonResponse({ text: "" }) : jsonResponse({}, 404);
+      };
+      const res = await asA("POST", `${url}/test`);
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true });
+      expect(seen).toEqual([`https://api.openai.com/v1/audio/transcriptions Bearer ${TR_KEY}`]);
+      const status = aiTranscriptionStatusSchema.parse((await asA("GET", url)).json());
+      expect(status.source).toBe("dedicated");
+      expect(status.connection?.lastTestOk).toBe(true);
+    });
+
+    it("a failing test is sanitized and never a 500", async () => {
+      factory.fetchImpl = async () => jsonResponse({ error: { message: `Incorrect API key provided: ${TR_KEY}` } }, 401);
+      const res = await asA("POST", `${url}/test`);
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: false });
+      expect(res.body).not.toContain(TR_KEY);
+    });
+
+    it("tenant B neither sees nor deletes A's transcription connection; A can remove it", async () => {
+      expect(aiTranscriptionStatusSchema.parse((await asB("GET", url)).json()).connection).toBeNull();
+      expect((await asB("DELETE", url)).statusCode).toBe(204);
+      expect(aiTranscriptionStatusSchema.parse((await asA("GET", url)).json()).connection).not.toBeNull();
+      expect((await asA("DELETE", url)).statusCode).toBe(204);
+      expect(aiTranscriptionStatusSchema.parse((await asA("GET", url)).json()).connection).toBeNull();
       expect(aiConnectionSchema.safeParse((await asA("GET", "/ai/connection")).json()).success).toBe(true);
     });
   });
