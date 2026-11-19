@@ -2,11 +2,12 @@
 
 import type { AiMode, InboxConversation, TagDto, TenantMember } from "@crmwsp/contracts";
 import { AlarmClock, ArrowLeft, Bot, CircleCheck, MailOpen, PanelRight, RotateCcw, Tag } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import { AI_MODE_OPTIONS, REMINDER_PRESETS, TAG_COLORS, localInputToIso } from "./inbox-meta";
+import { AiStatusPill } from "./AiStatusPill";
 import { MenuItem, Popover } from "./Popover";
 
 /** Inline text dropdown under the contact name: looks like a link, behaves like a select. */
@@ -74,6 +75,7 @@ export function ConversationHeader({
   const paused = conversation.automationsPausedUntil !== null && new Date(conversation.automationsPausedUntil) > new Date();
   const assignedId = assignee?.id === meId ? "me" : (assignee?.id ?? "");
   const hasTags = new Set(conversation.contactTags);
+  const aiSelect = useRef<HTMLSelectElement>(null);
   return (
     <header className="flex flex-col border-b border-line bg-white">
       <div className="flex items-center gap-3 px-4 py-2.5">
@@ -143,6 +145,7 @@ export function ConversationHeader({
           </button>
         </div>
         <select
+          ref={aiSelect}
           aria-label="Modo de IA de esta conversación"
           title="Modo de IA de esta conversación"
           className="ml-auto h-8 max-w-60 cursor-pointer rounded-lg border border-line-2 bg-white px-2 text-[12px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
@@ -159,6 +162,18 @@ export function ConversationHeader({
           Ocultar mensajes del sistema
         </label>
       </div>
+      <AiStatusPill
+        input={{
+          aiMode: conversation.aiMode,
+          status: conversation.status,
+          inboxStatus: conversation.inboxStatus,
+          assigneeName: assignee ? (assignee.name ?? assignee.email) : null,
+          pausedUntil: conversation.automationsPausedUntil,
+        }}
+        busy={busy}
+        onResume={() => onPause(null)}
+        onFocusMode={() => aiSelect.current?.focus()}
+      />
     </header>
   );
 }
