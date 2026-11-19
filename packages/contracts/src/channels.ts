@@ -27,6 +27,25 @@ export const updateGupshupCredentialsRequestSchema = z.object({
 });
 export type UpdateGupshupCredentialsRequest = z.infer<typeof updateGupshupCredentialsRequestSchema>;
 
+/** POST /channels/:id/reveal-api-key (owner only, ADR 0022). The password is re-checked on every call. */
+export const revealChannelApiKeyRequestSchema = z
+  .object({
+    password: z.string().min(1).max(256),
+  })
+  .strict();
+export type RevealChannelApiKeyRequest = z.infer<typeof revealChannelApiKeyRequestSchema>;
+
+/** Seconds the web shows a revealed key before hiding it. */
+export const REVEALED_API_KEY_TTL_SECONDS = 30;
+
+export const revealChannelApiKeyResponseSchema = z
+  .object({
+    apiKey: z.string().min(1),
+    expiresInSeconds: z.number().int().positive(),
+  })
+  .strict();
+export type RevealChannelApiKeyResponse = z.infer<typeof revealChannelApiKeyResponseSchema>;
+
 /** PUT /channels/:id/partner-credentials. The token is write-only: it is never returned. */
 export const setPartnerCredentialsRequestSchema = z.object({
   gupshupAppId: z.string().trim().min(1).max(128),

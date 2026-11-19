@@ -6,6 +6,7 @@ import { FileText, Inbox, KeyRound, Pencil, Power, RefreshCw, Send } from "lucid
 import { AiAssistButton, Button, Card, StatusChip, type Tone } from "@/components/ui";
 import { buildApiKeyPrompt, buildRechargePrompt, buildVerifyChannelPrompt, buildWebhookPrompt } from "@/lib/ai-assist-prompts";
 import { channelHealthText } from "@/lib/channel-health";
+import { RevealApiKeyPanel } from "./RevealApiKeyPanel";
 import { WalletBalanceLine } from "./WalletBalanceLine";
 import { WebhookUrlBox } from "./WebhookUrlBox";
 
@@ -37,6 +38,7 @@ export function ChannelCard({
   onPartner,
   onCredentials,
   health,
+  canRevealKey = false,
   children,
 }: {
   channel: Channel;
@@ -48,6 +50,8 @@ export function ChannelCard({
   onCredentials: () => void;
   /** Last activity of the channel; undefined while loading or when it could not be read. */
   health?: ChannelHealth | undefined;
+  /** Owner only (ADR 0022): shows "Mostrar API key" with password re-authentication. */
+  canRevealKey?: boolean;
   /** Inline area below the actions (rotate confirmation, partner credentials form). */
   children?: ReactNode;
 }) {
@@ -129,6 +133,7 @@ export function ChannelCard({
           <Button size="sm" variant={disabled ? "accent" : "outline"} disabled={busy} onClick={onToggle}>
             <Power aria-hidden className="size-4" />{disabled ? "Activar" : "Desactivar"}
           </Button>
+          {canRevealKey && channel.apiKeyHint ? <RevealApiKeyPanel key={channel.id} channelId={channel.id} /> : null}
         </div>
       ) : null}
       {children}
