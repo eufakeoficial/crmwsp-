@@ -5,15 +5,20 @@ import { AppError, ErrorCode } from "@crmwsp/contracts";
  * `ExternalProvider` union in contracts) because BYOK targets arbitrary
  * OpenAI-compatible vendors. Never carries the API key, request body or `cause`.
  */
+/** Why a provider call failed when it is actionable by the tenant (their own key has no balance/quota left). */
+export type LlmFailureReason = "insufficient_quota";
+
 export class LlmProviderError extends AppError {
   readonly provider = "llm" as const;
   readonly retryable: boolean;
   readonly status?: number;
+  readonly reason?: LlmFailureReason;
 
-  constructor(message: string, retryable: boolean, status?: number) {
+  constructor(message: string, retryable: boolean, status?: number, reason?: LlmFailureReason) {
     super(ErrorCode.ExternalProvider, message, 502, status === undefined ? {} : { details: { status } });
     this.retryable = retryable;
     if (status !== undefined) this.status = status;
+    if (reason !== undefined) this.reason = reason;
   }
 }
 
