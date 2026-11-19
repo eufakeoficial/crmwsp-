@@ -87,8 +87,8 @@ export type GupshupCredentialVerifier = (apiKey: string, appName: string) => Pro
 export const GUPSHUP_INVALID_KEY_MESSAGE = "La API key no es válida para esa cuenta de Gupshup.";
 export const GUPSHUP_INVALID_APP_MESSAGE = "No existe una app de Gupshup con ese nombre para esta API key.";
 
-/** Reads the Gupshup wallet balance for an API key; null = unavailable. */
-export type GupshupWalletReader = (apiKey: string) => Promise<GupshupWalletBalance | null>;
+/** Reads the Gupshup wallet balance through the Partner API; null = unavailable. */
+export type GupshupWalletReader = (creds: { appId: string; partnerToken: string }) => Promise<GupshupWalletBalance | null>;
 
 /** The balance is cached per channel so the channels page does not hammer Gupshup. */
 export const WALLET_CACHE_TTL_MS = 5 * 60_000;
@@ -464,7 +464,8 @@ export class ChannelsController {
 
   /**
    * Gupshup wallet balance of the channel (it pays the WhatsApp messages). Owner/admin only because it
-   * uses the stored API key. Never fails: any problem answers `unavailable`. Cached for 5 minutes.
+   * uses the stored Partner token (Gupshup only documents the balance on the Partner API); without it the
+   * answer is `partner_required`. Never fails: any other problem answers `unavailable`. Cached for 5 minutes.
    */
   @Get(":id/balance")
   @Roles("owner", "admin")
@@ -472,21 +473,27 @@ export class ChannelsController {
     if (!isUuid(id)) throw new NotFoundError();
     const channel = await db.run(async (tx) => {
       const [ch] = await tx
-        .select({ provider: channelConnections.provider, credentials: channelConnections.credentialsEncrypted })
+        .select({
+          provider: channelConnections.provider,
+          appId: channelConnections.gupshupAppId,
+          partnerToken: channelConnections.partnerTokenEncrypted,
+        })
         .from(channelConnections)
         .where(eq(channelConnections.id, id));
       return ch;
     });
     if (!channel) throw new NotFoundError();
     const unavailable: WalletBalance = { status: "unavailable" };
-    if (channel.provider !== "gupshup" || !channel.credentials || !this.cipher || !this.readWallet) return unavailable;
+    if (channel.provider !== "gupshup") return unavailable;
+    if (!channel.appId || !channel.partnerToken) return { status: "partner_required" };
+    if (!this.cipher || !this.readWallet) return unavailable;
     const cacheKey = `${db.tenantId}:${id}`;
     const hit = this.walletCache.get(cacheKey);
     if (hit) return hit;
     let value: WalletBalance = unavailable;
     try {
-      const apiKey = this.cipher.decrypt(channel.credentials, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
-      const balance = await this.readWallet(apiKey);
+      const partnerToken = this.cipher.decrypt(channel.partnerToken, { tenantId: db.tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE });
+      const balance = await this.readWallet({ appId: channel.appId, partnerToken });
       if (balance) value = { status: "ok", amount: balance.amount, currency: balance.currency, low: isLowWalletBalance(balance.amount, balance.currency) };
     } catch {
       // Decryption or reader failure: the UI just hides the balance. Nothing is logged (key material).

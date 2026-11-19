@@ -34,6 +34,7 @@ describe("wallet balance contract", () => {
   it("parses ok and unavailable results", () => {
     expect(walletBalanceSchema.safeParse({ status: "ok", amount: 3.2, currency: "USD", low: false }).success).toBe(true);
     expect(walletBalanceSchema.safeParse({ status: "unavailable" }).success).toBe(true);
+    expect(walletBalanceSchema.safeParse({ status: "partner_required" }).success).toBe(true);
     expect(walletBalanceSchema.safeParse({ status: "ok", amount: "x" }).success).toBe(false);
   });
 });

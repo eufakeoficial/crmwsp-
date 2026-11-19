@@ -46,7 +46,7 @@ function cipherFromEnv(): CipherBox | null {
       provide: GUPSHUP_WALLET,
       useFactory: (): GupshupWalletReader => {
         const gupshup = new GupshupProvider();
-        return (apiKey) => gupshup.getWalletBalance(apiKey);
+        return (creds) => gupshup.getWalletBalanceViaPartner(creds);
       },
     },
     { provide: CHANNEL_PROVIDER, useFactory: (): WhatsAppProvider => createDefaultWhatsAppProvider() },

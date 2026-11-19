@@ -117,7 +117,7 @@ export type ChannelHealthListResponse = z.infer<typeof channelHealthListResponse
 /** Gupshup wallet balance below this amount (USD) shows a low-balance warning. */
 export const GUPSHUP_LOW_BALANCE_USD = 2;
 
-/** GET /channels/:id/balance. `unavailable` = the balance could not be read (never an error for the UI). */
+/** GET /channels/:id/balance. `unavailable` = the balance could not be read (never an error for the UI); `partner_required` = no Partner token on the channel. */
 export const walletBalanceSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("ok"),
@@ -127,6 +127,8 @@ export const walletBalanceSchema = z.discriminatedUnion("status", [
     low: z.boolean(),
   }),
   z.object({ status: z.literal("unavailable") }),
+  /** The balance is only readable with the Partner token (Partner API); the channel has none configured. */
+  z.object({ status: z.literal("partner_required") }),
 ]);
 export type WalletBalance = z.infer<typeof walletBalanceSchema>;
 
