@@ -8,6 +8,7 @@ import { useSession } from "@/components/app/SessionProvider";
 import { Alert, Banner, Button, Toast } from "@/components/ui";
 import { canManageChannels } from "@/components/app/roles";
 import { useToast } from "@/lib/hooks/use-toast";
+import { canRevealApiKey } from "@/lib/reveal-api-key";
 import { buildDialog360ConnectUrl, DIALOG360_STATE_KEY } from "@/lib/dialog360";
 import { channelsApi } from "@/lib/inbox-api";
 import { api } from "@/lib/api";
@@ -193,6 +194,7 @@ export function ChannelsView() {
               key={c.id}
               channel={c}
               canManage={canManage}
+              canRevealKey={canRevealApiKey(tenant?.role)}
               busy={busyId === c.id}
               onRotate={() => setConfirmRotate(c)}
               onPartner={() => setPartnerFor(c)}

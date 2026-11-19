@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Body, Controller, Get, HttpCode, Inject, Logger, Optional, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Header, HttpCode, Inject, Logger, Optional, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import type { CipherBox } from "@crmwsp/crypto";
 import { redact } from "@crmwsp/crypto";
 import {
@@ -17,6 +17,8 @@ import {
   type TemplateLintResponse,
   updateChannelRequestSchema,
   updateGupshupCredentialsRequestSchema,
+  revealChannelApiKeyRequestSchema,
+  type RevealChannelApiKeyResponse,
   type Channel,
   type ChannelHealthListResponse,
   type ChannelListResponse,
@@ -34,10 +36,14 @@ import { TtlCache } from "./wallet-cache.js";
 import { planTemplateSync } from "../templates/sync-plan.js";
 import { buildChannelHealth, type InboundRow, type OutboundRow } from "./channel-health.js";
 import { generateWebhookToken, type Dialog360PartnerClient, type GupshupCredentialCheck, type GupshupWalletBalance, type WhatsAppProvider } from "@crmwsp/whatsapp";
-import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
+import { CurrentTenant, CurrentTenantDb, CurrentUser, Roles } from "../auth/decorators.js";
+import { hashPassword, verifyPassword } from "../auth/password.js";
+import { StoreRateLimiter } from "../auth/rate-limiter.js";
+import { RATE_LIMIT_STORE, defaultRateLimitStore, type CounterStore } from "../common/rate-limit-store.js";
+import { REVEAL_API_KEY_LIMIT, REVEAL_API_KEY_WINDOW_MS, revealApiKey, type RevealFailureReason } from "./api-key-reveal.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { EmailVerifiedGuard } from "../auth/email-verified.guard.js";
-import type { HttpRequest, RequestTenant } from "../common/http.js";
+import { DB_HANDLE, type DbHandle, type HttpRequest, type RequestTenant, type RequestUser } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { ActivationGuard } from "../billing/activation.guard.js";
@@ -107,7 +113,18 @@ export class ChannelsController {
     @Optional() @Inject(BusinessCategoryService) private readonly categories?: Pick<BusinessCategoryService, "assertCanConnect">,
     @Optional() @Inject(GUPSHUP_VERIFIER) private readonly verifyGupshup?: GupshupCredentialVerifier,
     @Optional() @Inject(GUPSHUP_WALLET) private readonly readWallet?: GupshupWalletReader,
-  ) {}
+    @Optional() @Inject(DB_HANDLE) private readonly handle?: DbHandle,
+    @Optional() @Inject(RATE_LIMIT_STORE) store?: CounterStore,
+  ) {
+    this.revealLimiter = new StoreRateLimiter(
+      { limit: REVEAL_API_KEY_LIMIT, windowMs: REVEAL_API_KEY_WINDOW_MS },
+      store ?? defaultRateLimitStore(),
+      "channel-key-reveal",
+    );
+  }
+
+  private readonly revealLimiter: StoreRateLimiter;
+  private dummyHashPromise: Promise<string> | undefined;
 
   private readonly walletCache = new TtlCache<WalletBalance>(WALLET_CACHE_TTL_MS, 1000);
 
@@ -870,5 +887,63 @@ export class ChannelsController {
       return updated;
     });
     return this.toDto(row, true);
+  }
+
+  /**
+   * ADR 0022: reveals the channel API key to the tenant owner after re-checking their password.
+   * Rate limited (5/hour per user+tenant, every attempt counts), audited (never the key nor the
+   * password), and answered with `Cache-Control: no-store`. Nothing here is logged.
+   */
+  @Post(":id/reveal-api-key")
+  @Roles("owner")
+  @HttpCode(200)
+  @Header("Cache-Control", "no-store")
+  @Header("Pragma", "no-cache")
+  async revealApiKey(
+    @CurrentTenantDb() db: TenantDb,
+    @CurrentUser() user: RequestUser,
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: HttpRequest,
+  ): Promise<RevealChannelApiKeyResponse> {
+    if (!isUuid(id)) throw new NotFoundError();
+    const input = parseOrThrow(revealChannelApiKeyRequestSchema, body);
+    const cipher = this.cipher;
+    if (!cipher) throw new EncryptionNotConfiguredError();
+    const channel = await db.run(async (tx) => {
+      const [ch] = await tx
+        .select({ provider: channelConnections.provider, credentials: channelConnections.credentialsEncrypted })
+        .from(channelConnections)
+        .where(eq(channelConnections.id, id));
+      return ch;
+    });
+    if (!channel) throw new NotFoundError();
+    const credentials = channel.credentials;
+    if ((channel.provider !== "gupshup" && channel.provider !== "360dialog") || !credentials) {
+      throw new ValidationError("Este canal no tiene una API key que se pueda mostrar.");
+    }
+    const audit = (action: string, diff: Record<string, unknown>) =>
+      db.run((tx) => writeAudit(tx, { tenantId: db.tenantId, userId: db.userId, entity: "channel_connection", entityId: id, action, diff, ip: req.ip }));
+    return revealApiKey(
+      {
+        hit: (key) => this.revealLimiter.hit(key),
+        loadPasswordHash: (userId, email) => this.loadPasswordHash(userId, email),
+        dummyHash: () => (this.dummyHashPromise ??= hashPassword(randomBytes(24).toString("hex"))),
+        verifyPassword,
+        decrypt: () => cipher.decrypt(credentials, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE }),
+        auditFailure: (reason: RevealFailureReason) => audit("channel.api_key_reveal_failed", { channelId: id, reason }),
+        auditSuccess: () => audit("channel.api_key_revealed", { channelId: id }),
+      },
+      { tenantId: db.tenantId, userId: user.id, email: user.email, password: input.password },
+    );
+  }
+
+  /** Same SECURITY DEFINER lookup as login (the app role cannot read user_credentials). */
+  private async loadPasswordHash(userId: string, email: string): Promise<string | undefined> {
+    if (!this.handle) return undefined;
+    const rows = await this.handle.sql<{ user_id: string; password_hash: string }[]>`
+      select user_id, password_hash from public.auth_login(${email})`;
+    const row = rows[0];
+    return row && row.user_id === userId ? row.password_hash : undefined;
   }
 }
