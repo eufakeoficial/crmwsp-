@@ -38,8 +38,17 @@ import {
   type ChunkHit,
   type LlmConnection,
   type Transaction,
+  isActiveChatConnection,
+  isActiveTranscriptionConnection,
 } from "@crmwsp/db";
-import { buildPlaybookContext, evaluateTurn, isSalesStage, resolvePlaybook, sanitizeDetectedPlaybook, type TenantAiPolicies } from "@crmwsp/domain";
+import {
+  buildPlaybookContext,
+  evaluateTurn,
+  isSalesStage,
+  resolvePlaybook,
+  sanitizeDetectedPlaybook,
+  type TenantAiPolicies,
+} from "@crmwsp/domain";
 import { UnrecoverableError } from "bullmq";
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { InboxEvent } from "../processors.js";
@@ -53,12 +62,12 @@ import { maybeWarnBudget, readBudget } from "./budget.js";
 import { withRedisLock } from "./lock.js";
 import {
   AUDIO_NOT_TRANSCRIBED,
-  DEFAULT_TRANSCRIPTION_MODEL,
   transcribeAttachment,
   voiceNoteText,
   type AudioAttachment,
   type TranscribeOutcome,
 } from "./transcribe.js";
+import { transcriptionRoute, type TranscriptionRoute } from "./transcription-route.js";
 import {
   InvalidModelOutputError,
   assertIds,
@@ -255,6 +264,8 @@ interface HistoryRow {
 
 interface Prepared {
   conn: LlmConnection;
+  /** Optional dedicated audio transcription connection (ADR 0024); loaded only for a voice note. */
+  transcriptionConn: LlmConnection | undefined;
   tenantName: string;
   /** Tenant IANA timezone (tenants.timezone) for "hoy"/"mañana" in the prompt. */
   timeZone: string;
@@ -362,7 +373,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
   const replay = await replayGuard(tx, c);
   if (replay) return { done: replay };
 
-  const [conn] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)).limit(1);
+  const [conn] = await tx.select().from(llmConnections).where(isActiveChatConnection).limit(1);
   if (!conn || !conn.lastTestOk) return { done: { result: { outcome: "skipped", reason: "no-llm-connection" }, events } };
 
   // Budget (ADR 0008: at 100 % the automatic AI stops; the inbox never does). Checked before any
@@ -413,6 +424,10 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
       if (r.messageId === triggerMessageId && !triggerAudio) triggerAudio = r;
     }
   }
+  let transcriptionConn: LlmConnection | undefined;
+  if (triggerAudio && !triggerAudio.transcript?.trim()) {
+    [transcriptionConn] = await tx.select().from(llmConnections).where(isActiveTranscriptionConnection).limit(1);
+  }
   let receipt: ReceiptImage | undefined;
   if (trigger.type === "image") {
     const order = await findPendingPaymentOrder(tx, conv.contactId);
@@ -446,6 +461,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
   return {
     prep: {
       conn,
+      transcriptionConn,
       tenantName: tenant?.name ?? "",
       timeZone: tenant?.timezone ?? "UTC",
       config,
@@ -489,7 +505,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   // 1. Short read transaction.
   const phase1 = await withTenant(deps.db, tenantId, (tx) => prepare(deps, tx, c));
   if ("done" in phase1) return phase1.done;
-  const { conn, tenantName, timeZone, config, contact, triggerAudio, transcripts, playbook, previousStage } = phase1.prep;
+  const { conn, transcriptionConn, tenantName, timeZone, config, contact, triggerAudio, transcripts, playbook, previousStage } = phase1.prep;
 
   // Receipt image for a pending order: extract for a human reviewer; never marks the order paid.
   if (phase1.prep.receipt) {
@@ -550,20 +566,22 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
 
     // Voice note: transcribe once (BYOK provider), persist, and let the turn see the text.
     // Any failure degrades to a marker; the transcript is stored before the chat call so a retry
-    // of this job never pays for the same audio twice.
+    // of this job never pays for the same audio twice. ADR 0024: the dedicated transcription
+    // connection wins; the chat connection is the fallback when it can transcribe.
     if (triggerAudio) {
+      const route = transcriptionRoute(conn, transcriptionConn, provider, (dc) => buildProvider(deps, tenantId, dc), logger);
       const outcome = await transcribeAttachment(triggerAudio, {
         tenantId,
         conversationId: c.conversationId,
-        provider,
-        supported: conn.capabilities.transcription === true,
-        model: transcriptionModelFor(conn),
+        provider: route.provider,
+        supported: route.source !== "none",
+        model: route.model,
         loadMedia: deps.loadMedia,
         logger,
       });
       if (outcome.status === "transcribed") {
         try {
-          await withTenant(deps.db, tenantId, (tx) => persistTranscript(tx, c, triggerAudio.id, outcome));
+          await withTenant(deps.db, tenantId, (tx) => persistTranscript(tx, c, triggerAudio.id, outcome, route));
         } catch (err) {
           logger.warn(`ai-turn ${triggerMessageId} could not persist transcript (${err instanceof Error ? err.name : "unknown"})`);
         }
@@ -672,10 +690,6 @@ function visionModelFor(conn: LlmConnection): string {
   return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : conn.modelCheap;
 }
 
-function transcriptionModelFor(conn: LlmConnection): string {
-  const configured = (conn.capabilities as { transcriptionModel?: unknown }).transcriptionModel;
-  return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : DEFAULT_TRANSCRIPTION_MODEL;
-}
 
 /** Stores the transcript once (first writer wins) and books the transcription cost in the ledger. */
 async function persistTranscript(
@@ -683,6 +697,7 @@ async function persistTranscript(
   c: TurnCtx,
   attachmentId: string,
   t: Extract<TranscribeOutcome, { status: "transcribed" }>,
+  route: TranscriptionRoute,
 ): Promise<void> {
   await tx
     .update(attachments)
@@ -705,6 +720,8 @@ async function persistTranscript(
       verified: t.verified,
       priceKnown: t.priceKnown,
       unit: "usd_microcents",
+      purpose: route.source === "dedicated" ? "transcription" : "chat",
+      llmConnectionId: route.connectionId,
     },
   });
 }

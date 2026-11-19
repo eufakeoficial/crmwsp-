@@ -39,7 +39,13 @@ export const aiCapabilitiesSchema = z.object({
 });
 export type AiCapabilities = z.infer<typeof aiCapabilitiesSchema>;
 
+/** What an LLM connection is used for (ADR 0024). Existing connections are `chat`. */
+export const AI_CONNECTION_PURPOSES = ["chat", "transcription"] as const;
+export const aiConnectionPurposeSchema = z.enum(AI_CONNECTION_PURPOSES);
+export type AiConnectionPurpose = z.infer<typeof aiConnectionPurposeSchema>;
+
 export const aiConnectionSchema = z.object({
+  purpose: aiConnectionPurposeSchema.default("chat"),
   provider: aiProviderSchema,
   baseUrl: z.string(),
   apiKeyHint: z.string().nullable(),
@@ -86,6 +92,59 @@ export const aiTestResultSchema = z.object({
   error: z.string().optional(),
 });
 export type AiTestResult = z.infer<typeof aiTestResultSchema>;
+
+/*
+ * Optional dedicated audio transcription connection (ADR 0024). Used only to transcribe inbound
+ * voice notes, e.g. an OpenAI key when the chat connection is OpenRouter. The API key is
+ * write-only: responses carry only `apiKeyHint` (last characters).
+ */
+export const DEFAULT_TRANSCRIPTION_MODELS = ["whisper-1", "gpt-4o-mini-transcribe", "gpt-4o-transcribe"] as const;
+export const DEFAULT_TRANSCRIPTION_MODEL = "whisper-1";
+
+/** Which connection transcribes voice notes: the dedicated one, the chat one, or none. */
+export const AI_TRANSCRIPTION_SOURCES = ["dedicated", "chat", "none"] as const;
+export const aiTranscriptionSourceSchema = z.enum(AI_TRANSCRIPTION_SOURCES);
+export type AiTranscriptionSource = z.infer<typeof aiTranscriptionSourceSchema>;
+
+export const aiTranscriptionConnectionSchema = z.object({
+  purpose: z.literal("transcription").default("transcription"),
+  provider: aiProviderSchema,
+  baseUrl: z.string(),
+  apiKeyHint: z.string().nullable(),
+  model: z.string(),
+  lastTestedAt: isoDate.nullable(),
+  lastTestOk: z.boolean().nullable(),
+});
+export type AiTranscriptionConnection = z.infer<typeof aiTranscriptionConnectionSchema>;
+
+/** `GET /ai/transcription-connection`: the dedicated connection (or null) and the effective source. */
+export const aiTranscriptionStatusSchema = z.object({
+  connection: aiTranscriptionConnectionSchema.nullable(),
+  source: aiTranscriptionSourceSchema,
+});
+export type AiTranscriptionStatus = z.infer<typeof aiTranscriptionStatusSchema>;
+
+/** `PUT /ai/transcription-connection`. Omitting `apiKey` keeps the stored key (required on first save). */
+export const saveAiTranscriptionConnectionRequestSchema = z
+  .object({
+    provider: aiProviderSchema.default("openai"),
+    baseUrl: z.string().trim().max(2048).optional(),
+    apiKey: z.string().trim().min(8).max(512).optional(),
+    model: z.string().trim().min(1).max(200).default(DEFAULT_TRANSCRIPTION_MODEL),
+  })
+  .refine((v) => v.provider !== "custom" || (v.baseUrl !== undefined && v.baseUrl.length > 0), {
+    path: ["baseUrl"],
+    message: "baseUrl is required for custom providers",
+  });
+export type SaveAiTranscriptionConnectionInput = z.input<typeof saveAiTranscriptionConnectionRequestSchema>;
+
+/** `POST /ai/transcription-connection/test`: a real transcription of 0.1 s of silence. */
+export const aiTranscriptionTestResultSchema = z.object({
+  ok: z.boolean(),
+  latencyMs: z.number().nonnegative(),
+  error: z.string().optional(),
+});
+export type AiTranscriptionTestResult = z.infer<typeof aiTranscriptionTestResultSchema>;
 
 /** `GET /ai/usage?month=YYYY-MM` (defaults to the current month). */
 export const aiUsageQuerySchema = z.object({

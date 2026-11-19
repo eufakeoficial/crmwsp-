@@ -50,7 +50,7 @@ function effectivePlan(s: PlanUsageSnapshot, paidUntil: string | null, ownAiKey 
 /** True when the active LLM connection of the current tenant holds its own provider key (BYOK, ADR 0008). */
 async function readOwnAiKey(tx: Transaction): Promise<boolean> {
   const [row] = await tx.execute<{ own: boolean }>(
-    sql`select exists (select 1 from llm_connections where is_active and api_key_encrypted is not null) as own`,
+    sql`select exists (select 1 from llm_connections where is_active and purpose = 'chat' and api_key_encrypted is not null) as own`,
   );
   return row?.own === true;
 }

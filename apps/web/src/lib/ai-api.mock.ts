@@ -62,6 +62,7 @@ export const mockAiApi: AiApi = {
   saveConnection: (input) => {
     if (input.apiKey) storedKeyHint = `••••${input.apiKey.slice(-4)}`;
     connection = {
+      purpose: "chat",
       provider: input.provider,
       baseUrl: input.baseUrl ?? "",
       apiKeyHint: storedKeyHint,

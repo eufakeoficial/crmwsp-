@@ -25,6 +25,7 @@ import {
   sql,
   tenants,
   type LlmConnection,
+  isActiveChatConnection,
 } from "@crmwsp/db";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -86,6 +87,7 @@ export class AiController {
   private toDto(row: LlmConnection, privileged: boolean): AiConnection {
     const caps = row.capabilities;
     return {
+      purpose: "chat",
       provider: row.provider,
       baseUrl: row.baseUrl,
       apiKeyHint: privileged ? row.apiKeyHint : null,
@@ -106,7 +108,7 @@ export class AiController {
   @Get("connection")
   @Roles("owner", "admin", "agent")
   async getConnection(@CurrentTenantDb() db: TenantDb, @CurrentTenant() tenant: RequestTenant): Promise<AiConnection | null> {
-    const [row] = await db.run((tx) => tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)));
+    const [row] = await db.run((tx) => tx.select().from(llmConnections).where(isActiveChatConnection));
     return row ? this.toDto(row, ADMIN_ROLES.has(tenant.role)) : null;
   }
 
@@ -125,7 +127,7 @@ export class AiController {
         const [existing] = await tx
           .select()
           .from(llmConnections)
-          .where(eq(llmConnections.isActive, true))
+          .where(isActiveChatConnection)
           .for("update");
         if (!existing && encrypted === undefined) {
           throw new ValidationError("Validation failed", {
@@ -196,7 +198,7 @@ export class AiController {
   @Roles("owner", "admin")
   @HttpCode(200)
   async testConnection(@CurrentTenantDb() db: TenantDb, @Req() req: HttpRequest): Promise<AiTestResult> {
-    const [row] = await db.run((tx) => tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)));
+    const [row] = await db.run((tx) => tx.select().from(llmConnections).where(isActiveChatConnection));
     if (!row) throw new ValidationError("No AI connection is configured");
     const started = Date.now();
     const noCaps: AiCapabilities = { structuredOutput: false, embeddings: false, transcription: false };
@@ -248,7 +250,7 @@ export class AiController {
   @HttpCode(204)
   async deleteConnection(@CurrentTenantDb() db: TenantDb, @Req() req: HttpRequest): Promise<void> {
     await db.run(async (tx) => {
-      const deleted = await tx.delete(llmConnections).where(eq(llmConnections.isActive, true)).returning({ id: llmConnections.id });
+      const deleted = await tx.delete(llmConnections).where(isActiveChatConnection).returning({ id: llmConnections.id });
       for (const d of deleted) {
         await writeAudit(tx, {
           tenantId: db.tenantId,
@@ -269,7 +271,7 @@ export class AiController {
     // Mid-month instant: tenant_monthly_spend truncates it in the tenant's timezone.
     const instant = new Date(`${month}-15T12:00:00.000Z`).toISOString();
     return db.run(async (tx) => {
-      const [conn] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true));
+      const [conn] = await tx.select().from(llmConnections).where(isActiveChatConnection);
       const [tenant] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, db.tenantId));
       const currency = conn?.budgetCurrency ?? tenant?.currency ?? "EUR";
       const rows = (await tx.execute(

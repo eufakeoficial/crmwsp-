@@ -2,7 +2,7 @@ import type { OwnerCommandInterpretation } from "@crmwsp/contracts";
 import { ownerCommandResponseFormat, buildOwnerInterpreterMessages, estimateCost, OpenAICompatibleProvider, type LLMProvider } from "@crmwsp/ai";
 import { aiMessagesAllowed } from "../ai/plan-gate.js";
 import type { CipherBox } from "@crmwsp/crypto";
-import { channelConnections, consumeUsage, llmConnections, readPlanUsage, usageLedger, withTenant, type Database } from "@crmwsp/db";
+import { isActiveChatConnection, channelConnections, consumeUsage, llmConnections, readPlanUsage, usageLedger, withTenant, type Database } from "@crmwsp/db";
 import type { WhatsAppProvider } from "@crmwsp/whatsapp";
 import { and, eq } from "drizzle-orm";
 import { readBudget } from "../ai/budget.js";
@@ -54,7 +54,7 @@ export function createOwnerInterpreter(deps: {
       const [c] = await tx
         .select()
         .from(llmConnections)
-        .where(and(eq(llmConnections.isActive, true), eq(llmConnections.lastTestOk, true)))
+        .where(and(isActiveChatConnection, eq(llmConnections.lastTestOk, true)))
         .limit(1);
       if (!c?.apiKeyEncrypted) return { kind: "no_llm" as const };
       const budget = await readBudget(tx, c);

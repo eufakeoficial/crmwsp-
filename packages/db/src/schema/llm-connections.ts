@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -18,6 +18,13 @@ import { tenants } from "./tenants.js";
 export const llmProviders = ["openai", "openrouter", "deepseek", "custom"] as const;
 export type LlmProvider = (typeof llmProviders)[number];
 
+/**
+ * What a connection is used for (ADR 0024). `chat` is the main connection (replies, extraction,
+ * embeddings); `transcription` is an optional second key used only to transcribe voice notes.
+ */
+export const llmConnectionPurposes = ["chat", "transcription"] as const;
+export type LlmConnectionPurpose = (typeof llmConnectionPurposes)[number];
+
 export interface LlmCapabilities {
   structuredOutput?: boolean;
   embeddings?: boolean;
@@ -30,7 +37,7 @@ export interface LlmCapabilities {
 
 /**
  * OpenAI-compatible LLM connection of a tenant (ADR 0008). At most one active
- * per tenant. The API key is stored only as ciphertext; `api_key_hint` keeps
+ * per tenant and purpose (ADR 0024): every "the active connection" query must filter by purpose. The API key is stored only as ciphertext; `api_key_hint` keeps
  * the last characters for display.
  *
  * `base_url` must be https in production: enforced by the application, not by
@@ -43,6 +50,7 @@ export const llmConnections = pgTable(
     tenantId: uuid("tenant_id")
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
+    purpose: text("purpose", { enum: llmConnectionPurposes }).notNull().default("chat"),
     provider: text("provider", { enum: llmProviders }).notNull(),
     baseUrl: text("base_url").notNull(),
     apiKeyEncrypted: bytea("api_key_encrypted"),
@@ -60,7 +68,8 @@ export const llmConnections = pgTable(
   },
   (t) => [
     index("llm_connections_tenant_id_id_idx").on(t.tenantId, t.id),
-    uniqueIndex("llm_connections_tenant_active_unique").on(t.tenantId).where(sql`${t.isActive}`),
+    uniqueIndex("llm_connections_tenant_purpose_active_unique").on(t.tenantId, t.purpose).where(sql`${t.isActive}`),
+    check("llm_connections_purpose_check", sql`${t.purpose} IN ('chat', 'transcription')`),
     check("llm_connections_provider_check", sql`${t.provider} IN ('openai', 'openrouter', 'deepseek', 'custom')`),
     check(
       "llm_connections_budget_check",
@@ -71,3 +80,14 @@ export const llmConnections = pgTable(
 
 export type LlmConnection = typeof llmConnections.$inferSelect;
 export type NewLlmConnection = typeof llmConnections.$inferInsert;
+
+/**
+ * WHERE for "the tenant's active chat connection" (ADR 0024). Every query that used to filter
+ * only `is_active` must use this, or it could pick the transcription-only connection.
+ */
+export const isActiveChatConnection = and(eq(llmConnections.isActive, true), eq(llmConnections.purpose, "chat"))!;
+/** WHERE for the optional active dedicated transcription connection (ADR 0024). */
+export const isActiveTranscriptionConnection = and(
+  eq(llmConnections.isActive, true),
+  eq(llmConnections.purpose, "transcription"),
+)!;

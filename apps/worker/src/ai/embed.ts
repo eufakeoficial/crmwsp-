@@ -1,5 +1,5 @@
 import { estimateCost } from "@crmwsp/ai";
-import { knowledgeChunks, knowledgeSources, llmConnections, usageLedger, withTenant } from "@crmwsp/db";
+import { isActiveChatConnection, knowledgeChunks, knowledgeSources, llmConnections, usageLedger, withTenant } from "@crmwsp/db";
 import { UnrecoverableError } from "bullmq";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { assertIds, buildProvider, embeddingModelFor, type AiDeps } from "./common.js";
@@ -22,7 +22,7 @@ export async function processEmbedSource(deps: AiDeps, data: unknown): Promise<E
   const { tenantId, sourceId } = assertIds(data, ["tenantId", "sourceId"]);
 
   const setup = await withTenant(deps.db, tenantId, async (tx) => {
-    const [conn] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)).limit(1);
+    const [conn] = await tx.select().from(llmConnections).where(isActiveChatConnection).limit(1);
     if (!conn || conn.capabilities.embeddings !== true || !conn.apiKeyEncrypted) return null;
     const [source] = await tx
       .select({ version: knowledgeSources.version })

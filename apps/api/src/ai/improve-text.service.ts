@@ -8,7 +8,7 @@ import {
   type ImproveTextResponse,
   type ImproveTextStyle,
 } from "@crmwsp/contracts";
-import { eq, llmConnections, readBudget, usageLedger } from "@crmwsp/db";
+import { isActiveChatConnection, llmConnections, readBudget, usageLedger } from "@crmwsp/db";
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import { CIPHER_BOX } from "../channels/channels.constants.js";
 import type { TenantDb } from "../db/tenant-db.js";
@@ -96,7 +96,7 @@ export class ImproveTextService {
 
   async improve(db: TenantDb, req: ImproveTextRequest): Promise<ImproveTextResponse> {
     const ctx = await db.run(async (tx) => {
-      const [conn] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)).limit(1);
+      const [conn] = await tx.select().from(llmConnections).where(isActiveChatConnection).limit(1);
       const budget = conn ? await readBudget(tx, conn) : undefined;
       return { conn, budgetExceeded: budget?.exceeded === true };
     });
