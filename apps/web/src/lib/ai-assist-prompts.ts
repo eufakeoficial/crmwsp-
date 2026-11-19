@@ -1,8 +1,10 @@
 /**
  * Prompts for the "Hacerlo con IA" button. Each builder takes ONLY non-secret tenant data
- * (webhook URL, app name, phone, channel id) and returns neutral-Spanish text meant to be pasted
+ * (app name, phone, channel id) and returns neutral-Spanish text meant to be pasted
  * into an AI browser assistant. They never accept or mention secret values: the AI must stop and
- * hand control back to the user for keys, logins, captchas and payments.
+ * hand control back to the user for keys, logins, captchas and payments. The webhook URL is also a
+ * secret (its path token is the only auth of inbound webhooks), so it is never embedded: the AI stops
+ * and the user pastes it themselves.
  */
 
 export const GUPSHUP_CONSOLE_URL = "https://www.gupshup.io/whatsapp/dashboard";
@@ -22,24 +24,28 @@ function compose(title: string, context: string[], steps: string[], check: strin
   return [title, "", ...context, "", RULES, "", "Pasos:", numbered].join("\n");
 }
 
+const PASTE_WEBHOOK_STEP =
+  "Cuando te lo pida, pega aquí la URL de webhook que copiaste en Vende+ (botón Copiar): detente y pídeme que yo la pegue; no la escribas ni la adivines.";
+
 function appLine(appName: string | null | undefined): string {
   return appName ? `Nombre de mi app en Gupshup: ${appName}` : "Nombre de mi app en Gupshup: (si no lo sabes, pregúntamelo)";
 }
 
 /** P1: set up the webhook (callback URL) in Gupshup. */
-export function buildWebhookPrompt(input: { webhookUrl: string; appName?: string | null | undefined }): string {
+export function buildWebhookPrompt(input: { appName?: string | null | undefined }): string {
   return compose(
     "Ayúdame a configurar el webhook de mi app de WhatsApp en Gupshup.",
-    [appLine(input.appName), `URL de webhook que debes registrar: ${input.webhookUrl}`],
+    [appLine(input.appName), "La URL de webhook es privada y no te la doy ahora: te la pediré cuando haga falta."],
     [
       `Abre ${GUPSHUP_CONSOLE_URL}. Si no he iniciado sesión, detente y pídeme que inicie sesión.`,
       "Entra a la app de WhatsApp con el nombre indicado arriba (verifica que sea la correcta) y abre su sección de Webhooks (Overview → Webhooks).",
+      PASTE_WEBHOOK_STEP,
       "Agrega un webhook con esa URL exacta, sin espacios ni caracteres extra.",
       'En el formato elige "Gupshup (v2)".',
       "Marca estos eventos: Mensaje, Enviado, Entregado, Leído y Error.",
       "Deja el interruptor del webhook encendido y guarda.",
     ],
-    "Recarga la página, vuelve a abrir la sección de Webhooks y confirma que la URL guardada coincide exactamente con la indicada, que el formato es Gupshup (v2), que los cinco eventos están marcados y que el interruptor está encendido. Dime el resultado.",
+    "Recarga la página, vuelve a abrir la sección de Webhooks y confirma que la URL guardada coincide exactamente con la que pegué, que el formato es Gupshup (v2), que los cinco eventos están marcados y que el interruptor está encendido. Dime el resultado.",
   );
 }
 
@@ -121,18 +127,19 @@ export function buildProfilePrompt(input: { phone: string; appName?: string | nu
 }
 
 /** P7: verify the whole channel (right app, key hint, webhook match, test send). */
-export function buildVerifyChannelPrompt(input: { webhookUrl: string; appName?: string | null | undefined; phone: string; apiKeyHint?: string | null | undefined }): string {
+export function buildVerifyChannelPrompt(input: { appName?: string | null | undefined; phone: string; apiKeyHint?: string | null | undefined }): string {
   const hint = input.apiKeyHint
     ? `Últimos caracteres de la clave que muestra Vende+: ${input.apiKeyHint}`
     : "Vende+ no muestra los últimos caracteres de la clave: pídeme que los revise yo.";
   return compose(
     "Ayúdame a verificar que mi canal de WhatsApp está bien conectado entre Gupshup y Vende+.",
-    [`Número: ${input.phone}`, appLine(input.appName), `URL de webhook esperada: ${input.webhookUrl}`, hint],
+    [`Número: ${input.phone}`, appLine(input.appName), hint],
     [
       `Abre ${GUPSHUP_CONSOLE_URL}. Si no he iniciado sesión, detente y pídeme que inicie sesión.`,
       "Confirma que existe una app con el nombre indicado y que está en la cuenta correcta; si hay varias parecidas, dime cuál es cuál.",
       "En Claves de API, compara solo los últimos 4 caracteres con los indicados arriba. No me muestres ni copies la clave completa.",
-      "En Webhooks, confirma que la URL guardada coincide exactamente con la esperada, que el formato es Gupshup (v2), que los eventos Mensaje, Enviado, Entregado, Leído y Error están marcados y que el interruptor está encendido. Corrige lo que no coincida.",
+      PASTE_WEBHOOK_STEP,
+      "En Webhooks, confirma que la URL guardada coincide exactamente con la que pegué, que el formato es Gupshup (v2), que los eventos Mensaje, Enviado, Entregado, Leído y Error están marcados y que el interruptor está encendido. Corrige lo que no coincida.",
       "Pídeme que envíe un mensaje de WhatsApp de prueba a este número y espera a que te diga que lo envié.",
     ],
     "Recarga Vende+ (Inbox y Canales) y confirma que el mensaje de prueba apareció en el Inbox y que el canal muestra actividad reciente. Dame un resumen con lo que está bien y lo que falta.",
