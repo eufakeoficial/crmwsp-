@@ -32,6 +32,7 @@ import { FolderSidebar } from "./FolderSidebar";
 import { useContactFilterIds } from "./InboxFilter";
 import { InboxSettingsDrawer } from "./InboxSettingsDrawer";
 import { type FolderId, aiModeLabel, folderParams } from "./inbox-meta";
+import { parseInboxDeepLink } from "@/lib/app-search-helpers";
 import { useInboxCounts, useInboxList } from "./use-inbox-list";
 
 const REFRESH_DEBOUNCE_MS = 250;
@@ -164,6 +165,23 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
     setTags([]);
     if (tenantId !== null) void loadTags();
   }, [tenantId, loadTags]);
+
+  // Deep links from the global search: `?conversation=<uuid>` opens it, `?q=` prefills and applies the search box.
+  const pendingConversation = useRef<string | null>(null);
+  useEffect(() => {
+    const params = parseInboxDeepLink(window.location.search);
+    pendingConversation.current = params.conversation;
+    if (params.q) {
+      setSearchDraft(params.q);
+      setQuery(params.q);
+    }
+  }, []);
+  useEffect(() => {
+    if (tenantId !== null && pendingConversation.current) {
+      setSelectedId(pendingConversation.current);
+      pendingConversation.current = null;
+    }
+  }, [tenantId]);
 
   // Opening a conversation: detail + notes. The thread hook loads the messages.
   useEffect(() => {
