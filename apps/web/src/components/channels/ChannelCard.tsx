@@ -145,6 +145,11 @@ export function ChannelHealthLines({ health }: { health: ChannelHealth }) {
         <Inbox aria-hidden className="size-4 text-muted" />
         {t.inbound}
       </p>
+      {t.invalidCredentials ? (
+        <p className="m-0" data-testid="channel-health-credentials">
+          <StatusChip label="Credenciales inválidas" tone="danger" />
+        </p>
+      ) : null}
       {out ? (
         <p className="m-0 flex flex-wrap items-center gap-2" data-testid="channel-health-outbound">
           <Send aria-hidden className="size-4 text-muted" />

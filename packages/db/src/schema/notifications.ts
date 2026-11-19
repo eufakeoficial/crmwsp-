@@ -29,6 +29,7 @@ export const notificationKinds = [
   "reminder",
   "channel_quality",
   "ai_credentials",
+  "channel_credentials",
 ] as const;
 export type NotificationKind = (typeof notificationKinds)[number];
 
@@ -69,7 +70,7 @@ export const notifications = pgTable(
     index("notifications_undispatched_idx").on(t.tenantId).where(sql`${t.dispatchedAt} IS NULL`),
     check(
       "notifications_kind_check",
-      sql`${t.kind} IN ('order_confirmed', 'order_paid', 'handoff', 'approval_requested', 'payment_review', 'reminder', 'channel_quality', 'ai_credentials')`,
+      sql`${t.kind} IN ('order_confirmed', 'order_paid', 'handoff', 'approval_requested', 'payment_review', 'reminder', 'channel_quality', 'ai_credentials', 'channel_credentials')`,
     ),
     check("notifications_whatsapp_status_check", sql`${t.whatsappStatus} IN ('pending', 'sent', 'skipped', 'not_configured')`),
   ],

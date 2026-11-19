@@ -11,6 +11,7 @@ export type OutboundRow = {
   at: string;
   error_message: string | null;
   error_code: string | null;
+  error_status?: string | null;
 };
 
 const MAX_ERROR_CHARS = 160;
@@ -30,6 +31,11 @@ function errorText(row: OutboundRow): string {
   return "Error desconocido";
 }
 
+function parseStatus(v: string | null | undefined): number | null {
+  const n = v ? Number.parseInt(v, 10) : Number.NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 const iso = (v: string): string => new Date(v).toISOString();
 
 /** Pure assembly of the per-channel health from the two aggregate queries. */
@@ -44,7 +50,7 @@ export function buildChannelHealth(channelIds: string[], inbound: InboundRow[], 
       lastInboundAt: lastIn ? iso(lastIn) : null,
       lastOutbound: out
         ? out.status === "failed"
-          ? { ok: false, at: iso(out.at), error: errorText(out) }
+          ? { ok: false, at: iso(out.at), error: errorText(out), errorStatus: parseStatus(out.error_status) }
           : { ok: true, at: iso(out.at), error: null }
         : null,
     };

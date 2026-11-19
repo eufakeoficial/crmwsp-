@@ -450,7 +450,8 @@ export class ChannelsController {
           m.status::text as status,
           coalesce(m.sent_at, m.created_at)::text as at,
           m.error ->> 'message' as error_message,
-          m.error ->> 'code' as error_code
+          m.error ->> 'code' as error_code,
+          m.error ->> 'status' as error_status
         from messages m
         join conversations c on c.id = m.conversation_id
         where m.direction = 'outbound'
