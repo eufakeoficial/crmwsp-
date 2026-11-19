@@ -8,7 +8,7 @@ import { ContactActivity } from "@/components/contacts/ContactActivity";
 import { Avatar, Badge } from "@/components/ui";
 import { extractedRows } from "@/lib/contact-extracted";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { localTimeIn, originLabel } from "./inbox-meta";
+import { aiModeLabel, localTimeIn, originLabel } from "./inbox-meta";
 import { MenuItem, Popover } from "./Popover";
 
 function InfoRow({ icon: Icon, label, children }: { icon: typeof Clock; label: string; children: ReactNode }) {
@@ -102,6 +102,7 @@ export function ContactPanel({
       </div>
 
       <Section title="Automatizaciones">
+        <p className="m-0 text-[13px] font-semibold text-ink">IA: {aiModeLabel(conversation.aiMode)}</p>
         <button
           type="button"
           disabled={busy}

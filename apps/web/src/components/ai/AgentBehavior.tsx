@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from "react";
 import { Alert, Button, Card, Input, Label, OptionCard, Spinner, Textarea, Toast } from "@/components/ui";
 import { aiApi } from "@/lib/ai-api";
+import { conversationsApi } from "@/lib/inbox-api";
 import { AI_MODES, type AgentConfig, type AiMode } from "@crmwsp/contracts";
 import { fromMinor, toMinor } from "@/lib/ai-validation";
 import { useToast } from "@/lib/hooks/use-toast";
@@ -22,6 +23,8 @@ export function AgentBehavior({ config, currency, canEdit, onSaved }: { config: 
   const [prompt, setPrompt] = useState(config.systemPrompt);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [savedMode, setSavedMode] = useState<AiMode | null>(null);
+  const [applying, setApplying] = useState(false);
   const { message, show } = useToast();
 
   async function onSubmit(e: FormEvent) {
@@ -33,11 +36,27 @@ export function AgentBehavior({ config, currency, canEdit, onSaved }: { config: 
     setError(undefined);
     try {
       onSaved(await aiApi.saveAgentConfig({ systemPrompt: prompt, aiModeDefault: mode, confidenceThreshold: confidence, approvalThresholdMinor: minor }));
+      setSavedMode(mode);
       show("Comportamiento guardado");
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function applyToOpen() {
+    if (!savedMode) return;
+    setApplying(true);
+    setError(undefined);
+    try {
+      const { updated } = await conversationsApi.bulkAiMode(savedMode);
+      setSavedMode(null);
+      show(updated === 1 ? "1 conversación abierta actualizada" : `${updated} conversaciones abiertas actualizadas`);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setApplying(false);
     }
   }
 
@@ -72,6 +91,12 @@ export function AgentBehavior({ config, currency, canEdit, onSaved }: { config: 
           <span className="text-xs text-muted">Tono, horarios, qué no debe prometer. La IA solo da precios, stock y plazos que estén en Conocimiento.</span>
         </div>
         <Alert>{error}</Alert>
+        {canEdit && savedMode ? (
+          <div className="flex flex-col gap-2 rounded-lg bg-paper p-3 sm:flex-row sm:items-center">
+            <span className="text-sm">El modo por defecto solo afecta a conversaciones nuevas. ¿Quieres usar «{MODE_LABELS[savedMode].title}» también en las abiertas?</span>
+            <Button type="button" variant="accent" disabled={applying} onClick={() => void applyToOpen()}>{applying ? <Spinner /> : null}Aplicar también a las conversaciones abiertas</Button>
+          </div>
+        ) : null}
         {canEdit ? <div><Button type="submit" variant="accent" disabled={busy}>{busy ? <Spinner /> : null}Guardar comportamiento</Button></div> : null}
       </form>
       <Toast message={message} />

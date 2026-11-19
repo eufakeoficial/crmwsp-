@@ -230,6 +230,12 @@ export const updateConversationRequestSchema = z
   });
 export type UpdateConversationRequest = z.infer<typeof updateConversationRequestSchema>;
 
+/** POST /conversations/ai-mode/bulk: sets the AI mode on every open conversation of the tenant. */
+export const bulkAiModeRequestSchema = z.object({ aiMode: aiModeSchema });
+export type BulkAiModeRequest = z.infer<typeof bulkAiModeRequestSchema>;
+export const bulkAiModeResponseSchema = z.object({ updated: z.number().int().nonnegative() });
+export type BulkAiModeResponse = z.infer<typeof bulkAiModeResponseSchema>;
+
 // --- Realtime (SSE /events) ---------------------------------------------------
 
 /** Thread-scoped inbox events (best effort; clients refetch on receipt). */

@@ -5,12 +5,14 @@ import {
   OutsideServiceWindowError,
   SERVICE_WINDOW_MS,
   ValidationError,
+  bulkAiModeRequestSchema,
   listConversationsQuerySchema,
   listMessagesQuerySchema,
   sendMessageRequestSchema,
   setReactionRequestSchema,
   sendTemplateMessageRequestSchema,
   updateConversationRequestSchema,
+  type BulkAiModeResponse,
   type Conversation,
   type ConversationListResponse,
   type Message,
@@ -22,6 +24,7 @@ import {
   conversations,
   desc,
   eq,
+  inArray,
   isUuid,
   memberships,
   messages,
@@ -240,6 +243,32 @@ export class ConversationsController {
     });
     if (!row) throw new NotFoundError();
     await this.hub.publish(db.tenantId, { type: "conversation.updated", conversationId: id });
+  }
+
+  /** Applies an AI mode to all open (open/pending) conversations; tenant isolation comes from RLS via withTenant. */
+  @Post("ai-mode/bulk")
+  @Roles("owner", "admin")
+  @HttpCode(200)
+  async bulkAiMode(@CurrentTenantDb() db: TenantDb, @Body() body: unknown, @Req() req: HttpRequest): Promise<BulkAiModeResponse> {
+    const { aiMode } = parseOrThrow(bulkAiModeRequestSchema, body);
+    const updated = await db.run(async (tx) => {
+      const rows = await tx
+        .update(conversations)
+        .set({ aiMode, lockVersion: sql`${conversations.lockVersion} + 1`, updatedAt: new Date() })
+        .where(and(eq(conversations.tenantId, db.tenantId), inArray(conversations.status, ["open", "pending"])))
+        .returning({ id: conversations.id });
+      await writeAudit(tx, {
+        tenantId: db.tenantId,
+        userId: db.userId,
+        entity: "conversation",
+        entityId: db.tenantId,
+        action: "conversation.ai_mode_bulk_updated",
+        diff: { aiMode, count: rows.length },
+        ip: req.ip,
+      });
+      return rows.length;
+    });
+    return { updated };
   }
 
   @Patch(":id")

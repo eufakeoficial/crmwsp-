@@ -1,6 +1,6 @@
 "use client";
 
-import type { ConversationNote, InboxConversation, Message, ReactionEmoji, TagDto, TenantMember } from "@crmwsp/contracts";
+import type { AiMode, ConversationNote, InboxConversation, Message, ReactionEmoji, TagDto, TenantMember } from "@crmwsp/contracts";
 import type { ReactNode } from "react";
 import { Alert } from "@/components/ui";
 import { isOutsideServiceWindow } from "@/lib/service-window";
@@ -18,6 +18,7 @@ export interface ThreadActions {
   onToggleStatus: () => void;
   onMarkUnread: () => void;
   onPause: (minutes: number | null) => void;
+  onSetAiMode: (mode: AiMode) => void;
 }
 
 export function ConversationThread({

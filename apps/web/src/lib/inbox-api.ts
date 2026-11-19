@@ -1,4 +1,5 @@
 import {
+  type AiMode,
   type ConversationStatus,
   type Connect360dialogRequest,
   type CreateGupshupChannelRequest,
@@ -7,6 +8,7 @@ import {
   type ReactionEmoji,
   type UpdateConversationRequest,
   attachmentUrlResponseSchema,
+  bulkAiModeResponseSchema,
   channelHealthListResponseSchema,
   channelListResponseSchema,
   walletBalanceSchema,
@@ -77,6 +79,9 @@ export const conversationsApi = {
       body: { ...patch, lockVersion },
       schema: conversationSchema,
     }),
+  /** Owner/admin: sets the AI mode on every open conversation of the tenant. */
+  bulkAiMode: (aiMode: AiMode) =>
+    request("/conversations/ai-mode/bulk", { method: "POST", body: { aiMode }, schema: bulkAiModeResponseSchema }),
   /** 202 with the queued message. Pass the same clientMessageId on retries. */
   send: (id: string, text: string, clientMessageId: string = newClientMessageId()) =>
     request(`/conversations/${id}/messages`, {

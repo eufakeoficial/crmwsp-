@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  type AiMode,
   type Contact,
   type ContactFilter,
   type ContactPanel as ContactPanelDto,
@@ -15,11 +16,11 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef
 import { useSession } from "@/components/app/SessionProvider";
 import { useInboxEvents } from "@/components/app/TenantEventsProvider";
 import { Alert, Toast } from "@/components/ui";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { contactBookApi } from "@/lib/contacts-api";
 import { useThread } from "@/lib/hooks/use-thread";
 import { useToast } from "@/lib/hooks/use-toast";
-import { contactsApi } from "@/lib/inbox-api";
+import { contactsApi, conversationsApi } from "@/lib/inbox-api";
 import { inboxV2Api } from "@/lib/inbox-v2-api";
 import { errorMessage } from "@/lib/messages";
 import { NotificationBell } from "@/components/app/notifications/NotificationBell";
@@ -30,7 +31,7 @@ import { ConversationThread } from "./ConversationThread";
 import { FolderSidebar } from "./FolderSidebar";
 import { useContactFilterIds } from "./InboxFilter";
 import { InboxSettingsDrawer } from "./InboxSettingsDrawer";
-import { type FolderId, folderParams } from "./inbox-meta";
+import { type FolderId, aiModeLabel, folderParams } from "./inbox-meta";
 import { useInboxCounts, useInboxList } from "./use-inbox-list";
 
 const REFRESH_DEBOUNCE_MS = 250;
@@ -285,6 +286,26 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
     }, "No se pudo cambiar la pausa de automatizaciones");
   };
 
+  const setAiMode = (mode: AiMode) => {
+    if (!selectedId || !detail || mode === detail.aiMode) return;
+    const id = selectedId;
+    void act(async () => {
+      try {
+        await conversationsApi.update(id, { aiMode: mode }, detail.lockVersion);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          await loadDetail(id);
+          show("La conversación cambió; revisa el modo de IA e inténtalo de nuevo");
+          return;
+        }
+        throw err;
+      }
+      await loadDetail(id);
+      refreshAll();
+      show(`Modo de IA: ${aiModeLabel(mode)}`);
+    }, "No se pudo cambiar el modo de IA");
+  };
+
   const setContactTag = (name: string, on: boolean) => {
     if (!detail) return;
     const current = detail.contactTags;
@@ -480,6 +501,7 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
                       onToggleStatus: toggleStatus,
                       onMarkUnread: markUnread,
                       onPause: pause,
+                      onSetAiMode: setAiMode,
                     }}
                     onHideSystem={setHideSystem}
                     onSend={thread.send}
