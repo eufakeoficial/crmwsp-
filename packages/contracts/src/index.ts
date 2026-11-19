@@ -41,3 +41,4 @@ export * from "./bookings.js";
 export * from "./support.js";
 export * from "./support-email.js";
 export * from "./policies.js";
+export * from "./whatsapp-profile.js";

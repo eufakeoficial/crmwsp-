@@ -94,6 +94,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     icon: Settings,
     children: [
       { key: "channels", label: "WhatsApp", href: "/app/channels", icon: Plug },
+      { key: "settings-whatsapp-profile", label: "Perfil de WhatsApp", href: "/app/settings/whatsapp-profile", icon: Smartphone },
       { key: "products", label: "Catálogo", href: "/app/products", icon: Package },
       { key: "team", label: "Equipo", href: "/app/team", icon: Users },
       { key: "settings-integrations", label: "Integraciones", href: "/app/settings/integrations", icon: Plug },
