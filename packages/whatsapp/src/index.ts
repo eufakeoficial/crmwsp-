@@ -10,3 +10,5 @@ export type { BspName } from "./router.js";
 export { createDefaultWhatsAppProvider } from "./default.js";
 export { Dialog360PartnerClient, extractChannelClientId, extractChannelPhone } from "./dialog360/partner.js";
 export type { Dialog360ChannelInfo, Dialog360PartnerOptions } from "./dialog360/partner.js";
+export { GupshupProfileClient, GupshupProfileError, profileErrorMessage } from "./gupshup/profile.js";
+export type { GupshupBusinessProfile, GupshupPartnerCreds, GupshupProfileClientOptions, GupshupProfileUpdate } from "./gupshup/profile.js";
