@@ -49,6 +49,7 @@ export function EditCredentialsPanel({ channel, onClose, onSaved, onNoKeys }: { 
       <p className="m-0 text-sm text-muted">
         Cambia la API key o el nombre de la app del número <b>{channel.phoneE164}</b>. Verificamos los datos con Gupshup antes de guardar y la URL del webhook no cambia.
       </p>
+      <p className="m-0 text-sm font-semibold text-warning">Si cambias de app, tendrás que volver a cargar el ID de app y el Token de Partner.</p>
       <AiAssistButton prompt={buildApiKeyPrompt({ appName: channel.appName })} label="Hacerlo con IA: obtener la API key" />
       <form onSubmit={submit} className="flex flex-col gap-3" noValidate>
         <div className="flex flex-col gap-1.5">

@@ -96,7 +96,8 @@ export function ChannelCard({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-extrabold text-muted">URL de webhook (Gupshup → Callback URL)</span>
           <WebhookUrlBox url={channel.webhookUrl} />
-          <AiAssistButton prompt={buildWebhookPrompt({ webhookUrl: channel.webhookUrl, appName: channel.appName })} label="Hacerlo con IA: configurar el webhook" />
+          <span className="text-xs text-muted">Esta URL es privada: no la compartas. Si se filtra, usa Rotar token.</span>
+          <AiAssistButton prompt={buildWebhookPrompt({ appName: channel.appName })} label="Hacerlo con IA: configurar el webhook" />
         </div>
       ) : null}
       {canManage ? (
@@ -121,7 +122,7 @@ export function ChannelCard({
           {channel.provider === "gupshup" ? <AiAssistButton prompt={buildRechargePrompt({ appName: channel.appName })} label="Hacerlo con IA: recargar saldo" /> : null}
           {channel.provider === "gupshup" && channel.webhookUrl ? (
             <AiAssistButton
-              prompt={buildVerifyChannelPrompt({ webhookUrl: channel.webhookUrl, appName: channel.appName, phone: channel.phoneE164, apiKeyHint: channel.apiKeyHint })}
+              prompt={buildVerifyChannelPrompt({ appName: channel.appName, phone: channel.phoneE164, apiKeyHint: channel.apiKeyHint })}
               label="Verificar mi canal con IA"
             />
           ) : null}

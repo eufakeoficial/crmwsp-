@@ -144,7 +144,8 @@ export function ConnectChannelPanel({ onClose, onCreated, onNoKeys }: { onClose:
               <>
                 <p className="m-0 text-sm">El número <b>{created.phoneE164}</b> ya está activo. Falta un último paso en Gupshup:</p>
                 {created.webhookUrl ? <WebhookUrlBox url={created.webhookUrl} /> : null}
-                {created.webhookUrl ? <AiAssistButton prompt={buildWebhookPrompt({ webhookUrl: created.webhookUrl, appName: created.appName })} label="Hacerlo con IA: configurar el webhook" /> : null}
+                {created.webhookUrl ? <span className="text-xs text-muted">Esta URL es privada: no la compartas. Si se filtra, usa Rotar token.</span> : null}
+                {created.webhookUrl ? <AiAssistButton prompt={buildWebhookPrompt({ appName: created.appName })} label="Hacerlo con IA: configurar el webhook" /> : null}
                 <p className="m-0 text-sm text-muted">Pégala en <b>Gupshup → Callback URL</b>. Después podrás recibir mensajes en el Inbox.</p>
                 <p className="m-0 rounded-2xl bg-warning-soft px-4 py-3 text-sm font-semibold text-warning">
                   La API key no se vuelve a mostrar. Solo verás sus últimos caracteres ({created.apiKeyHint ?? "••••"}).
