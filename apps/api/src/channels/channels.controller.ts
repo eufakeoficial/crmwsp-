@@ -30,6 +30,7 @@ import {
 } from "@crmwsp/contracts";
 import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, sql, type ChannelConnection, type MessageTemplate, type Transaction } from "@crmwsp/db";
 import { lintTemplate } from "@crmwsp/domain";
+import { TtlCache } from "./wallet-cache.js";
 import { planTemplateSync } from "../templates/sync-plan.js";
 import { buildChannelHealth, type InboundRow, type OutboundRow } from "./channel-health.js";
 import { generateWebhookToken, type Dialog360PartnerClient, type GupshupCredentialCheck, type GupshupWalletBalance, type WhatsAppProvider } from "@crmwsp/whatsapp";
@@ -108,7 +109,7 @@ export class ChannelsController {
     @Optional() @Inject(GUPSHUP_WALLET) private readonly readWallet?: GupshupWalletReader,
   ) {}
 
-  private readonly walletCache = new Map<string, { at: number; value: WalletBalance }>();
+  private readonly walletCache = new TtlCache<WalletBalance>(WALLET_CACHE_TTL_MS, 1000);
 
   private readonly logger = new Logger(ChannelsController.name);
 
@@ -480,7 +481,7 @@ export class ChannelsController {
     if (channel.provider !== "gupshup" || !channel.credentials || !this.cipher || !this.readWallet) return unavailable;
     const cacheKey = `${db.tenantId}:${id}`;
     const hit = this.walletCache.get(cacheKey);
-    if (hit && Date.now() - hit.at < WALLET_CACHE_TTL_MS) return hit.value;
+    if (hit) return hit;
     let value: WalletBalance = unavailable;
     try {
       const apiKey = this.cipher.decrypt(channel.credentials, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
@@ -489,7 +490,7 @@ export class ChannelsController {
     } catch {
       // Decryption or reader failure: the UI just hides the balance. Nothing is logged (key material).
     }
-    this.walletCache.set(cacheKey, { at: Date.now(), value });
+    this.walletCache.set(cacheKey, value);
     return value;
   }
 
