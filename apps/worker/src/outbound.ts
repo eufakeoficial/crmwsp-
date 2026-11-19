@@ -21,8 +21,7 @@ import type { SendResult, WhatsAppConnection, WhatsAppProvider } from "@crmwsp/w
 import { UnrecoverableError, Worker, type ConnectionOptions, type Job } from "bullmq";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { TTS_API_KEY_PURPOSE, sendVoiceOrText, type VoiceDeps } from "./voice.js";
-import { channelCredentialsNotification, isProviderAuthError } from "./notifications/channel-credentials.js";
-import { insertNotification } from "./notifications/notify.js";
+import { alertInvalidCredentials, isProviderAuthError } from "./notifications/channel-credentials.js";
 import { tenantChannel, type EventPublisher, type InboxEvent, type Logger } from "./processors.js";
 import {
   OUTBOUND_QUEUE_NAME,
@@ -378,7 +377,7 @@ export async function processSendMessage(
           .where(and(eq(broadcastRecipients.id, loaded.recipientId), eq(broadcastRecipients.status, "pending")));
       }
       if (isProviderAuthError(err)) {
-        await insertNotification(tx, tenantId, channelCredentialsNotification(loaded.connectionId, new Date()));
+        await alertInvalidCredentials(tx, tenantId, loaded.connectionId, err, deps.logger ?? silent);
       }
       (deps.logger ?? silent).warn(`send-message ${messageId} failed permanently`);
       return { res: { outcome: "failed" } as SendMessageResult, conversationId: loaded.conversationId };

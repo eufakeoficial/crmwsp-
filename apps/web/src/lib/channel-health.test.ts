@@ -18,7 +18,13 @@ describe("channelHealthText", () => {
     const base = { channelId: ID, lastInboundAt: null };
     const fail = (error: string) => channelHealthText({ ...base, lastOutbound: { ok: false, at: "2026-11-19T11:50:00.000Z", error } }, now);
     expect(fail("Authentication Failed").invalidCredentials).toBe(true);
+    expect(fail("Gupshup responded with HTTP 401").invalidCredentials).toBe(true);
+    expect(fail("360dialog responded with HTTP 403").invalidCredentials).toBe(true);
+    expect(fail("Invalid destination").invalidCredentials).toBe(false);
     expect(fail("Template not found").invalidCredentials).toBe(false);
+    expect(
+      channelHealthText({ ...base, lastOutbound: { ok: false, at: "2026-11-19T11:50:00.000Z", error: "Error del proveedor", errorStatus: 401 } }, now).invalidCredentials,
+    ).toBe(true);
     expect(channelHealthText({ ...base, lastOutbound: { ok: true, at: "2026-11-19T11:50:00.000Z", error: null } }, now).invalidCredentials).toBe(false);
     expect(channelHealthText({ ...base, lastOutbound: null }, now).invalidCredentials).toBe(false);
   });

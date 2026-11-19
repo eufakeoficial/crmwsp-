@@ -8,14 +8,20 @@ export interface ChannelHealthText {
   invalidCredentials: boolean;
 }
 
-const AUTH_ERROR = /authentication failed|unauthori[sz]ed|invalid api ?key|forbidden/i;
+const AUTH_ERROR = /authentication failed|unauthori[sz]ed|invalid api ?key|forbidden|HTTP 40[13]\b/i;
+
+function isAuthFailure(out: { ok: boolean; error: string | null; errorStatus?: number | null | undefined }): boolean {
+  if (out.ok) return false;
+  if (out.errorStatus === 401 || out.errorStatus === 403) return true;
+  return !!out.error && AUTH_ERROR.test(out.error);
+}
 
 /** Copy for the channel card: "Último mensaje recibido: hace 5 min" / "Último envío: falló — Authentication Failed". */
 export function channelHealthText(health: ChannelHealth, now: Date = new Date()): ChannelHealthText {
   const out = health.lastOutbound;
   return {
     inbound: health.lastInboundAt ? `Último mensaje recibido: ${formatRelative(health.lastInboundAt, now)}` : "Aún no has recibido mensajes por este número",
-    invalidCredentials: !!out && !out.ok && !!out.error && AUTH_ERROR.test(out.error),
+    invalidCredentials: !!out && isAuthFailure(out),
     outbound: out ? { ok: out.ok, error: out.error, when: formatRelative(out.at, now) } : null,
   };
 }

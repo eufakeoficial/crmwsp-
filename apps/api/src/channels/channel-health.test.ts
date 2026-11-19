@@ -16,7 +16,7 @@ describe("buildChannelHealth", () => {
       ],
     );
     expect(out.map((h) => h.channelId)).toEqual([B, A, C]);
-    expect(out[0]).toEqual({ channelId: B, lastInboundAt: null, lastOutbound: { ok: false, at: "2026-11-19T09:00:00.000Z", error: "Authentication Failed" } });
+    expect(out[0]).toEqual({ channelId: B, lastInboundAt: null, lastOutbound: { ok: false, at: "2026-11-19T09:00:00.000Z", error: "Authentication Failed", errorStatus: null } });
     expect(out[1]).toEqual({ channelId: A, lastInboundAt: "2026-11-19T10:00:00.000Z", lastOutbound: { ok: true, at: "2026-11-19T10:05:00.000Z", error: null } });
     expect(out[2]).toEqual({ channelId: C, lastInboundAt: null, lastOutbound: null });
   });

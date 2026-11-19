@@ -104,6 +104,8 @@ export const channelHealthSchema = z.object({
       at: isoDateTimeSchema,
       /** Short provider error text (e.g. "Authentication Failed") when `ok` is false. */
       error: z.string().nullable(),
+      /** HTTP status stored with the failed send (e.g. 401 for rejected credentials); null/absent when unknown. */
+      errorStatus: z.number().int().nullable().optional(),
     })
     .nullable(),
 });
