@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { FileText, Inbox, KeyRound, Pencil, Power, RefreshCw, Send } from "lucide-react";
 import { Button, Card, StatusChip, type Tone } from "@/components/ui";
 import { channelHealthText } from "@/lib/channel-health";
+import { WalletBalanceLine } from "./WalletBalanceLine";
 import { WebhookUrlBox } from "./WebhookUrlBox";
 
 const QUALITY: Record<NonNullable<Channel["qualityRating"]>, { label: string; tone: Tone }> = {
@@ -76,6 +77,7 @@ export function ChannelCard({
         </p>
       ) : null}
       {health && channel.status !== "disabled" ? <ChannelHealthLines health={health} /> : null}
+      {canManage && channel.provider === "gupshup" && channel.status !== "disabled" ? <WalletBalanceLine channelId={channel.id} /> : null}
       {canManage && channel.apiKeyHint ? (
         <p className="m-0 flex items-center gap-2 text-sm">
           <KeyRound aria-hidden className="size-4 text-muted" />

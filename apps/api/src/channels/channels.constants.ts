@@ -7,6 +7,9 @@ export const CHANNEL_PROVIDER = Symbol("CHANNEL_PROVIDER");
 /** DI token: checks a Gupshup API key + app name before saving a channel (overridable in tests). */
 export const GUPSHUP_VERIFIER = Symbol("GUPSHUP_VERIFIER");
 
+/** DI token: reads a Gupshup wallet balance (never throws; null = unavailable). Overridable in tests. */
+export const GUPSHUP_WALLET = Symbol("GUPSHUP_WALLET");
+
 /** DI token: Dialog360PartnerClient, or null when D360_PARTNER_ID / D360_PARTNER_API_KEY are not set. */
 export const DIALOG360_PARTNER = Symbol("DIALOG360_PARTNER");
 

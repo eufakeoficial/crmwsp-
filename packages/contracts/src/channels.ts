@@ -111,3 +111,24 @@ export type ChannelHealth = z.infer<typeof channelHealthSchema>;
 
 export const channelHealthListResponseSchema = z.object({ items: z.array(channelHealthSchema) });
 export type ChannelHealthListResponse = z.infer<typeof channelHealthListResponseSchema>;
+
+/** Gupshup wallet balance below this amount (USD) shows a low-balance warning. */
+export const GUPSHUP_LOW_BALANCE_USD = 2;
+
+/** GET /channels/:id/balance. `unavailable` = the balance could not be read (never an error for the UI). */
+export const walletBalanceSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ok"),
+    amount: z.number(),
+    /** ISO currency code as reported by Gupshup; null when the response did not include it. */
+    currency: z.string().nullable(),
+    low: z.boolean(),
+  }),
+  z.object({ status: z.literal("unavailable") }),
+]);
+export type WalletBalance = z.infer<typeof walletBalanceSchema>;
+
+/** True when the balance is in USD and under {@link GUPSHUP_LOW_BALANCE_USD}. Unknown currency never warns. */
+export function isLowWalletBalance(amount: number, currency: string | null): boolean {
+  return currency?.toUpperCase() === "USD" && amount < GUPSHUP_LOW_BALANCE_USD;
+}

@@ -9,6 +9,7 @@ import {
   attachmentUrlResponseSchema,
   channelHealthListResponseSchema,
   channelListResponseSchema,
+  walletBalanceSchema,
   channelSchema,
   contactListResponseSchema,
   contactSchema,
@@ -47,6 +48,7 @@ export const channelsApi = {
   setPartnerCredentials: (id: string, input: SetPartnerCredentialsRequest) =>
     request(`/channels/${id}/partner-credentials`, { method: "PUT", body: input, schema: channelSchema }),
   health: () => request("/channels/health", { schema: channelHealthListResponseSchema }),
+  balance: (id: string) => request(`/channels/${id}/balance`, { schema: walletBalanceSchema }),
   updateCredentials: (id: string, input: UpdateGupshupCredentialsRequest) =>
     request(`/channels/${id}/credentials`, { method: "PATCH", body: input, schema: channelSchema }),
   rotateWebhookToken: (id: string) =>

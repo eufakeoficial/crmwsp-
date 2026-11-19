@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { channelHealthText } from "./channel-health";
+import { channelHealthText, walletBalanceText } from "./channel-health";
 
 const now = new Date("2026-11-19T12:00:00.000Z");
 const ID = "11111111-1111-4111-8111-111111111111";
@@ -18,5 +18,13 @@ describe("channelHealthText", () => {
     const t = channelHealthText({ channelId: ID, lastInboundAt: null, lastOutbound: null }, now);
     expect(t.inbound).toBe("Aún no has recibido mensajes por este número");
     expect(t.outbound).toBeNull();
+  });
+});
+
+describe("walletBalanceText", () => {
+  it("formats the balance and hides it when unavailable", () => {
+    expect(walletBalanceText({ status: "ok", amount: 3.5, currency: "USD", low: false })).toBe("Saldo Gupshup: USD 3.50");
+    expect(walletBalanceText({ status: "ok", amount: 12, currency: null, low: false })).toBe("Saldo Gupshup: 12.00");
+    expect(walletBalanceText({ status: "unavailable" })).toBeNull();
   });
 });

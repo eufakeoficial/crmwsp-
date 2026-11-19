@@ -20,6 +20,8 @@ import {
   type Channel,
   type ChannelHealthListResponse,
   type ChannelListResponse,
+  type WalletBalance,
+  isLowWalletBalance,
   type Dialog360Config,
   type Dialog360ConnectState,
   type MessageTemplateDto,
@@ -30,7 +32,7 @@ import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, sq
 import { lintTemplate } from "@crmwsp/domain";
 import { planTemplateSync } from "../templates/sync-plan.js";
 import { buildChannelHealth, type InboundRow, type OutboundRow } from "./channel-health.js";
-import { generateWebhookToken, type Dialog360PartnerClient, type GupshupCredentialCheck, type WhatsAppProvider } from "@crmwsp/whatsapp";
+import { generateWebhookToken, type Dialog360PartnerClient, type GupshupCredentialCheck, type GupshupWalletBalance, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { EmailVerifiedGuard } from "../auth/email-verified.guard.js";
@@ -41,7 +43,7 @@ import { ActivationGuard } from "../billing/activation.guard.js";
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import { PG_UNIQUE_VIOLATION, pgCode, writeAudit } from "../inbox/audit.js";
 import { BusinessCategoryService, CATEGORY_REVIEW_BLOCKS_CHANNELS } from "../settings/business-category.service.js";
-import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_API_KEY_PURPOSE, GUPSHUP_VERIFIER, webhookUrlFor } from "./channels.constants.js";
+import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_API_KEY_PURPOSE, GUPSHUP_VERIFIER, GUPSHUP_WALLET, webhookUrlFor } from "./channels.constants.js";
 
 function redactedHint(row: ChannelConnection, cipher: CipherBox): string | null {
   if (!row.credentialsEncrypted) return null;
@@ -84,6 +86,12 @@ export type GupshupCredentialVerifier = (apiKey: string, appName: string) => Pro
 export const GUPSHUP_INVALID_KEY_MESSAGE = "La API key no es válida para esa cuenta de Gupshup.";
 export const GUPSHUP_INVALID_APP_MESSAGE = "No existe una app de Gupshup con ese nombre para esta API key.";
 
+/** Reads the Gupshup wallet balance for an API key; null = unavailable. */
+export type GupshupWalletReader = (apiKey: string) => Promise<GupshupWalletBalance | null>;
+
+/** The balance is cached per channel so the channels page does not hammer Gupshup. */
+export const WALLET_CACHE_TTL_MS = 5 * 60_000;
+
 /** The part of PlanLimitsService the channels need (stubbed in unit tests). */
 export type ChannelPlanLimits = Pick<PlanLimitsService, "assert" | "lock" | "startTrialIfEligible">;
 
@@ -97,7 +105,10 @@ export class ChannelsController {
     @Inject(PlanLimitsService) private readonly limits: ChannelPlanLimits,
     @Optional() @Inject(BusinessCategoryService) private readonly categories?: Pick<BusinessCategoryService, "assertCanConnect">,
     @Optional() @Inject(GUPSHUP_VERIFIER) private readonly verifyGupshup?: GupshupCredentialVerifier,
+    @Optional() @Inject(GUPSHUP_WALLET) private readonly readWallet?: GupshupWalletReader,
   ) {}
+
+  private readonly walletCache = new Map<string, { at: number; value: WalletBalance }>();
 
   private readonly logger = new Logger(ChannelsController.name);
 
@@ -449,6 +460,39 @@ export class ChannelsController {
     });
   }
 
+  /**
+   * Gupshup wallet balance of the channel (it pays the WhatsApp messages). Owner/admin only because it
+   * uses the stored API key. Never fails: any problem answers `unavailable`. Cached for 5 minutes.
+   */
+  @Get(":id/balance")
+  @Roles("owner", "admin")
+  async balance(@CurrentTenantDb() db: TenantDb, @Param("id") id: string): Promise<WalletBalance> {
+    if (!isUuid(id)) throw new NotFoundError();
+    const channel = await db.run(async (tx) => {
+      const [ch] = await tx
+        .select({ provider: channelConnections.provider, credentials: channelConnections.credentialsEncrypted })
+        .from(channelConnections)
+        .where(eq(channelConnections.id, id));
+      return ch;
+    });
+    if (!channel) throw new NotFoundError();
+    const unavailable: WalletBalance = { status: "unavailable" };
+    if (channel.provider !== "gupshup" || !channel.credentials || !this.cipher || !this.readWallet) return unavailable;
+    const cacheKey = `${db.tenantId}:${id}`;
+    const hit = this.walletCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < WALLET_CACHE_TTL_MS) return hit.value;
+    let value: WalletBalance = unavailable;
+    try {
+      const apiKey = this.cipher.decrypt(channel.credentials, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
+      const balance = await this.readWallet(apiKey);
+      if (balance) value = { status: "ok", amount: balance.amount, currency: balance.currency, low: isLowWalletBalance(balance.amount, balance.currency) };
+    } catch {
+      // Decryption or reader failure: the UI just hides the balance. Nothing is logged (key material).
+    }
+    this.walletCache.set(cacheKey, { at: Date.now(), value });
+    return value;
+  }
+
   @Post(":id/rotate-webhook-token")
   @Roles("owner", "admin")
   @HttpCode(200)
@@ -764,6 +808,7 @@ export class ChannelsController {
         });
         return updated;
       });
+      this.walletCache.delete(`${db.tenantId}:${id}`);
       return this.toDto(row, true, redact(input.apiKey));
     } catch (err) {
       if (pgCode(err) === PG_UNIQUE_VIOLATION) throw new ConflictError("Esa app de Gupshup ya está conectada a otro canal.");
