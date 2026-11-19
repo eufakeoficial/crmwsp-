@@ -145,6 +145,10 @@ export function Composer({
     const before = text;
     try {
       const res = await improveTextApi.improve(trimmed, style);
+      if (res.unchanged) {
+        setImproveError("No pude mejorar este texto sin cambiar su sentido.");
+        return;
+      }
       setUndo(before);
       setText(res.text);
     } catch (err) {
