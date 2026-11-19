@@ -6,6 +6,7 @@ import { canManageAi } from "@/components/app/roles";
 import { SettingsFrame } from "@/components/ai/AccessGate";
 import { Alert, Button, Card, Input, Label } from "@/components/ui";
 import { ownerModeApi } from "@/lib/owner-mode-api";
+import { ApiError } from "@/lib/api";
 import { errorMessage } from "@/lib/messages";
 
 const COMMANDS = [
@@ -18,6 +19,17 @@ const COMMANDS = [
   ["/responder Juan: mañana voy", "Borrador de respuesta al cliente (pide confirmación)"],
   ["/pausar · /activar", "IA de todo el negocio (pide confirmación)"],
 ] as const;
+
+/** The API answers 400 for several distinct causes; say which one instead of a generic "check your data". */
+function ownerPhoneErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.status === 400) {
+    if (/business channel number/i.test(err.message)) return "Ese es el número del negocio. Usa tu número personal.";
+    if (/No active WhatsApp channel/i.test(err.message)) return "Primero activa tu canal de WhatsApp en Configuración → WhatsApp.";
+    return "Escribe el número con el código de país, por ejemplo +51906109195.";
+  }
+  if (err instanceof ApiError && err.status === 409) return "Ese número ya está vinculado a otro miembro del equipo.";
+  return errorMessage(err);
+}
 
 function OwnerPhoneCard({ status, onChange }: { status: OwnerModeStatus; onChange: (s: OwnerModeStatus) => void }) {
   const [phone, setPhone] = useState(status.phone?.phoneE164 ?? "");
@@ -34,7 +46,7 @@ function OwnerPhoneCard({ status, onChange }: { status: OwnerModeStatus; onChang
       onChange(await fn());
       setCode("");
     } catch (err) {
-      setError(errorMessage(err));
+      setError(ownerPhoneErrorMessage(err));
     } finally {
       setBusy(false);
     }

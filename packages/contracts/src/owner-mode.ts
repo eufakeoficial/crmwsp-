@@ -3,7 +3,7 @@ import { z } from "zod";
 /* F9 "modo dueño": a verified owner/admin runs the CRM from their own WhatsApp. */
 
 /** Strict E.164 for owner phones (min 7 digits after the country code prefix, same as the DB check). */
-export const ownerPhoneE164Schema = z.string().trim().regex(/^\+[1-9]\d{6,14}$/, "Invalid E.164 phone number");
+export const ownerPhoneE164Schema = z.string().trim().transform((v) => v.replace(/[\s().-]/g, "")).pipe(z.string().regex(/^\+[1-9]\d{6,14}$/, "Invalid E.164 phone number"));
 
 export const OWNER_PHONE_STATUSES = ["pending", "verified"] as const;
 export const ownerPhoneStatusSchema = z.enum(OWNER_PHONE_STATUSES);
