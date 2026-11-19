@@ -278,3 +278,56 @@ describe("courtesy handoff (ADR 0023)", () => {
     expect(replyDefersToHuman("No ofrecemos tango. ¿Te paso los horarios de salsa?")).toBe(false);
   });
 });
+
+describe("customerWantsHuman billing/dispute terms", () => {
+  it.each([
+    "me van a cobrar doble",
+    "me cobraron dos veces la mensualidad",
+    "hay un cobro indebido en mi tarjeta",
+    "tengo un doble cobro",
+    "esto es un fraude",
+    "es una estafa",
+    "quiero cancelar mi plan",
+    "solicito la cancelación",
+    "quiero anular la reserva",
+    "nadie me responde",
+    "voy a hablar con mi abogado",
+    "pondré una denuncia",
+    "la app no funciona",
+    "tengo un reclamo",
+    "quiero la devolución",
+    "pido reembolso",
+    "QUIERO CANCELACION",
+  ])("fails toward a human: %s", (text) => {
+    expect(customerWantsHuman(text)).toBe(true);
+    const r = evaluateTurn(
+      out({ reply: { text: "Lo revisamos.", claims: [] }, needsHuman: true }),
+      ctx({ customerText: text }),
+    );
+    expect(r.reply.allowed).toBe(false);
+  });
+
+  it.each([
+    "¿Cuánto cuesta la clase suelta?",
+    "¿Cuánto cobran por la mensualidad?",
+    "¿Cuál es el precio del paquete de boda?",
+    "¿Aceptan Yape o tarjeta?",
+    "¿Hay clase de salsa el sábado?",
+  ])("does not match ordinary questions: %s", (text) => {
+    expect(customerWantsHuman(text)).toBe(false);
+  });
+});
+
+describe("reply dropped by the sanitizer", () => {
+  it("escalates to a human instead of going silent", () => {
+    const r = evaluateTurn(out({ replyDropped: true }), ctx({ customerText: "¿Precio?" }));
+    expect(r.reply).toEqual({ allowed: false, reason: "reply contained only internal references" });
+    expect(hasHandoff(r)).toBe(true);
+  });
+
+  it("a plain missing reply is unchanged (no handoff)", () => {
+    const r = evaluateTurn(out(), ctx());
+    expect(r.reply).toEqual({ allowed: false, reason: "no reply proposed" });
+    expect(hasHandoff(r)).toBe(false);
+  });
+});

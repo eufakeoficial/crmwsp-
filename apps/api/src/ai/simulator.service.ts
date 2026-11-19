@@ -4,6 +4,7 @@ import {
   PROMPT_VERSION,
   aiTurnResponseFormat,
   buildAiTurnMessages,
+  sanitizeTurnReply,
   estimateCost,
   type ChatMessage,
   type ChatResult,
@@ -160,7 +161,7 @@ export class SimulatorService {
       const final = calls[calls.length - 1]!;
       const chunks = new Map<string, SimulatedChunk>(hits.map((h) => [h.id, { sourceTitle: titles.get(h.sourceId) ?? null, content: h.content }]));
       const report = dryRunTurn({
-        output: final.result.parsed as AiTurnOutput,
+        output: sanitizeTurnReply(final.result.parsed as AiTurnOutput, { chunkIds: hits.map((h) => h.id) }),
         chunks,
         contextIds: new Set(messageIds),
         confidenceThreshold: ctx.config ? Number(ctx.config.confidenceThreshold) : DEFAULT_CONFIDENCE_THRESHOLD,

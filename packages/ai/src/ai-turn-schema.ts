@@ -65,13 +65,18 @@ export function normalizeAiTurnOutput(raw: unknown): unknown {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
   const out: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
   if (out.reply === null) delete out.reply;
-  // Customer-facing text never carries chunk ids or citation markers (they live in claims).
+  // Set only by this parser, never by the model.
+  delete out.replyDropped;
+  // Customer-facing text never carries explicit chunk references (they live in claims). Bare
+  // UUIDs and "[n]" markers need the retrieved chunk ids: see `sanitizeTurnReply`.
   if (typeof out.reply === "object" && out.reply !== null && !Array.isArray(out.reply)) {
     const reply = { ...(out.reply as Record<string, unknown>) };
     if (typeof reply.text === "string") reply.text = sanitizeReplyText(reply.text);
-    // Nothing left to say once the markers are gone: no reply (the policy hands off).
-    if (reply.text === "") delete out.reply;
-    else out.reply = reply;
+    // Nothing left to say once the markers are gone: escalate instead of going silent.
+    if (reply.text === "") {
+      delete out.reply;
+      out.replyDropped = true;
+    } else out.reply = reply;
   }
   // Playbook detection is best effort: null, absent or off-list values never fail the turn.
   if (typeof out.salesStage !== "string" || !(SALES_STAGES as readonly string[]).includes(out.salesStage)) delete out.salesStage;

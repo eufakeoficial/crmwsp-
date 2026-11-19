@@ -3,6 +3,7 @@ import {
   PROMPT_VERSION,
   aiTurnResponseFormat,
   buildAiTurnMessages,
+  sanitizeTurnReply,
   estimateCost,
   type ChatResult,
   type LLMProvider,
@@ -798,7 +799,8 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
 
   const handoff = handoffWriter(tx, c, events);
   const final = p.calls[p.calls.length - 1]!;
-  const output = final.result.parsed as AiTurnOutput;
+  // Bare chunk UUIDs and "[n]" markers are stripped against the chunks the model actually saw.
+  const output = sanitizeTurnReply(final.result.parsed as AiTurnOutput, { chunkIds: p.hits.map((h) => h.id) });
   const modelUsed = final.model;
   const detected = p.playbook.enabled ? sanitizeDetectedPlaybook(output, p.playbook.offeredObjectionIds) : {};
   // Auto only when nobody (human or handoff) owns the conversation; otherwise drafts.

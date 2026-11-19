@@ -15,6 +15,25 @@ describe("renderLocalDate", () => {
     expect(renderLocalDate(NOW, "Europe/Madrid")).toMatch(/^Local date: Friday 2026-11-20 03:30 \(Europe\/Madrid\)\. Tomorrow: Saturday 2026-11-21\.$/);
   });
 
+  it("Europe/Madrid DST end (25 h day): tomorrow is Monday, not Sunday again", () => {
+    // 2026-10-25 lasts 25 h in Madrid: now + 24 h is still Sunday 23:30 local, so it would say "Sunday".
+    expect(renderLocalDate("2026-10-24T22:30:00.000Z", "Europe/Madrid")).toBe(
+      "Local date: Sunday 2026-10-25 00:30 (Europe/Madrid). Tomorrow: Monday 2026-10-26.",
+    );
+  });
+
+  it("Europe/Madrid DST start: the 23 h day", () => {
+    expect(renderLocalDate("2026-03-28T23:30:00.000Z", "Europe/Madrid")).toBe(
+      "Local date: Sunday 2026-03-29 00:30 (Europe/Madrid). Tomorrow: Monday 2026-03-30.",
+    );
+  });
+
+  it("America/Lima (no DST) late at night and across a month end", () => {
+    expect(renderLocalDate("2026-12-01T04:59:00.000Z", "America/Lima")).toBe(
+      "Local date: Monday 2026-11-30 23:59 (America/Lima). Tomorrow: Tuesday 2026-12-01.",
+    );
+  });
+
   it.each([undefined, "", "Mars/Olympus"])("falls back to UTC with a note for %s", (tz) => {
     const line = renderLocalDate(NOW, tz);
     expect(line).toContain("Friday 2026-11-20 02:30 (UTC)");

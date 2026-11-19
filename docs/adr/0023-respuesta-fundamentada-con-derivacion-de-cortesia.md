@@ -45,3 +45,9 @@ cualquier derivación, así que la IA no seguirá respondiendo sola en los turno
   alguien que quería una persona, que de todos modos recibe la derivación.
 - El simulador (`dryRunTurn`) aplica la misma regla con los últimos mensajes del cliente, así que el
   veredicto simulado coincide con el del worker.
+- Si el saneador de texto deja la respuesta vacía (solo tenía ids o marcas de cita), la salida lleva
+  `replyDropped` y el motor deriva a un humano con notificación. El cliente no queda en silencio sin
+  que nadie se entere.
+- Los cobros dobles o indebidos, fraudes, cancelaciones, reembolsos, abogados, denuncias,
+  "nadie me responde" y "no funciona" cuentan como pedir una persona: en esos casos la respuesta
+  se bloquea y se deriva.

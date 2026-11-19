@@ -176,8 +176,11 @@ const WANTS_HUMAN = new RegExp(
     word("hablar|comunicarme|comunicar|pasarme|pasar|contactarme|contactar|atienda|atiende|talk|speak") + GAP + PERSON,
     word("quiero|necesito|prefiero|ped[ií]|exijo") + String.raw`\s+(?:a\s+)?(?:una?\s+)?` + PERSON,
     word(
-      String.raw`quejas?|reclam\p{L}*|inaceptable|denunci\p{L}*|estaf\p{L}*|p[eé]sim\p{L}*|indignad\p{L}*|hart[oa]|enojad\p{L}*|enfadad\p{L}*|molest[oa]s?|complain\p{L}*|refund|reembols\p{L}*|devoluci[oó]n`,
+      String.raw`quejas?|reclam\p{L}*|inaceptable|denunci\p{L}*|estaf\p{L}*|fraud\p{L}*|p[eé]sim\p{L}*|indignad\p{L}*|hart[oa]|enojad\p{L}*|enfadad\p{L}*|molest[oa]s?|complain\p{L}*|refund|reembols\p{L}*|devoluci[oó]n\p{L}*|devuelv\p{L}*|abogad\p{L}*|cancel\p{L}*|anul\p{L}*|indebid\p{L}*|chargeback`,
     ),
+    // Billing disputes and being ignored.
+    word(String.raw`(?:doble|dos\s+veces)\s+(?:cobr\p{L}*|cargo\p{L}*)|cobr\p{L}*\s+(?:doble|dos\s+veces|de\s+m[aá]s|demas)`),
+    word(String.raw`nadie\s+(?:me\s+)?(?:responde|contesta|atiende|ayuda)\p{L}*|no\s+funciona\p{L}*|no\s+sirve\p{L}*`),
   ].join("|"),
   "iu",
 );
@@ -213,7 +216,11 @@ export function evaluateTurn(output: AiTurnOutput, ctx: AiPolicyContext): TurnEv
   let reply: TurnEvaluation["reply"];
   let needsHandoff = false;
 
-  if (!output.reply) {
+  if (!output.reply && output.replyDropped === true) {
+    // The text was only internal ids/markers: nobody would answer the customer otherwise.
+    reply = { allowed: false, reason: "reply contained only internal references" };
+    needsHandoff = true;
+  } else if (!output.reply) {
     reply = { allowed: false, reason: "no reply proposed" };
   } else if (hasUncitedFactualClaim(output, ctx.validChunkIds)) {
     reply = { allowed: false, reason: "factual claim without valid citation" };

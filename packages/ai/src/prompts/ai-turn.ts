@@ -102,7 +102,9 @@ export function renderLocalDate(nowIso: string, timeZone?: string): string {
   const tz = validTimeZone(timeZone);
   const zone = tz ?? "UTC";
   const today = localDay(now, zone);
-  const tomorrow = localDay(new Date(now.getTime() + 24 * 60 * 60 * 1000), zone);
+  // Calendar arithmetic on the local date (not now + 24 h, which is wrong on DST days).
+  const [y, m, d] = today.ymd.split("-").map(Number) as [number, number, number];
+  const tomorrow = localDay(new Date(Date.UTC(y, m - 1, d + 1, 12)), "UTC");
   const note = tz ? "" : " The business timezone is unknown: times are UTC, confirm the date with the customer if it matters.";
   return `Local date: ${today.weekday} ${today.ymd} ${today.time} (${attr(zone)}). Tomorrow: ${tomorrow.weekday} ${tomorrow.ymd}.${note}`;
 }
