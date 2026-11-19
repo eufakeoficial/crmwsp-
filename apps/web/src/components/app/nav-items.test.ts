@@ -44,7 +44,7 @@ describe("NAV_GROUPS", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
   it("shows Soporte and Puesta en marcha as secondary entries", () => {
-    expect(NAV_SECONDARY.map((i) => i.key)).toEqual(["support", "onboarding"]);
+    expect(NAV_SECONDARY.map((i) => i.key)).toEqual(["billing", "support", "onboarding"]);
   });
   it("groups pages as designed", () => {
     const labels = (k: string) => NAV_GROUPS.find((g) => g.key === k)?.children?.map((c) => c.label);

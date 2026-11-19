@@ -102,7 +102,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { key: "settings-integrations", label: "Integraciones", href: "/app/settings/integrations", icon: Plug },
       { key: "settings-currency", label: "Moneda", href: "/app/settings/currency", icon: Coins },
       { key: "settings-plan", label: "Plan y uso", href: "/app/settings/plan", icon: CreditCard },
-      { key: "settings-billing", label: "Suscripción", href: "/app/settings/billing", icon: Wallet },
       { key: "settings-templates", label: "Plantillas de negocio", href: "/app/settings/templates", icon: LayoutTemplate },
       { key: "settings-developers", label: "Claves de API", href: "/app/settings/developers", icon: Code2 },
       { key: "settings-ads", label: "Anuncios", href: "/app/settings/ads", icon: Megaphone },
@@ -113,6 +112,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 
 /** Footer entries below the groups. */
 export const NAV_SECONDARY: readonly NavItem[] = [
+  { key: "billing", label: "Suscripción", href: "/app/settings/billing", icon: Wallet },
   { key: "support", label: "Soporte", href: "/app/support", icon: LifeBuoy },
   { key: "onboarding", label: "Puesta en marcha", href: "/app/onboarding", icon: Rocket },
 ];
