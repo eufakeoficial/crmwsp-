@@ -399,8 +399,8 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
   const listError = list.error ? errorMessage(list.error) : undefined;
   const showPanel = panelOpen && selectedId !== null;
   const cols = showPanel
-    ? "desk:grid-cols-[380px_minmax(0,1fr)_340px]"
-    : "desk:grid-cols-[380px_minmax(0,1fr)]";
+    ? "desk:grid-cols-[304px_minmax(0,1fr)_340px]"
+    : "desk:grid-cols-[304px_minmax(0,1fr)]";
   return (
     <div className="flex h-[calc(100dvh-68px)] min-h-[420px] flex-col bg-white desk:h-dvh">
       {eventsStatus === "limited" ? (
