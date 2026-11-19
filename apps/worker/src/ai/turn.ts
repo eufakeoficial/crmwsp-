@@ -13,6 +13,7 @@ import { AI_ACTION_TYPES, aiActionSchema, normalizeReactionEmoji } from "@crmwsp
 import type { PlaybookConfig, SalesStage } from "@crmwsp/contracts";
 import type { AiActionType, AiDecision, AiTurnOutput } from "@crmwsp/contracts";
 import { aiMessagesAllowed } from "./plan-gate.js";
+import { startTypingIndicator } from "./typing.js";
 import {
   agentConfigs,
   consumeUsage,
@@ -618,6 +619,8 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       nowIso: now.toISOString(),
       playbook: playbookCtx,
     });
+    // Best-effort "typing..." for the customer while the model thinks (never awaited, never throws).
+    startTypingIndicator(deps, { tenantId, conversationId: c.conversationId, triggerMessageId, now });
     calls = await callModel(provider, conn, chatMessages);
   } catch (err) {
     const reason = handoffReasonFor(err);

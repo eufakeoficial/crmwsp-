@@ -32,4 +32,10 @@ export interface WhatsAppProvider {
   submitTemplate(conn: WhatsAppConnection, tpl: TemplateSubmission): Promise<SubmitTemplateResult>;
   /** Lists every template of the connection with its current review status. */
   listTemplates(conn: WhatsAppConnection): Promise<ProviderTemplate[]>;
+  /**
+   * Optional: marks the inbound message as read and shows "typing..." to the customer (WhatsApp Cloud API
+   * typing indicator). The BSP dismisses it after ~25 s or when we reply. Best effort: adapters without
+   * support omit it; callers must catch errors and never let this block a reply.
+   */
+  sendTypingIndicator?(conn: WhatsAppConnection, inboundExternalMessageId: string): Promise<void>;
 }
