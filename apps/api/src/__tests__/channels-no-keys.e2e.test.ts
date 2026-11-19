@@ -4,9 +4,9 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { errorResponseSchema } from "@crmwsp/contracts";
 import { createDb, eq, inArray, tenants, users } from "@crmwsp/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Test } from "@nestjs/testing";
+import { NestFactory } from "@nestjs/core";
 import { AppModule } from "../app.module.js";
-import { GUPSHUP_VERIFIER } from "../channels/channels.constants.js";
+import { ChannelsController, type GupshupCredentialVerifier } from "../channels/channels.controller.js";
 
 const hasEnv = Boolean(process.env["DATABASE_URL"] && process.env["DATABASE_URL_MIGRATOR"] && process.env["REDIS_URL"]);
 
@@ -18,12 +18,10 @@ describe.skipIf(!hasEnv)("channels without master keys", () => {
   beforeAll(async () => {
     delete process.env["ENCRYPTION_MASTER_KEY"];
     delete process.env["ENCRYPTION_MASTER_KEY_ID"];
+    app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { logger: false });
     // Never reach the real Gupshup API from tests: the credential check always passes.
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(GUPSHUP_VERIFIER)
-      .useValue(async () => ({ status: "valid" as const }))
-      .compile();
-    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter(), { logger: false });
+    // (Test.createTestingModule cannot be used: WebhooksModule needs the Fastify adapter at compile time.)
+    (app.get(ChannelsController) as unknown as { verifyGupshup: GupshupCredentialVerifier }).verifyGupshup = async () => ({ status: "valid" });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
   });
