@@ -3,7 +3,8 @@
 import type { Channel } from "@crmwsp/contracts";
 import { updateGupshupCredentialsRequestSchema } from "@crmwsp/contracts";
 import { type FormEvent, useState } from "react";
-import { Alert, Button, Input, Label, Spinner } from "@/components/ui";
+import { AiAssistButton, Alert, Button, Input, Label, Spinner } from "@/components/ui";
+import { buildApiKeyPrompt } from "@/lib/ai-assist-prompts";
 import { ApiError } from "@/lib/api";
 import { channelsApi } from "@/lib/inbox-api";
 import { channelErrorMessage, isEncryptionNotConfigured } from "@/lib/messages";
@@ -48,6 +49,7 @@ export function EditCredentialsPanel({ channel, onClose, onSaved, onNoKeys }: { 
       <p className="m-0 text-sm text-muted">
         Cambia la API key o el nombre de la app del número <b>{channel.phoneE164}</b>. Verificamos los datos con Gupshup antes de guardar y la URL del webhook no cambia.
       </p>
+      <AiAssistButton prompt={buildApiKeyPrompt({ appName: channel.appName })} label="Hacerlo con IA: obtener la API key" />
       <form onSubmit={submit} className="flex flex-col gap-3" noValidate>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ec-app">Nombre de la app en Gupshup</Label>

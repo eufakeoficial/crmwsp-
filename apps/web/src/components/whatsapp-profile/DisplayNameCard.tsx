@@ -2,11 +2,12 @@
 
 import { requestDisplayNameRequestSchema } from "@crmwsp/contracts";
 import { useState, type FormEvent } from "react";
-import { Alert, Button, Card, Input, Label } from "@/components/ui";
+import { AiAssistButton, Alert, Button, Card, Input, Label } from "@/components/ui";
+import { buildDisplayNamePrompt } from "@/lib/ai-assist-prompts";
 import { profileErrorMessage, whatsappProfileApi } from "@/lib/whatsapp-profile-api";
 
 /** Display-name change request. Meta must approve it, so the card says so up front. */
-export function DisplayNameCard({ channelId, onSent }: { channelId: string; onSent: (message: string) => void }) {
+export function DisplayNameCard({ channelId, phone, onSent }: { channelId: string; phone: string; onSent: (message: string) => void }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -43,8 +44,9 @@ export function DisplayNameCard({ channelId, onSent }: { channelId: string; onSe
           <Input id="wa-display-name" value={name} maxLength={249} onChange={(e) => setName(e.target.value)} placeholder="Mi Negocio" />
         </div>
         <Alert>{error}</Alert>
-        <div>
+        <div className="flex flex-wrap gap-2">
           <Button type="submit" variant="outline" disabled={busy || name.trim() === ""}>{busy ? "Enviando…" : "Solicitar cambio de nombre"}</Button>
+          <AiAssistButton prompt={buildDisplayNamePrompt({ phone, displayName: name.trim() || null })} label="Hacerlo con IA: pedirlo en Meta" className="" />
         </div>
       </form>
     </Card>

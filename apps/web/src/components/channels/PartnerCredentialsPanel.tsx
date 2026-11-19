@@ -3,7 +3,8 @@
 import type { Channel } from "@crmwsp/contracts";
 import { setPartnerCredentialsRequestSchema } from "@crmwsp/contracts";
 import { type FormEvent, useState } from "react";
-import { Alert, Button, Input, Label, Spinner } from "@/components/ui";
+import { AiAssistButton, Alert, Button, Input, Label, Spinner } from "@/components/ui";
+import { buildPartnerCredentialsPrompt } from "@/lib/ai-assist-prompts";
 import type { ApiError } from "@/lib/api";
 import { channelsApi } from "@/lib/inbox-api";
 import { channelErrorMessage, isEncryptionNotConfigured } from "@/lib/messages";
@@ -43,6 +44,7 @@ export function PartnerCredentialsPanel({ channel, onClose, onSaved, onNoKeys }:
     <div className="flex flex-col gap-3 rounded-2xl border border-line bg-paper p-4" data-testid="partner-credentials-panel">
       <b>Credenciales de plantillas (Gupshup)</b>
       <p className="m-0 text-sm text-muted">Necesarias para crear y sincronizar plantillas de WhatsApp del número <b>{channel.phoneE164}</b>.</p>
+      <AiAssistButton prompt={buildPartnerCredentialsPrompt({ appName: channel.appName })} label="Hacerlo con IA: conseguir ID de app y token" />
       <form onSubmit={submit} className="flex flex-col gap-3" noValidate>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="pc-app">ID de app de Gupshup</Label>

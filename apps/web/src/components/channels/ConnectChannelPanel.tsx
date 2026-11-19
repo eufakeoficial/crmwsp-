@@ -4,7 +4,8 @@ import type { Channel } from "@crmwsp/contracts";
 import { createGupshupChannelRequestSchema } from "@crmwsp/contracts";
 import { ExternalLink } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { Alert, Button, Card, Input, Label, Spinner } from "@/components/ui";
+import { AiAssistButton, Alert, Button, Card, Input, Label, Spinner } from "@/components/ui";
+import { buildApiKeyPrompt, buildWebhookPrompt } from "@/lib/ai-assist-prompts";
 import { ApiError } from "@/lib/api";
 import { channelsApi } from "@/lib/inbox-api";
 import { channelErrorMessage, isEncryptionNotConfigured } from "@/lib/messages";
@@ -89,6 +90,7 @@ export function ConnectChannelPanel({ onClose, onCreated, onNoKeys }: { onClose:
           <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
             <b>Crea la app de WhatsApp</b>
             <span className="text-sm text-muted">En la consola de Gupshup crea una app de WhatsApp y copia el nombre de la app y su API key.</span>
+            <AiAssistButton prompt={buildApiKeyPrompt({ appName: appName.trim() || null })} label="Hacerlo con IA: obtener la API key" />
           </div>
         </li>
         <li className="flex items-start gap-3">
@@ -142,6 +144,7 @@ export function ConnectChannelPanel({ onClose, onCreated, onNoKeys }: { onClose:
               <>
                 <p className="m-0 text-sm">El número <b>{created.phoneE164}</b> ya está activo. Falta un último paso en Gupshup:</p>
                 {created.webhookUrl ? <WebhookUrlBox url={created.webhookUrl} /> : null}
+                {created.webhookUrl ? <AiAssistButton prompt={buildWebhookPrompt({ webhookUrl: created.webhookUrl, appName: created.appName })} label="Hacerlo con IA: configurar el webhook" /> : null}
                 <p className="m-0 text-sm text-muted">Pégala en <b>Gupshup → Callback URL</b>. Después podrás recibir mensajes en el Inbox.</p>
                 <p className="m-0 rounded-2xl bg-warning-soft px-4 py-3 text-sm font-semibold text-warning">
                   La API key no se vuelve a mostrar. Solo verás sus últimos caracteres ({created.apiKeyHint ?? "••••"}).

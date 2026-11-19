@@ -3,7 +3,8 @@
 import type { Channel, ChannelHealth } from "@crmwsp/contracts";
 import type { ReactNode } from "react";
 import { FileText, Inbox, KeyRound, Pencil, Power, RefreshCw, Send } from "lucide-react";
-import { Button, Card, StatusChip, type Tone } from "@/components/ui";
+import { AiAssistButton, Button, Card, StatusChip, type Tone } from "@/components/ui";
+import { buildApiKeyPrompt, buildRechargePrompt, buildVerifyChannelPrompt, buildWebhookPrompt } from "@/lib/ai-assist-prompts";
 import { channelHealthText } from "@/lib/channel-health";
 import { WalletBalanceLine } from "./WalletBalanceLine";
 import { WebhookUrlBox } from "./WebhookUrlBox";
@@ -95,6 +96,7 @@ export function ChannelCard({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-extrabold text-muted">URL de webhook (Gupshup → Callback URL)</span>
           <WebhookUrlBox url={channel.webhookUrl} />
+          <AiAssistButton prompt={buildWebhookPrompt({ webhookUrl: channel.webhookUrl, appName: channel.appName })} label="Hacerlo con IA: configurar el webhook" />
         </div>
       ) : null}
       {canManage ? (
@@ -114,6 +116,14 @@ export function ChannelCard({
             <Button size="sm" variant="outline" disabled={busy} onClick={onPartner}>
               <FileText aria-hidden className="size-4" />{channel.partnerConfigured ? "Cambiar credenciales de plantillas" : "Configurar plantillas"}
             </Button>
+          ) : null}
+          {channel.provider === "gupshup" ? <AiAssistButton prompt={buildApiKeyPrompt({ appName: channel.appName })} label="Hacerlo con IA: API key" /> : null}
+          {channel.provider === "gupshup" ? <AiAssistButton prompt={buildRechargePrompt({ appName: channel.appName })} label="Hacerlo con IA: recargar saldo" /> : null}
+          {channel.provider === "gupshup" && channel.webhookUrl ? (
+            <AiAssistButton
+              prompt={buildVerifyChannelPrompt({ webhookUrl: channel.webhookUrl, appName: channel.appName, phone: channel.phoneE164, apiKeyHint: channel.apiKeyHint })}
+              label="Verificar mi canal con IA"
+            />
           ) : null}
           <Button size="sm" variant={disabled ? "accent" : "outline"} disabled={busy} onClick={onToggle}>
             <Power aria-hidden className="size-4" />{disabled ? "Activar" : "Desactivar"}

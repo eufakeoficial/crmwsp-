@@ -34,6 +34,7 @@ export { SuccessCard } from "./SuccessCard";
 export { Switch } from "./Switch";
 export { Tabs, type TabItem } from "./Tabs";
 export { Textarea } from "./Textarea";
+export { AiAssistButton } from "./AiAssistButton";
 export { Toast } from "./Toast";
 export { TONE_BG, TONE_SOFT, type Tone } from "./tones";
 export { UploadTile } from "./UploadTile";
