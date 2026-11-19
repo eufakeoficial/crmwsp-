@@ -537,6 +537,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   // 2. Provider calls, outside any transaction (no pooled connection held while the LLM thinks).
   let calls: ModelCall[];
   let hits: ChunkHit[] = [];
+  let customerText = "";
   /** Objection ids offered in this turn's prompt: the only ones the model may report back. */
   let offeredObjectionIds: string[] = [];
   let queryEmbeddingTokens: { model: string; tokens: number } | undefined;
@@ -576,6 +577,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       m.type === "audio" && !m.body?.trim() && transcripts.has(m.id) ? { ...m, body: `[voice note] ${transcripts.get(m.id)}` } : m,
     );
     const query = buildQuery(history);
+    customerText = query;
     let sourceTitles = new Map<string, string>();
     if (query !== "") {
       let vector: { embedding: number[]; model: string; dims: number } | undefined;
@@ -653,6 +655,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       hits,
       contextIds,
       confidenceThreshold,
+      customerText,
       queryEmbeddingTokens,
       playbook: { enabled: playbook.enabled, offeredObjectionIds },
     }),
@@ -754,6 +757,8 @@ interface PersistInput {
   hits: ChunkHit[];
   contextIds: Set<string>;
   confidenceThreshold: number;
+  /** Customer text of this turn: tells a courtesy handoff from a request for a person (ADR 0023). */
+  customerText: string;
   queryEmbeddingTokens: { model: string; tokens: number } | undefined;
   /** Sales playbook state of the turn: detection is stored only while it is enabled. */
   playbook: { enabled: boolean; offeredObjectionIds: string[] };
@@ -808,6 +813,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
     policies: toTenantPolicies(p.config?.policies ?? {}),
     now,
     mode,
+    customerText: p.customerText,
   });
 
   const actionIds: string[] = [];

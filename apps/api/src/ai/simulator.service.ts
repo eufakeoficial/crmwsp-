@@ -166,6 +166,7 @@ export class SimulatorService {
         approvalThresholdMinor: Number(ctx.config?.approvalThresholdMinor ?? 0n),
         policies: toTenantPolicies(ctx.config?.policies ?? {}),
         now,
+        customerText: query,
       });
       const usage = summarizeUsage(calls, embedding);
       return { promptSource, model: final.model, retrievedChunks: hits.length, usage, ...report };

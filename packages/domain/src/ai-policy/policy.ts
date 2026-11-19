@@ -33,6 +33,12 @@ export interface AiPolicyContext {
   mode?: "auto" | "assist";
   /** Current opportunity stage, if any. */
   currentStage?: string;
+  /**
+   * The customer's latest message(s). Lets the engine tell a courtesy handoff (grounded answer
+   * plus "a human may follow up") from a real request for a person or a complaint (ADR 0023).
+   * Absent means unknown: a model handoff then blocks the reply, as before.
+   */
+  customerText?: string;
 }
 
 export interface ActionEvaluation {
@@ -154,6 +160,49 @@ function hasUncitedFactualClaim(output: AiTurnOutput, valid: ReadonlySet<string>
   return false;
 }
 
+/*
+ * Courtesy handoff (ADR 0023). Deliberately broad, like the factual detectors: a false positive
+ * keeps the old behaviour (blocked reply + handoff), a false negative would answer someone who
+ * wanted a person.
+ */
+/** Wraps an alternation in Unicode-aware word boundaries (`\b` is ASCII-only and breaks on ñ/á). */
+const word = (alt: string): string => String.raw`(?<![\p{L}\p{N}])(?:${alt})(?![\p{L}\p{N}])`;
+const PERSON = word(
+  "persona|humano|human|agente|agent|asesora?|operadora?|encargad[oa]|alguien|responsable|due[ñn][oa]|gerente|ejecutiv[oa]|vendedora?|representante|someone|person",
+);
+const GAP = String.raw`[^.?!\n]{0,40}`;
+const WANTS_HUMAN = new RegExp(
+  [
+    word("hablar|comunicarme|comunicar|pasarme|pasar|contactarme|contactar|atienda|atiende|talk|speak") + GAP + PERSON,
+    word("quiero|necesito|prefiero|ped[ií]|exijo") + String.raw`\s+(?:a\s+)?(?:una?\s+)?` + PERSON,
+    word(
+      String.raw`quejas?|reclam\p{L}*|inaceptable|denunci\p{L}*|estaf\p{L}*|p[eé]sim\p{L}*|indignad\p{L}*|hart[oa]|enojad\p{L}*|enfadad\p{L}*|molest[oa]s?|complain\p{L}*|refund|reembols\p{L}*|devoluci[oó]n`,
+    ),
+  ].join("|"),
+  "iu",
+);
+const DEFERS = new RegExp(
+  [
+    word("te|le|les") + String.raw`\s+` + word("recomiendo|recomendamos|sugiero|sugerimos|aconsejo") + String.raw`\s+(?:que\s+)?` +
+      word("hablar|hables|contactar|contactes|comunicarte|escribir|escribas|llamar|llames|consultar|consultes"),
+    word("te|le|les") + String.raw`\s+` + word("paso|pasamos|comunico|comunicamos|conecto|conectamos") + String.raw`\s+con\s`,
+    word("te|le|les") + String.raw`\s+` + word("derivo|derivamos|transfiero|transferimos"),
+    String.raw`una?\s+` + PERSON + GAP + word("te|le|les") + String.raw`\s+` + word("atender[aá]|contactar[aá]|responder[aá]|ayudar[aá]|escribir[aá]|llamar[aá]"),
+    word("habla|hablar|consulta|consultar|contacta|contactar") + String.raw`\s+(?:con\s+)?(?:una?\s+|el\s+|la\s+|nuestr[oa]\s+)?` + PERSON,
+  ].join("|"),
+  "iu",
+);
+
+/** True if the customer asks for a person or is complaining. */
+export function customerWantsHuman(text: string): boolean {
+  return WANTS_HUMAN.test(text);
+}
+
+/** True if the reply text itself sends the customer to a person instead of answering. */
+export function replyDefersToHuman(text: string): boolean {
+  return DEFERS.test(text);
+}
+
 /**
  * Pure policy engine (ADR 0003). The model proposes; this decides what may run
  * automatically, what needs a human, and what is refused.
@@ -175,6 +224,14 @@ export function evaluateTurn(output: AiTurnOutput, ctx: AiPolicyContext): TurnEv
         ? { allowed: true, draft: true, reason: "low confidence; draft for human review" }
         : { allowed: false, reason: "confidence below threshold" };
     needsHandoff = mode === "auto";
+  } else if (output.needsHuman === true && isCourtesyHandoff(output, ctx)) {
+    // ADR 0023: grounded, confident answer + a flag for a human. Send it AND hand off,
+    // so the customer is answered and nobody is ignored.
+    reply =
+      mode === "assist"
+        ? { allowed: true, draft: true, reason: "grounded reply with handoff flag; draft only" }
+        : { allowed: true, reason: "grounded reply sent; handoff flagged for a human" };
+    needsHandoff = true;
   } else if (output.needsHuman === true) {
     reply =
       mode === "assist"
@@ -193,4 +250,16 @@ export function evaluateTurn(output: AiTurnOutput, ctx: AiPolicyContext): TurnEv
     });
   }
   return { reply, actions };
+}
+
+/**
+ * A model handoff is only a courtesy flag when the customer did not ask for a person or
+ * complain, and the text answers instead of deferring. Citation and confidence gates have
+ * already passed by the time this runs (see `evaluateTurn`).
+ */
+function isCourtesyHandoff(output: AiTurnOutput, ctx: AiPolicyContext): boolean {
+  if (ctx.customerText === undefined || ctx.customerText.trim() === "") return false;
+  if (customerWantsHuman(ctx.customerText)) return false;
+  const text = output.reply?.text ?? "";
+  return text.trim() !== "" && !replyDefersToHuman(text);
 }
