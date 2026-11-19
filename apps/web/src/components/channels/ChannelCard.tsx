@@ -1,9 +1,11 @@
 "use client";
 
-import type { Channel } from "@crmwsp/contracts";
+import type { Channel, ChannelHealth } from "@crmwsp/contracts";
 import type { ReactNode } from "react";
-import { FileText, KeyRound, Power, RefreshCw } from "lucide-react";
+import { FileText, Inbox, KeyRound, Pencil, Power, RefreshCw, Send } from "lucide-react";
 import { Button, Card, StatusChip, type Tone } from "@/components/ui";
+import { channelHealthText } from "@/lib/channel-health";
+import { WalletBalanceLine } from "./WalletBalanceLine";
 import { WebhookUrlBox } from "./WebhookUrlBox";
 
 const QUALITY: Record<NonNullable<Channel["qualityRating"]>, { label: string; tone: Tone }> = {
@@ -32,6 +34,8 @@ export function ChannelCard({
   onRotate,
   onToggle,
   onPartner,
+  onCredentials,
+  health,
   children,
 }: {
   channel: Channel;
@@ -40,6 +44,9 @@ export function ChannelCard({
   onRotate: () => void;
   onToggle: () => void;
   onPartner: () => void;
+  onCredentials: () => void;
+  /** Last activity of the channel; undefined while loading or when it could not be read. */
+  health?: ChannelHealth | undefined;
   /** Inline area below the actions (rotate confirmation, partner credentials form). */
   children?: ReactNode;
 }) {
@@ -69,6 +76,8 @@ export function ChannelCard({
           {channel.messagingLimit ? <span className="text-muted">Límite: {channel.messagingLimit}</span> : null}
         </p>
       ) : null}
+      {health && channel.status !== "disabled" ? <ChannelHealthLines health={health} /> : null}
+      {canManage && channel.provider === "gupshup" && channel.status !== "disabled" ? <WalletBalanceLine channelId={channel.id} /> : null}
       {canManage && channel.apiKeyHint ? (
         <p className="m-0 flex items-center gap-2 text-sm">
           <KeyRound aria-hidden className="size-4 text-muted" />
@@ -97,6 +106,11 @@ export function ChannelCard({
             </Button>
           ) : null}
           {channel.provider === "gupshup" ? (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onCredentials}>
+              <Pencil aria-hidden className="size-4" />Editar credenciales
+            </Button>
+          ) : null}
+          {channel.provider === "gupshup" ? (
             <Button size="sm" variant="outline" disabled={busy} onClick={onPartner}>
               <FileText aria-hidden className="size-4" />{channel.partnerConfigured ? "Cambiar credenciales de plantillas" : "Configurar plantillas"}
             </Button>
@@ -108,5 +122,26 @@ export function ChannelCard({
       ) : null}
       {children}
     </Card>
+  );
+}
+
+export function ChannelHealthLines({ health }: { health: ChannelHealth }) {
+  const t = channelHealthText(health);
+  const out = t.outbound;
+  return (
+    <div className="flex flex-col gap-1 text-sm" data-testid="channel-health">
+      <p className="m-0 flex items-center gap-2">
+        <Inbox aria-hidden className="size-4 text-muted" />
+        {t.inbound}
+      </p>
+      {out ? (
+        <p className="m-0 flex flex-wrap items-center gap-2" data-testid="channel-health-outbound">
+          <Send aria-hidden className="size-4 text-muted" />
+          Último envío: <StatusChip label={out.ok ? "ok" : "falló"} tone={out.ok ? "success" : "danger"} />
+          {out.error ? <span>— {out.error}</span> : null}
+          <span className="text-muted">{out.when}</span>
+        </p>
+      ) : null}
+    </div>
   );
 }

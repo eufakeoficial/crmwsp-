@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Bot, CircleDollarSign, MessageCircle, Percent, ShoppingBag, Trophy, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/app/EmptyState";
+import { AiUsageBanner } from "@/components/app/billing/AiUsageBanner";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { Alert, buttonClasses, Card, CHIP_ROW, Chip, KpiCard, Spinner } from "@/components/ui";
@@ -69,6 +70,7 @@ export function SalesDashboard() {
           ))}
         </div>
       </div>
+      <AiUsageBanner />
       {canManageAi(tenant?.role) ? (
         <Card className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm font-semibold">Probar la IA antes de activarla</span>

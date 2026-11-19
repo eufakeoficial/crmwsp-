@@ -574,6 +574,13 @@
       "when": 1792970000000,
       "tag": "0097_trial_claims_owner_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1792980000000,
+      "tag": "0098_notification_ai_credentials_kind",
+      "breakpoints": true
     }
   ]
 }

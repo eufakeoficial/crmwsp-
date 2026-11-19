@@ -264,3 +264,24 @@ describe("SSRF guard runs on every request and every endpoint", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("insufficient quota detection", () => {
+  it.each([
+    [429, '{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}'],
+    [402, '{"error":"Insufficient credits"}'],
+    [429, '{"error":{"message":"You exceeded your current quota, please check your plan and billing details."}}'],
+  ])("HTTP %i with a quota body is non-retryable with reason insufficient_quota", async (status, body) => {
+    const { p } = make(() => new Response(body, { status }));
+    const e = await expectNoKeyLeak(p.chat({ model: "m", messages: [] }));
+    expect(e.reason).toBe("insufficient_quota");
+    expect(e.retryable).toBe(false);
+    expect(e.status).toBe(status);
+  });
+
+  it("a plain rate-limit 429 stays retryable without a reason", async () => {
+    const { p } = make(() => new Response('{"error":{"message":"Rate limit reached for requests"}}', { status: 429 }));
+    const e = await expectNoKeyLeak(p.chat({ model: "m", messages: [] }));
+    expect(e.reason).toBeUndefined();
+    expect(e.retryable).toBe(true);
+  });
+});

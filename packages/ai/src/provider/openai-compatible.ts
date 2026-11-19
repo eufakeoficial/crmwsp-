@@ -286,11 +286,27 @@ export class OpenAICompatibleProvider implements LLMProvider {
     }
     if (!res.ok) {
       if (res.status === 400 && (await this.blamesResponseFormat(res))) throw new ResponseFormatUnsupportedError();
+      // 402 / 429 / 403 can mean "no balance left" (OpenAI: 429 insufficient_quota). Retrying cannot fix that.
+      const noQuota = [402, 403, 429].includes(res.status) && (await this.blamesQuota(res));
       await res.body?.cancel().catch(() => undefined);
+      if (noQuota) throw new LlmProviderError(`LLM provider responded with HTTP ${res.status}`, false, res.status, "insufficient_quota");
       const retryable = res.status >= 500 || res.status === 429 || res.status === 408;
       throw new LlmProviderError(`LLM provider responded with HTTP ${res.status}`, retryable, res.status);
     }
     return res;
+  }
+
+  /**
+   * Inspects (at most 16 KiB of) an error body for "out of quota / balance" wording. The body is never
+   * surfaced: it may echo request data.
+   */
+  private async blamesQuota(res: Response): Promise<boolean> {
+    try {
+      const text = new TextDecoder().decode(await this.readLimited(res, 16 * 1024)).toLowerCase();
+      return /insufficient_quota|exceeded your current quota|insufficient[ _]?(funds|balance|credits?)|out of credits|payment required|billing[ _]hard[ _]limit/.test(text);
+    } catch {
+      return false;
+    }
   }
 
   /**

@@ -43,6 +43,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { InboxEvent } from "../processors.js";
 import { AI_TURN_MAX_ATTEMPTS, SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS, SEND_REACTION_JOB, sendReactionJobId } from "../queue.js";
 import { insertNotification } from "../notifications/notify.js";
+import { isInsufficientQuota, quotaNotification } from "./quota-notice.js";
 import { contactAutomationsPaused, routeHandoff } from "../inbox/routing.js";
 import { applyConversationHandoff, runAction } from "./actions.js";
 import { extractReceipt, findPendingPaymentOrder, handleReceipt, pgReceiptPorts, type ReceiptImage } from "./receipt.js";
@@ -631,6 +632,8 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       if (await replayGuard(tx, c)) return false;
       await recordUsage(tx, c, [], queryEmbeddingTokens);
       await handoffWriter(tx, c, events).record(reason, null);
+      // The tenant's own key is out of balance: tell the team (retrying or handing off silently hides it).
+      if (isInsufficientQuota(err)) await insertNotification(tx, tenantId, quotaNotification(conn, now));
       return true;
     });
     if (!handed) return { result: { outcome: "skipped", reason: "already-processed" }, events: [] };

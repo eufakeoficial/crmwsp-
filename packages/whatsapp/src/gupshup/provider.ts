@@ -103,6 +103,42 @@ export type GupshupCredentialCheck =
   | { status: "invalid_app" }
   | { status: "unverified"; reason: string };
 
+/** Gupshup wallet balance. `currency` is null when the response did not name one. */
+export interface GupshupWalletBalance {
+  amount: number;
+  currency: string | null;
+}
+
+const BALANCE_KEY = /^(balance|currentbalance|walletbalance|availablebalance|amount|credits?)$/i;
+const CURRENCY_KEY = /^(currency|currencycode)$/i;
+
+const toNumber = (v: unknown): number | null => {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v.trim())) return Number(v);
+  return null;
+};
+
+/**
+ * Defensive parse: the success shape of GET /sm/api/v2/wallet/balance is not documented, so look (up to
+ * 3 levels deep) for a numeric balance-like field and a 3-letter currency. Unknown shape -> null.
+ */
+export function parseWalletBalance(body: unknown, depth = 0): GupshupWalletBalance | null {
+  if (typeof body !== "object" || body === null || Array.isArray(body) || depth > 3) return null;
+  const obj = body as Record<string, unknown>;
+  let amount: number | null = null;
+  let currency: string | null = null;
+  for (const [k, v] of Object.entries(obj)) {
+    if (amount === null && BALANCE_KEY.test(k)) amount = toNumber(v);
+    if (currency === null && CURRENCY_KEY.test(k) && typeof v === "string" && /^[A-Za-z]{3}$/.test(v.trim())) currency = v.trim().toUpperCase();
+  }
+  if (amount !== null) return { amount, currency };
+  for (const v of Object.values(obj)) {
+    const nested = parseWalletBalance(v, depth + 1);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 export class GupshupProvider implements WhatsAppProvider {
   readonly name = "gupshup";
   private readonly fetchImpl: typeof globalThis.fetch;
@@ -358,6 +394,28 @@ export class GupshupProvider implements WhatsAppProvider {
     if (res.status === 401 || res.status === 403) return { status: "invalid_credentials" };
     if (res.status >= 400 && res.status < 500 && /app/i.test(detail)) return { status: "invalid_app" };
     return { status: "unverified", reason: `HTTP ${res.status}${detail ? `: ${detail}` : ""}` };
+  }
+
+  /**
+   * Reads the wallet balance (GET {baseUrl}/sm/api/v2/wallet/balance, `apikey` header). Never throws:
+   * network errors, non-2xx and unrecognised shapes all return null ("unavailable"). Never logs the key.
+   */
+  async getWalletBalance(apiKey: string): Promise<GupshupWalletBalance | null> {
+    try {
+      const res = await this.fetchImpl(`${this.baseUrl}/sm/api/v2/wallet/balance`, {
+        method: "GET",
+        headers: { apikey: apiKey, accept: "application/json" },
+        redirect: "error",
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => undefined);
+        return null;
+      }
+      return parseWalletBalance(JSON.parse(await res.text()));
+    } catch {
+      return null;
+    }
   }
 
   /** Performs the request; maps network errors and non-2xx to GupshupProviderError. */
