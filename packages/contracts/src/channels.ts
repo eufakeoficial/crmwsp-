@@ -91,3 +91,23 @@ export const updateChannelRequestSchema = z.object({
   status: z.enum(["active", "disabled"]),
 });
 export type UpdateChannelRequest = z.infer<typeof updateChannelRequestSchema>;
+
+/** Last activity of one channel, derived from conversations and messages (no extra tables). */
+export const channelHealthSchema = z.object({
+  channelId: uuidSchema,
+  /** Last inbound customer message through this channel; null when none yet. */
+  lastInboundAt: isoDateTimeSchema.nullable(),
+  /** Result of the last outbound send that reached a final state (sent/delivered/read/failed); null when none. */
+  lastOutbound: z
+    .object({
+      ok: z.boolean(),
+      at: isoDateTimeSchema,
+      /** Short provider error text (e.g. "Authentication Failed") when `ok` is false. */
+      error: z.string().nullable(),
+    })
+    .nullable(),
+});
+export type ChannelHealth = z.infer<typeof channelHealthSchema>;
+
+export const channelHealthListResponseSchema = z.object({ items: z.array(channelHealthSchema) });
+export type ChannelHealthListResponse = z.infer<typeof channelHealthListResponseSchema>;

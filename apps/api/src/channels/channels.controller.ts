@@ -18,6 +18,7 @@ import {
   updateChannelRequestSchema,
   updateGupshupCredentialsRequestSchema,
   type Channel,
+  type ChannelHealthListResponse,
   type ChannelListResponse,
   type Dialog360Config,
   type Dialog360ConnectState,
@@ -28,6 +29,7 @@ import {
 import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, sql, type ChannelConnection, type MessageTemplate, type Transaction } from "@crmwsp/db";
 import { lintTemplate } from "@crmwsp/domain";
 import { planTemplateSync } from "../templates/sync-plan.js";
+import { buildChannelHealth, type InboundRow, type OutboundRow } from "./channel-health.js";
 import { generateWebhookToken, type Dialog360PartnerClient, type GupshupCredentialCheck, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -414,6 +416,37 @@ export class ChannelsController {
     );
     const privileged = ADMIN_ROLES.has(tenant.role);
     return { items: rows.map((r) => this.toDto(r, privileged)) };
+  }
+
+  /**
+   * Last inbound message and last final outbound result of every channel, derived from conversations and
+   * messages (no extra table). Read-only: every role may see it; it carries only short provider error texts.
+   */
+  @Get("health")
+  async health(@CurrentTenantDb() db: TenantDb): Promise<ChannelHealthListResponse> {
+    return db.run(async (tx) => {
+      const channels = await tx.select({ id: channelConnections.id }).from(channelConnections).orderBy(asc(channelConnections.createdAt), asc(channelConnections.id));
+      if (channels.length === 0) return { items: [] };
+      const inbound = await tx.execute<InboundRow>(sql`
+        select channel_connection_id::text as channel_id, max(last_inbound_at)::text as at
+        from conversations
+        group by channel_connection_id`);
+      // Only the last 30 days: bounds the scan on large tenants; older failures are not "current" health.
+      const outbound = await tx.execute<OutboundRow>(sql`
+        select distinct on (c.channel_connection_id)
+          c.channel_connection_id::text as channel_id,
+          m.status::text as status,
+          coalesce(m.sent_at, m.created_at)::text as at,
+          m.error ->> 'message' as error_message,
+          m.error ->> 'code' as error_code
+        from messages m
+        join conversations c on c.id = m.conversation_id
+        where m.direction = 'outbound'
+          and m.status in ('sent', 'delivered', 'read', 'failed')
+          and m.created_at > now() - interval '30 days'
+        order by c.channel_connection_id, m.created_at desc`);
+      return { items: buildChannelHealth(channels.map((c) => c.id), [...inbound], [...outbound]) };
+    });
   }
 
   @Post(":id/rotate-webhook-token")

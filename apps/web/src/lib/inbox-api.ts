@@ -7,6 +7,7 @@ import {
   type ReactionEmoji,
   type UpdateConversationRequest,
   attachmentUrlResponseSchema,
+  channelHealthListResponseSchema,
   channelListResponseSchema,
   channelSchema,
   contactListResponseSchema,
@@ -45,6 +46,7 @@ export const channelsApi = {
     request("/channels/360dialog/connect", { method: "POST", body: input, schema: channelListResponseSchema }),
   setPartnerCredentials: (id: string, input: SetPartnerCredentialsRequest) =>
     request(`/channels/${id}/partner-credentials`, { method: "PUT", body: input, schema: channelSchema }),
+  health: () => request("/channels/health", { schema: channelHealthListResponseSchema }),
   updateCredentials: (id: string, input: UpdateGupshupCredentialsRequest) =>
     request(`/channels/${id}/credentials`, { method: "PATCH", body: input, schema: channelSchema }),
   rotateWebhookToken: (id: string) =>

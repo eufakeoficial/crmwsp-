@@ -1,6 +1,6 @@
 "use client";
 
-import type { Channel } from "@crmwsp/contracts";
+import type { Channel, ChannelHealth } from "@crmwsp/contracts";
 import { Lock, MailCheck, Plug } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
@@ -23,6 +23,7 @@ export function ChannelsView() {
   const { me, tenant } = useSession();
   const canManage = canManageChannels(tenant?.role);
   const [channels, setChannels] = useState<Channel[] | null>(null);
+  const [health, setHealth] = useState<Map<string, ChannelHealth>>(new Map());
   const [error, setError] = useState<unknown>(null);
   // null = follow the default (panel open only while there are no channels).
   const [connecting, setConnecting] = useState<boolean | null>(null);
@@ -39,6 +40,8 @@ export function ChannelsView() {
     try {
       setChannels((await channelsApi.list()).items);
       setError(null);
+      // Health is informative: a failure here must never hide the channels.
+      channelsApi.health().then((r) => setHealth(new Map(r.items.map((h) => [h.channelId, h]))), () => undefined);
     } catch (err) {
       setError(err);
     }
@@ -194,6 +197,7 @@ export function ChannelsView() {
               onRotate={() => setConfirmRotate(c)}
               onPartner={() => setPartnerFor(c)}
               onCredentials={() => setCredentialsFor(c)}
+              health={health.get(c.id)}
               onToggle={() => void act(c.id, () => channelsApi.setStatus(c.id, c.status === "disabled" ? "active" : "disabled"), c.status === "disabled" ? "Canal activado" : "Canal desactivado")}
             >
               {confirmRotate?.id === c.id ? (
