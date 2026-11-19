@@ -1,7 +1,6 @@
 import "reflect-metadata";
 import { randomBytes, randomUUID } from "node:crypto";
 import { request as httpRequest, type IncomingMessage } from "node:http";
-import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { contactSchema, errorResponseSchema } from "@crmwsp/contracts";
 import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
@@ -24,7 +23,9 @@ import {
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { Test } from "@nestjs/testing";
 import { AppModule } from "../app.module.js";
+import { GUPSHUP_VERIFIER } from "../channels/channels.constants.js";
 import { RealtimeHub } from "../events/realtime.hub.js";
 import { SSE_MAX_CONNECTIONS_PER_USER } from "../events/events.controller.js";
 
@@ -146,7 +147,12 @@ describe.skipIf(!hasEnv)("channels, inbox, outbound and SSE (e2e, real Postgres 
     migrator = createDb(MIGRATOR_URL as string, { max: 2 });
     redis = new Redis(REDIS_URL as string);
     outboundQueue = new Queue(queueName, { connection: new Redis(REDIS_URL as string, { maxRetriesPerRequest: null }) });
-    app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { logger: false });
+    // Never reach the real Gupshup API from tests: the credential check always passes.
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(GUPSHUP_VERIFIER)
+      .useValue(async () => ({ status: "valid" as const }))
+      .compile();
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter(), { logger: false });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
 
