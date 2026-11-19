@@ -72,6 +72,10 @@ describe.skipIf(!hasDb)("team invitations and members (e2e)", () => {
     }
     // Signup leaves a new tenant in setup (ADR 0015); grandfather the test tenants so writes are not
     // answered with SETUP_REQUIRED.
+    // platform.e2e (a parallel file) briefly flips the GLOBAL platform_settings.require_approval, so a signup
+    // here can land as pending_approval and every call answers 403 "Tenant is not active". Pin both tenants to
+    // active so this file does not depend on that shared flag.
+    await migrator.db.update(tenants).set({ status: "active", statusReason: null }).where(inArray(tenants.id, [s.tenantA, s.tenantB]));
     await migrator.db.update(tenantPlans).set({ setupEndsAt: null }).where(inArray(tenantPlans.tenantId, [s.tenantA, s.tenantB]));
   });
 
