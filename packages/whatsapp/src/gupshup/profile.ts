@@ -147,7 +147,7 @@ export class GupshupProfileClient {
 
   async updatePhoto(creds: GupshupPartnerCreds, image: { data: Uint8Array; mime: string; filename: string }): Promise<void> {
     const form = new FormData();
-    form.set("image", new Blob([image.data as BlobPart], { type: image.mime }), image.filename);
+    form.set("image", new Blob([image.data as unknown as ArrayBuffer], { type: image.mime }), image.filename);
     const res = await this.call(creds, this.url(creds, "/business/profile/photo"), { method: "PUT", body: form }, "photo");
     this.assertSuccess(await this.json(res), res.status);
   }

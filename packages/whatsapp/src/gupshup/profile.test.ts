@@ -74,7 +74,7 @@ describe("GupshupProfileClient", () => {
         throw new Error("boom SECRET_PARTNER_TOKEN");
       }) as never,
     });
-    const e = await down.getProfile(creds).catch((x: unknown) => x as Error);
+    const e = await down.getProfile(creds).then(() => new Error("unexpected"), (x: unknown) => x as Error);
     expect(e.message).toMatch(/conectar/);
     expect(e.message).not.toContain("SECRET");
     const odd = new GupshupProfileClient({ fetch: (async () => json({ status: "error" })) as never });
