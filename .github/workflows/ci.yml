@@ -120,7 +120,8 @@ jobs:
   # Browser E2E for the web app. The API is mocked at the network layer, so no services are needed.
   e2e-web:
     name: e2e-web
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.56 has no browser build for ubuntu-latest (26.04).
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
