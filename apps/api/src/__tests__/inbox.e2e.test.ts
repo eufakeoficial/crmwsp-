@@ -413,6 +413,21 @@ describe.skipIf(!hasEnv)("channels, inbox, outbound and SSE (e2e, real Postgres 
       expect(audit).toHaveLength(2);
     });
 
+    it("assignee must be a member of the tenant", async () => {
+      const id = s.convA[1]!;
+      const foreign = await asA("PATCH", `/conversations/${id}`, { assignedUserId: s.userB, lockVersion: 0 });
+      expect(foreign.statusCode).toBe(400);
+      const ok = await asA("PATCH", `/conversations/${id}`, { assignedUserId: s.userC, lockVersion: 0 });
+      expect(ok.statusCode).toBe(200);
+      expect((ok.json() as { assignee: { id: string } }).assignee.id).toBe(s.userC);
+      const mine = (await inject({ method: "GET", url: "/conversations?assignedTo=me", cookie: s.cookieC, tenant: s.tenantA })).json() as { items: { id: string }[] };
+      expect(mine.items.map((i) => i.id)).toEqual([id]);
+      const byId = (await asA("GET", `/conversations?assignedTo=${s.userC}`)).json() as { items: { id: string }[] };
+      expect(byId.items.map((i) => i.id)).toEqual([id]);
+      const unassigned = (await asA("GET", "/conversations?assignedTo=unassigned&limit=100")).json() as { items: unknown[] };
+      expect(unassigned.items).toHaveLength(4);
+    });
+
     it("POST /conversations/ai-mode/bulk sets the mode on open conversations of the caller tenant only", async () => {
       const before = await migrator.db.select({ aiMode: conversations.aiMode }).from(conversations).where(eq(conversations.id, s.convB));
       const forbidden = await inject({ method: "POST", url: "/conversations/ai-mode/bulk", payload: { aiMode: "auto" }, cookie: s.cookieC, tenant: s.tenantA });
@@ -428,21 +443,6 @@ describe.skipIf(!hasEnv)("channels, inbox, outbound and SSE (e2e, real Postgres 
       expect(after[0]!.aiMode).toBe(before[0]!.aiMode);
       const audit = await migrator.db.select().from(auditEvents).where(eq(auditEvents.entityId, s.tenantA));
       expect(audit.find((e) => e.action === "conversation.ai_mode_bulk_updated")?.diff).toMatchObject({ aiMode: "auto", count: updated });
-    });
-
-    it("assignee must be a member of the tenant", async () => {
-      const id = s.convA[1]!;
-      const foreign = await asA("PATCH", `/conversations/${id}`, { assignedUserId: s.userB, lockVersion: 0 });
-      expect(foreign.statusCode).toBe(400);
-      const ok = await asA("PATCH", `/conversations/${id}`, { assignedUserId: s.userC, lockVersion: 0 });
-      expect(ok.statusCode).toBe(200);
-      expect((ok.json() as { assignee: { id: string } }).assignee.id).toBe(s.userC);
-      const mine = (await inject({ method: "GET", url: "/conversations?assignedTo=me", cookie: s.cookieC, tenant: s.tenantA })).json() as { items: { id: string }[] };
-      expect(mine.items.map((i) => i.id)).toEqual([id]);
-      const byId = (await asA("GET", `/conversations?assignedTo=${s.userC}`)).json() as { items: { id: string }[] };
-      expect(byId.items.map((i) => i.id)).toEqual([id]);
-      const unassigned = (await asA("GET", "/conversations?assignedTo=unassigned&limit=100")).json() as { items: unknown[] };
-      expect(unassigned.items).toHaveLength(4);
     });
   });
 
