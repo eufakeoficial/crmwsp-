@@ -36,6 +36,6 @@ class Vendemas_Plugin {
 		if ( ! current_user_can( 'activate_plugins' ) ) {
 			return;
 		}
-		echo '<div class="notice notice-error"><p>' . esc_html__( 'Vende+ para WooCommerce necesita que WooCommerce esté instalado y activo.', 'vendemas-woocommerce' ) . '</p></div>';
+		echo '<div class="notice notice-error"><p>' . esc_html__( 'Vende+ Connector necesita que WooCommerce esté instalado y activo.', 'vende-connector' ) . '</p></div>';
 	}
 }

@@ -53,7 +53,7 @@ class Vendemas_Connector {
 	 */
 	public function connect( $code ) {
 		if ( $this->get_connection() ) {
-			return new WP_Error( 'vendemas_already', __( 'Esta tienda ya está conectada. Desconéctala primero.', 'vendemas-woocommerce' ) );
+			return new WP_Error( 'vendemas_already', __( 'Esta tienda ya está conectada. Desconéctala primero.', 'vende-connector' ) );
 		}
 
 		$key = $this->create_api_key();
@@ -85,20 +85,20 @@ class Vendemas_Connector {
 
 		if ( is_wp_error( $response ) ) {
 			$this->delete_api_key( $key['id'] );
-			return new WP_Error( 'vendemas_http', __( 'No se pudo contactar con Vende+. Inténtalo de nuevo en unos minutos.', 'vendemas-woocommerce' ) );
+			return new WP_Error( 'vendemas_http', __( 'No se pudo contactar con Vende+. Inténtalo de nuevo en unos minutos.', 'vende-connector' ) );
 		}
 
 		$status = (int) wp_remote_retrieve_response_code( $response );
 		if ( 401 === $status ) {
 			$this->delete_api_key( $key['id'] );
-			return new WP_Error( 'vendemas_code', __( 'Código inválido o vencido. Genera uno nuevo en Vende+.', 'vendemas-woocommerce' ) );
+			return new WP_Error( 'vendemas_code', __( 'Código inválido o vencido. Genera uno nuevo en Vende+.', 'vende-connector' ) );
 		}
 
 		$body        = json_decode( wp_remote_retrieve_body( $response ), true );
 		$webhook_url = ( is_array( $body ) && isset( $body['webhookUrl'] ) ) ? esc_url_raw( (string) $body['webhookUrl'] ) : '';
 		if ( 200 !== $status || '' === $webhook_url ) {
 			$this->delete_api_key( $key['id'] );
-			return new WP_Error( 'vendemas_response', __( 'Vende+ respondió con un error. Inténtalo de nuevo más tarde.', 'vendemas-woocommerce' ) );
+			return new WP_Error( 'vendemas_response', __( 'Vende+ respondió con un error. Inténtalo de nuevo más tarde.', 'vende-connector' ) );
 		}
 		$tenant_name = isset( $body['tenantName'] ) ? sanitize_text_field( (string) $body['tenantName'] ) : '';
 
@@ -173,17 +173,17 @@ class Vendemas_Connector {
 	public function test() {
 		$data = $this->get_connection();
 		if ( ! $data ) {
-			return new WP_Error( 'vendemas_not_connected', __( 'La tienda no está conectada.', 'vendemas-woocommerce' ) );
+			return new WP_Error( 'vendemas_not_connected', __( 'La tienda no está conectada.', 'vende-connector' ) );
 		}
 		foreach ( $this->webhook_statuses() as $row ) {
 			if ( 'active' !== $row['status'] ) {
-				return new WP_Error( 'vendemas_webhook', __( 'Hay webhooks desactivados o eliminados. Desconecta y vuelve a conectar la tienda.', 'vendemas-woocommerce' ) );
+				return new WP_Error( 'vendemas_webhook', __( 'Hay webhooks desactivados o eliminados. Desconecta y vuelve a conectar la tienda.', 'vende-connector' ) );
 			}
 		}
 		global $wpdb;
 		$exists = $wpdb->get_var( $wpdb->prepare( "SELECT key_id FROM {$wpdb->prefix}woocommerce_api_keys WHERE key_id = %d", (int) $data['api_key_id'] ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		if ( ! $exists ) {
-			return new WP_Error( 'vendemas_key', __( 'La clave de API de WooCommerce ya no existe. Desconecta y vuelve a conectar la tienda.', 'vendemas-woocommerce' ) );
+			return new WP_Error( 'vendemas_key', __( 'La clave de API de WooCommerce ya no existe. Desconecta y vuelve a conectar la tienda.', 'vende-connector' ) );
 		}
 		return true;
 	}
@@ -213,7 +213,7 @@ class Vendemas_Connector {
 		);
 
 		if ( ! $inserted ) {
-			return new WP_Error( 'vendemas_key', __( 'No se pudo crear la clave de API de WooCommerce.', 'vendemas-woocommerce' ) );
+			return new WP_Error( 'vendemas_key', __( 'No se pudo crear la clave de API de WooCommerce.', 'vende-connector' ) );
 		}
 
 		return array(
@@ -252,7 +252,7 @@ class Vendemas_Connector {
 				foreach ( $ids as $created ) {
 					$this->delete_webhook( $created );
 				}
-				return new WP_Error( 'vendemas_webhook', __( 'No se pudieron crear los webhooks de WooCommerce.', 'vendemas-woocommerce' ) );
+				return new WP_Error( 'vendemas_webhook', __( 'No se pudieron crear los webhooks de WooCommerce.', 'vende-connector' ) );
 			}
 			$ids[] = (int) $id;
 		}
