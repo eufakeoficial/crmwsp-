@@ -567,6 +567,13 @@
       "when": 1792960000000,
       "tag": "0096_woocommerce_connect_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1792970000000,
+      "tag": "0097_trial_claims_owner_policy",
+      "breakpoints": true
     }
   ]
 }
