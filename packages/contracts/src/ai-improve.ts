@@ -10,5 +10,5 @@ export const improveTextRequestSchema = z.object({
 });
 export type ImproveTextRequest = z.infer<typeof improveTextRequestSchema>;
 
-export const improveTextResponseSchema = z.object({ text: z.string() });
+export const improveTextResponseSchema = z.object({ text: z.string(), unchanged: z.boolean().optional() });
 export type ImproveTextResponse = z.infer<typeof improveTextResponseSchema>;
