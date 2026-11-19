@@ -4,7 +4,7 @@ import type { AiTestResult } from "@crmwsp/contracts";
 const ROWS = [
   { key: "structuredOutput", label: "Salida estructurada", off: "Sin ella la IA no puede proponer acciones (presupuestos, etiquetas): solo redactará respuestas." },
   { key: "embeddings", label: "Embeddings", off: "Sin embeddings la búsqueda en tu conocimiento usa coincidencia de texto, menos precisa." },
-  { key: "transcription", label: "Transcripción de audio", off: "Sin transcripción, los audios de clientes no se convierten en texto para la IA." },
+  { key: "transcription", label: "Transcripción de audio", off: "Este proveedor no transcribe audios. Agrega una key de OpenAI en «Transcripción de audios (opcional)» para que la IA entienda las notas de voz." },
 ] as const;
 
 /** Latency and capabilities (check / cross) with what gets disabled when one is missing. */

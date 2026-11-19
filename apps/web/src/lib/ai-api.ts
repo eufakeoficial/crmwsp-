@@ -16,6 +16,10 @@ import {
   aiConnectionResponseSchema,
   aiConnectionSchema,
   aiTestResultSchema,
+  aiTranscriptionConnectionSchema,
+  aiTranscriptionStatusSchema,
+  aiTranscriptionTestResultSchema,
+  type SaveAiTranscriptionConnectionInput,
   aiUsageSchema,
   knowledgeConflictListSchema,
   knowledgeSourceListSchema,
@@ -85,4 +89,13 @@ export { realAiApi, realKnowledgeApi };
 export const improveTextApi = {
   improve: (text: string, style: ImproveTextStyle) =>
     request("/ai/improve-text", { method: "POST", body: { text, style }, schema: improveTextResponseSchema }),
+};
+
+/** Optional dedicated audio transcription connection (ADR 0024). The key is write-only. */
+export const transcriptionApi = {
+  get: () => request("/ai/transcription-connection", { schema: aiTranscriptionStatusSchema }),
+  save: (input: SaveAiTranscriptionConnectionInput) =>
+    request("/ai/transcription-connection", { method: "PUT", body: input, schema: aiTranscriptionConnectionSchema }),
+  test: () => request("/ai/transcription-connection/test", { method: "POST", schema: aiTranscriptionTestResultSchema }),
+  remove: () => request("/ai/transcription-connection", { method: "DELETE" }),
 };
