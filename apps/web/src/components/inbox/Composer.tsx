@@ -203,7 +203,7 @@ export function Composer({
         />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <Popover label="Emoji" disabled={replyBlocked} triggerClassName="bg-transparent hover:bg-paper" trigger={<Smile aria-hidden className="size-[18px]" />} panelClassName="w-64">
+        <Popover label="Emoji" placement="up" disabled={replyBlocked} triggerClassName="bg-transparent hover:bg-paper" trigger={<Smile aria-hidden className="size-[18px]" />} panelClassName="w-64">
           {(close) => (
             <div className="grid grid-cols-8 gap-0.5">
               {COMMON_EMOJIS.map((e) => (
@@ -216,7 +216,7 @@ export function Composer({
         </Popover>
         <CannedPicker onPick={pick} disabled={replyBlocked} />
         {note ? null : (
-          <Popover label="Mejorar texto" disabled={replyBlocked || improving || trimmed.length === 0} triggerClassName="bg-transparent hover:bg-paper" trigger={<><Sparkles aria-hidden className="size-4" /> {improving ? "Mejorando…" : "Mejorar texto"}</>}>
+          <Popover label="Mejorar texto" placement="up" disabled={replyBlocked || improving || trimmed.length === 0} triggerClassName="bg-transparent hover:bg-paper" trigger={<><Sparkles aria-hidden className="size-4" /> {improving ? "Mejorando…" : "Mejorar texto"}</>}>
             {(close) => (
               <div className="flex flex-col">
                 {IMPROVE_STYLES.map((s) => (
@@ -255,7 +255,7 @@ function CannedPicker({ onPick, disabled }: { onPick: (c: CannedResponseDto) => 
     );
   };
   return (
-    <Popover label="Respuestas predefinidas" disabled={disabled} triggerClassName="bg-transparent hover:bg-paper" trigger={<MessageSquareText aria-hidden className="size-[18px]" />} panelClassName="w-72">
+    <Popover label="Respuestas predefinidas" placement="up" disabled={disabled} triggerClassName="bg-transparent hover:bg-paper" trigger={<MessageSquareText aria-hidden className="size-[18px]" />} panelClassName="w-72">
       {(close) => (
         <CannedList items={items} failed={failed} load={load} onPick={(c) => { onPick(c); close(); }} />
       )}
