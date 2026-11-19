@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Logger, Optional, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import type { CipherBox } from "@crmwsp/crypto";
 import { redact } from "@crmwsp/crypto";
 import {
@@ -27,7 +27,7 @@ import {
 import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, sql, type ChannelConnection, type MessageTemplate, type Transaction } from "@crmwsp/db";
 import { lintTemplate } from "@crmwsp/domain";
 import { planTemplateSync } from "../templates/sync-plan.js";
-import { generateWebhookToken, type Dialog360PartnerClient, type WhatsAppProvider } from "@crmwsp/whatsapp";
+import { generateWebhookToken, type Dialog360PartnerClient, type GupshupCredentialCheck, type WhatsAppProvider } from "@crmwsp/whatsapp";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { EmailVerifiedGuard } from "../auth/email-verified.guard.js";
@@ -38,7 +38,7 @@ import { ActivationGuard } from "../billing/activation.guard.js";
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import { PG_UNIQUE_VIOLATION, pgCode, writeAudit } from "../inbox/audit.js";
 import { BusinessCategoryService, CATEGORY_REVIEW_BLOCKS_CHANNELS } from "../settings/business-category.service.js";
-import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_API_KEY_PURPOSE, webhookUrlFor } from "./channels.constants.js";
+import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_API_KEY_PURPOSE, GUPSHUP_VERIFIER, webhookUrlFor } from "./channels.constants.js";
 
 function redactedHint(row: ChannelConnection, cipher: CipherBox): string | null {
   if (!row.credentialsEncrypted) return null;
@@ -75,6 +75,12 @@ export function hashConnectState(state: string): Buffer {
   return createHash("sha256").update(state, "utf8").digest();
 }
 
+/** Checks a Gupshup API key + app name against Gupshup before the channel is saved. */
+export type GupshupCredentialVerifier = (apiKey: string, appName: string) => Promise<GupshupCredentialCheck>;
+
+export const GUPSHUP_INVALID_KEY_MESSAGE = "La API key no es válida para esa cuenta de Gupshup.";
+export const GUPSHUP_INVALID_APP_MESSAGE = "No existe una app de Gupshup con ese nombre para esta API key.";
+
 /** The part of PlanLimitsService the channels need (stubbed in unit tests). */
 export type ChannelPlanLimits = Pick<PlanLimitsService, "assert" | "lock" | "startTrialIfEligible">;
 
@@ -87,7 +93,28 @@ export class ChannelsController {
     @Inject(DIALOG360_PARTNER) private readonly partner: Dialog360PartnerClient | null,
     @Inject(PlanLimitsService) private readonly limits: ChannelPlanLimits,
     @Optional() @Inject(BusinessCategoryService) private readonly categories?: Pick<BusinessCategoryService, "assertCanConnect">,
+    @Optional() @Inject(GUPSHUP_VERIFIER) private readonly verifyGupshup?: GupshupCredentialVerifier,
   ) {}
+
+  private readonly logger = new Logger(ChannelsController.name);
+
+  /**
+   * Rejects wrong Gupshup credentials up front (a bad key otherwise only shows as 401 on every send).
+   * When Gupshup cannot answer the connect proceeds: an outage must not block onboarding.
+   */
+  private async assertGupshupCredentials(apiKey: string, appName: string): Promise<void> {
+    if (!this.verifyGupshup) return;
+    const check = await this.verifyGupshup(apiKey, appName).catch(
+      (): GupshupCredentialCheck => ({ status: "unverified", reason: "verifier failed" }),
+    );
+    if (check.status === "invalid_credentials") {
+      throw new ValidationError(GUPSHUP_INVALID_KEY_MESSAGE, { details: { reason: "gupshup_invalid_credentials" } });
+    }
+    if (check.status === "invalid_app") {
+      throw new ValidationError(GUPSHUP_INVALID_APP_MESSAGE, { details: { reason: "gupshup_invalid_app" } });
+    }
+    if (check.status === "unverified") this.logger.warn(`Gupshup credentials could not be verified (${check.reason}); connecting anyway`);
+  }
 
   /** ADR 0021: no new number while the business category review is pending or rejected (DB trigger too). */
   private async assertCategory(db: TenantDb): Promise<void> {
@@ -136,6 +163,7 @@ export class ChannelsController {
     const input = parseOrThrow(createGupshupChannelRequestSchema, body);
     if (!this.cipher) throw new EncryptionNotConfiguredError();
     await this.assertCategory(db);
+    await this.assertGupshupCredentials(input.apiKey, input.appName);
     const credentials = this.cipher.encrypt(input.apiKey, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
     const partnerToken = input.partnerToken ? this.cipher.encrypt(input.partnerToken, { tenantId: db.tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE }) : null;
     try {

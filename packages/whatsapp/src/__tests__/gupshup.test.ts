@@ -324,3 +324,44 @@ describe("webhook token", () => {
     expect(safeEqualToken(t, "")).toBe(false);
   });
 });
+
+describe("verifyCredentials", () => {
+  const respond = (status: number, body: string) =>
+    vi.fn(async () => new Response(body, { status }));
+  const check = (fetchFn: typeof fetch) => new GupshupProvider({ fetch: fetchFn }).verifyCredentials(API_KEY, "Demo App");
+
+  it("calls the app-scoped template list with the apikey header", async () => {
+    const f = respond(200, "{}");
+    expect(await check(f as unknown as typeof fetch)).toEqual({ status: "valid" });
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.gupshup.io/sm/api/v1/template/list/Demo%20App");
+    expect((init.headers as Record<string, string>)["apikey"]).toBe(API_KEY);
+    expect(init.redirect).toBe("error");
+  });
+
+  it.each([401, 403])("%i (plain text body) is invalid credentials", async (status) => {
+    expect(await check(respond(status, "Portal User Not Found With APIKey") as unknown as typeof fetch)).toEqual({ status: "invalid_credentials" });
+  });
+
+  it("other 4xx mentioning the app is an invalid app", async () => {
+    expect(await check(respond(404, JSON.stringify({ message: "App not found" })) as unknown as typeof fetch)).toEqual({ status: "invalid_app" });
+  });
+
+  it("other 4xx without an app mention is unverified", async () => {
+    const r = await check(respond(400, "Bad request") as unknown as typeof fetch);
+    expect(r.status).toBe("unverified");
+  });
+
+  it("5xx is unverified", async () => {
+    expect((await check(respond(503, "down") as unknown as typeof fetch)).status).toBe("unverified");
+  });
+
+  it("network error is unverified and never leaks the key", async () => {
+    const f = vi.fn(async () => {
+      throw new Error(`boom ${API_KEY}`);
+    });
+    const r = await check(f as unknown as typeof fetch);
+    expect(r.status).toBe("unverified");
+    expect(JSON.stringify(r)).not.toContain(API_KEY);
+  });
+});
