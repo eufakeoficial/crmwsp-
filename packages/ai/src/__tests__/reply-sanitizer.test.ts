@@ -59,6 +59,16 @@ describe("sanitizeTurnReply", () => {
     expect(out.replyDropped).toBe(true);
   });
 
+  it("flags a reply left with only markers after the explicit id is stripped", () => {
+    const parsed = aiTurnResponseFormat.schema.parse({
+      actions: [], reaction: null, salesStage: null, objection: null, confidence: 0.9, needsHuman: false, reason: "r",
+      reply: { text: `(chunkId: ${ID}) [1]`, claims: [] },
+    });
+    const out = sanitizeTurnReply(parsed, ctx);
+    expect(out.reply).toBeUndefined();
+    expect(out.replyDropped).toBe(true);
+  });
+
   it("returns the same object when nothing changes", () => {
     const o = { ...base, reply: { text: "Hola", claims: [] } };
     expect(sanitizeTurnReply(o, ctx)).toBe(o);

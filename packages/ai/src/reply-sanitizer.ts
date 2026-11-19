@@ -20,6 +20,8 @@ const BARE_CHUNK = /[ \t]{0,3}\bchunk[ \t_-]?ids?[ \t]{0,3}[:=][ \t]{0,3}[\w-]{1
 // (an enumeration). Only numbers that match a retrieved chunk (1..chunkCount) count.
 const NUMERIC_MARKER = /(?<=[^\s[【])[ \t]?[[【][ \t]?(\d{1,2}(?:[ \t]?[,;][ \t]?\d{1,2}){0,5})[ \t]?[\]】]/gu;
 
+const MARKER_ONLY_LINE = /^[ \t]{0,3}(?:[[【][ \t]?\d{1,2}(?:[ \t]?[,;][ \t]?\d{1,2}){0,5}[ \t]?[\]】][ \t]{0,3}){1,10}$/gmu;
+
 export interface SanitizeContext {
   /** Ids of the chunks the model saw; only these UUIDs are stripped when bare. */
   chunkIds?: readonly string[];
@@ -40,6 +42,11 @@ export function sanitizeReplyText(text: string, ctx: SanitizeContext = {}): stri
         ? ""
         : m,
     );
+    // A line made only of in-range markers (left over after stripping) is not an enumeration.
+    out = out.replace(MARKER_ONLY_LINE, (line) => {
+      const nums = line.match(/\d{1,2}/g) ?? [];
+      return nums.every((n) => Number(n) >= 1 && Number(n) <= chunkCount) ? "" : line;
+    });
   }
   return out
     .replace(/\([ \t]{0,3}\)|\[[ \t]{0,3}\]/g, "")
