@@ -141,6 +141,46 @@ export class ChannelsController {
     try {
       const row = await db.run(async (tx) => {
         await this.assertNumbers(tx, db.tenantId, 1);
+        // A disabled Gupshup channel with the same phone is reconnected in place (new app, key and webhook
+        // token) instead of failing on the per-tenant phone uniqueness; its conversations stay attached.
+        const [disabled] = await tx
+          .select({ id: channelConnections.id })
+          .from(channelConnections)
+          .where(
+            and(
+              eq(channelConnections.phoneE164, input.phoneE164),
+              eq(channelConnections.provider, "gupshup"),
+              eq(channelConnections.status, "disabled"),
+            ),
+          )
+          .for("update");
+        if (disabled) {
+          const [reconnected] = await tx
+            .update(channelConnections)
+            .set({
+              externalAppId: input.appName,
+              credentialsEncrypted: credentials,
+              gupshupAppId: partnerToken ? (input.gupshupAppId ?? null) : null,
+              partnerTokenEncrypted: partnerToken,
+              webhookToken: generateWebhookToken(),
+              status: "active",
+              updatedAt: new Date(),
+            })
+            .where(eq(channelConnections.id, disabled.id))
+            .returning();
+          if (!reconnected) throw new Error("update returned no row");
+          await this.limits.startTrialIfEligible(tx, reconnected);
+          await writeAudit(tx, {
+            tenantId: db.tenantId,
+            userId: db.userId,
+            entity: "channel_connection",
+            entityId: reconnected.id,
+            action: "channel.reconnected",
+            diff: { provider: "gupshup", phoneE164: input.phoneE164, appName: input.appName, status: "active" },
+            ip: req.ip,
+          });
+          return reconnected;
+        }
         const [created] = await tx
           .insert(channelConnections)
           .values({
