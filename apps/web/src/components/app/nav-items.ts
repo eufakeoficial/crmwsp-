@@ -1,4 +1,4 @@
-import { AlertCircle, BookOpen, Bot, CalendarDays, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, MessageSquareText, Rocket, Package, Plug, Settings, Users2, Workflow, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { Building2, AlertCircle, BookOpen, Bot, CalendarDays, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, MessageSquareText, Rocket, Package, Plug, Settings, Users2, Workflow, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -19,6 +19,7 @@ export interface NavGroup {
 
 /** Subsections of Configuración, shown as sidebar sub-links and as tabs. */
 export const SETTINGS_SECTIONS: readonly NavItem[] = [
+  { key: "settings-company", label: "Empresa", href: "/app/settings/company", icon: Building2 },
   { key: "settings-ai", label: "IA", href: "/app/settings/ai", icon: Sparkles },
   { key: "settings-integrations", label: "Integraciones", href: "/app/settings/integrations", icon: Plug },
   { key: "settings-knowledge", label: "Conocimiento", href: "/app/settings/knowledge", icon: BookOpen },
