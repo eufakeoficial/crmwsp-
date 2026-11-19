@@ -28,6 +28,9 @@ export function channelHealthText(health: ChannelHealth, now: Date = new Date())
 
 export const GUPSHUP_RECHARGE_URL = "https://www.gupshup.io";
 
+/** Shown when the channel has no Partner token, so the balance cannot be read. */
+export const PARTNER_REQUIRED_TEXT = "Saldo: conecta el Token de Partner para verlo aquí";
+
 /** "Saldo Gupshup: USD 3.50" (null when the balance is unavailable: the UI shows nothing). */
 export function walletBalanceText(balance: WalletBalance): string | null {
   if (balance.status !== "ok") return null;

@@ -119,7 +119,7 @@ const toNumber = (v: unknown): number | null => {
 };
 
 /**
- * Defensive parse: the success shape of GET /sm/api/v2/wallet/balance is not documented, so look (up to
+ * Defensive parse: the documented `walletResponse` object is passed in; stay tolerant: look (up to
  * 3 levels deep) for a numeric balance-like field and a 3-letter currency. Unknown shape -> null.
  */
 export function parseWalletBalance(body: unknown, depth = 0): GupshupWalletBalance | null {
@@ -421,14 +421,17 @@ export class GupshupProvider implements WhatsAppProvider {
   }
 
   /**
-   * Reads the wallet balance (GET {baseUrl}/sm/api/v2/wallet/balance, `apikey` header). Never throws:
-   * network errors, non-2xx and unrecognised shapes all return null ("unavailable"). Never logs the key.
+   * Reads the wallet balance via the Partner API (documented at
+   * https://partner-docs.gupshup.io/reference/get_partner-app-appid-wallet-balance):
+   * GET {partnerBaseUrl}/partner/app/{appId}/wallet/balance, `Authorization: <partner app token>` (no Bearer),
+   * body `{ status, walletResponse: { currency, currentBalance, overDraftLimit } }`.
+   * Never throws: network errors, non-2xx and unrecognised shapes return null. Never logs the token.
    */
-  async getWalletBalance(apiKey: string): Promise<GupshupWalletBalance | null> {
+  async getWalletBalanceViaPartner(creds: { appId: string; partnerToken: string }): Promise<GupshupWalletBalance | null> {
     try {
-      const res = await this.fetchImpl(`${this.baseUrl}/sm/api/v2/wallet/balance`, {
+      const res = await this.fetchImpl(`${this.partnerBaseUrl}/partner/app/${encodeURIComponent(creds.appId)}/wallet/balance`, {
         method: "GET",
-        headers: { apikey: apiKey, accept: "application/json" },
+        headers: { Authorization: creds.partnerToken, accept: "application/json" },
         redirect: "error",
         signal: AbortSignal.timeout(this.timeoutMs),
       });
@@ -436,7 +439,9 @@ export class GupshupProvider implements WhatsAppProvider {
         await res.body?.cancel().catch(() => undefined);
         return null;
       }
-      return parseWalletBalance(JSON.parse(await res.text()));
+      const body: unknown = JSON.parse(await res.text());
+      const wallet = typeof body === "object" && body !== null ? (body as Record<string, unknown>)["walletResponse"] : undefined;
+      return parseWalletBalance(wallet);
     } catch {
       return null;
     }

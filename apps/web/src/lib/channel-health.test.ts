@@ -41,5 +41,6 @@ describe("walletBalanceText", () => {
     expect(walletBalanceText({ status: "ok", amount: 3.5, currency: "USD", low: false })).toBe("Saldo Gupshup: USD 3.50");
     expect(walletBalanceText({ status: "ok", amount: 12, currency: null, low: false })).toBe("Saldo Gupshup: 12.00");
     expect(walletBalanceText({ status: "unavailable" })).toBeNull();
+    expect(walletBalanceText({ status: "partner_required" })).toBeNull();
   });
 });
