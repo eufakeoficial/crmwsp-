@@ -51,7 +51,7 @@ export function PartnerCredentialsPanel({ channel, onClose, onSaved, onNoKeys }:
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="pc-token">Token de Partner</Label>
-          <Input id="pc-token" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} required />
+          <Input id="pc-token" type="password" autoComplete="new-password" data-1p-ignore data-lpignore="true" value={token} onChange={(e) => setToken(e.target.value)} required />
           <span className="text-xs text-muted">En el portal de Partner de Gupshup, en la sección de tokens de tu cuenta. Se guarda cifrado y no se vuelve a mostrar.</span>
         </div>
         <Alert>{error}</Alert>
