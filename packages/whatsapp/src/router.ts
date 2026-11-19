@@ -63,4 +63,8 @@ export class RoutingWhatsAppProvider implements WhatsAppProvider {
   listTemplates(conn: WhatsAppConnection): Promise<ProviderTemplate[]> {
     return this.for(conn).listTemplates(conn);
   }
+  /** No-op for adapters without typing-indicator support. */
+  async sendTypingIndicator(conn: WhatsAppConnection, inboundExternalMessageId: string): Promise<void> {
+    await this.for(conn).sendTypingIndicator?.(conn, inboundExternalMessageId);
+  }
 }

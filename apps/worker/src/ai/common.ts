@@ -7,6 +7,7 @@ import {
 } from "@crmwsp/ai";
 import { DecryptionError, type CipherBox } from "@crmwsp/crypto";
 import { isUuid, type Database, type LlmConnection } from "@crmwsp/db";
+import type { WhatsAppProvider } from "@crmwsp/whatsapp";
 import { UnrecoverableError, type Queue } from "bullmq";
 import type { LockRedis } from "./lock.js";
 import type { MediaLoader } from "./transcribe.js";
@@ -45,6 +46,8 @@ export interface AiDeps {
   embeddingModel?: string;
   /** Downloads inbound media (voice notes) for transcription; absent = audio is not transcribed. */
   loadMedia?: MediaLoader;
+  /** WhatsApp BSP used for the typing indicator; defaults to the production router. */
+  whatsapp?: WhatsAppProvider;
   now?: () => Date;
 }
 

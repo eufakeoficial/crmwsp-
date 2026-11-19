@@ -257,6 +257,30 @@ export class GupshupProvider implements WhatsAppProvider {
     }));
   }
 
+  /**
+   * Marks an inbound message as read and shows the typing indicator
+   * (https://partner-docs.gupshup.io/docs/mark-message-as-readtyping-indicator).
+   * Partner API only: `POST {partner}/partner/app/{appId}/v1/event` with `Authorization: <partner app token>`.
+   * Without partner credentials on the channel it is a silent no-op (the `apikey` API has no such endpoint).
+   */
+  async sendTypingIndicator(conn: WhatsAppConnection, inboundExternalMessageId: string): Promise<void> {
+    if (!conn.partnerAppId || !conn.partnerToken || !inboundExternalMessageId) return;
+    await this.request(`${this.partnerBaseUrl}/partner/app/${encodeURIComponent(conn.partnerAppId)}/v1/event`, {
+      method: "POST",
+      headers: { authorization: conn.partnerToken, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        type: "message-event",
+        message: {
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: inboundExternalMessageId,
+          typing_indicator: { type: "text" },
+        },
+      }),
+      redirect: "error",
+    });
+  }
+
   /** Partner API templates URL + app token. Throws (non-retryable) when the channel has no partner credentials. */
   private partnerTemplates(conn: WhatsAppConnection): { url: string; token: string } {
     if (!conn.partnerAppId || !conn.partnerToken) {
