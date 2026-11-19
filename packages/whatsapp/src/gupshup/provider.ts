@@ -93,6 +93,16 @@ function mapTemplateCategory(raw: string | undefined): ProviderTemplateCategory 
   }
 }
 
+/**
+ * Outcome of checking an API key + app name against Gupshup. `unverified` means Gupshup could not
+ * answer (network, timeout, 5xx, unrecognised 4xx): callers must NOT block on it.
+ */
+export type GupshupCredentialCheck =
+  | { status: "valid" }
+  | { status: "invalid_credentials" }
+  | { status: "invalid_app" }
+  | { status: "unverified"; reason: string };
+
 export class GupshupProvider implements WhatsAppProvider {
   readonly name = "gupshup";
   private readonly fetchImpl: typeof globalThis.fetch;
@@ -323,6 +333,33 @@ export class GupshupProvider implements WhatsAppProvider {
     return { externalId: parsed.data.messageId };
   }
 
+  /**
+   * Read-only credential check: GET {baseUrl}/sm/api/v1/template/list/{appName} with the `apikey` header.
+   * 401/403 -> invalid key; 2xx -> valid; other 4xx -> invalid app only when Gupshup's text mentions the app;
+   * anything else (network, timeout, 5xx, other 4xx) -> unverified. Never logs or returns the key.
+   */
+  async verifyCredentials(apiKey: string, appName: string): Promise<GupshupCredentialCheck> {
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.baseUrl}/sm/api/v1/template/list/${encodeURIComponent(appName)}`, {
+        method: "GET",
+        headers: { apikey: apiKey, accept: "application/json" },
+        redirect: "error",
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch {
+      return { status: "unverified", reason: "network error" };
+    }
+    if (res.ok) {
+      await res.body?.cancel().catch(() => undefined);
+      return { status: "valid" };
+    }
+    const detail = await gupshupErrorDetail(res);
+    if (res.status === 401 || res.status === 403) return { status: "invalid_credentials" };
+    if (res.status >= 400 && res.status < 500 && /app/i.test(detail)) return { status: "invalid_app" };
+    return { status: "unverified", reason: `HTTP ${res.status}${detail ? `: ${detail}` : ""}` };
+  }
+
   /** Performs the request; maps network errors and non-2xx to GupshupProviderError. */
   private async request(url: string, init: RequestInit): Promise<Response> {
     let res: Response;
@@ -348,8 +385,14 @@ export class GupshupProvider implements WhatsAppProvider {
  */
 async function gupshupErrorDetail(res: Response): Promise<string> {
   try {
-    const body: unknown = JSON.parse(await res.text());
-    const msg = typeof body === "object" && body !== null ? (body as Record<string, unknown>)["message"] : undefined;
+    const text = await res.text();
+    let msg: unknown = text;
+    try {
+      const body: unknown = JSON.parse(text);
+      msg = typeof body === "object" && body !== null ? (body as Record<string, unknown>)["message"] : undefined;
+    } catch {
+      // Plain-text body (e.g. "Portal User Not Found With APIKey"): use it as is.
+    }
     if (typeof msg !== "string") return "";
     return msg.replace(/[^\p{L}\p{N} .,:_'()-]/gu, "").trim().slice(0, 120);
   } catch {

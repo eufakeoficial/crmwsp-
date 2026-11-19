@@ -2,9 +2,9 @@ import { Logger, Module } from "@nestjs/common";
 import { createCipherBox, loadMasterKeysFromEnv, type CipherBox } from "@crmwsp/crypto";
 import { AuthModule } from "../auth/auth.module.js";
 import { BillingModule } from "../billing/billing.module.js";
-import { Dialog360PartnerClient, createDefaultWhatsAppProvider, type WhatsAppProvider } from "@crmwsp/whatsapp";
-import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER } from "./channels.constants.js";
-import { ChannelsController } from "./channels.controller.js";
+import { Dialog360PartnerClient, createDefaultWhatsAppProvider, GupshupProvider, type WhatsAppProvider } from "@crmwsp/whatsapp";
+import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_VERIFIER } from "./channels.constants.js";
+import { ChannelsController, type GupshupCredentialVerifier } from "./channels.controller.js";
 
 /**
  * Master keys are loaded once at startup. If they are missing or invalid the API
@@ -33,6 +33,13 @@ function cipherFromEnv(): CipherBox | null {
         const partnerId = process.env["D360_PARTNER_ID"];
         const partnerApiKey = process.env["D360_PARTNER_API_KEY"];
         return partnerId && partnerApiKey ? new Dialog360PartnerClient({ partnerId, partnerApiKey }) : null;
+      },
+    },
+    {
+      provide: GUPSHUP_VERIFIER,
+      useFactory: (): GupshupCredentialVerifier => {
+        const gupshup = new GupshupProvider();
+        return (apiKey, appName) => gupshup.verifyCredentials(apiKey, appName);
       },
     },
     { provide: CHANNEL_PROVIDER, useFactory: (): WhatsAppProvider => createDefaultWhatsAppProvider() },
