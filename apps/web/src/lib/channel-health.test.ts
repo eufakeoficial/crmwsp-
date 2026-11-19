@@ -14,6 +14,15 @@ describe("channelHealthText", () => {
     expect(t.outbound).toEqual({ ok: false, error: "Authentication Failed", when: "hace 10 min" });
   });
 
+  it("flags invalid credentials only for a failed auth error", () => {
+    const base = { channelId: ID, lastInboundAt: null };
+    const fail = (error: string) => channelHealthText({ ...base, lastOutbound: { ok: false, at: "2026-11-19T11:50:00.000Z", error } }, now);
+    expect(fail("Authentication Failed").invalidCredentials).toBe(true);
+    expect(fail("Template not found").invalidCredentials).toBe(false);
+    expect(channelHealthText({ ...base, lastOutbound: { ok: true, at: "2026-11-19T11:50:00.000Z", error: null } }, now).invalidCredentials).toBe(false);
+    expect(channelHealthText({ ...base, lastOutbound: null }, now).invalidCredentials).toBe(false);
+  });
+
   it("handles no inbound and no outbound yet", () => {
     const t = channelHealthText({ channelId: ID, lastInboundAt: null, lastOutbound: null }, now);
     expect(t.inbound).toBe("Aún no has recibido mensajes por este número");
