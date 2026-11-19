@@ -12,6 +12,7 @@ import {
   withTenant,
   type Database,
   type Transaction,
+  isActiveChatConnection,
 } from "@crmwsp/db";
 import { OPT_OUT_CONFIRMATION_TEXT } from "@crmwsp/domain";
 import { BSP_HEADER, type InboundWebhookResult, type NormalizedInboundMessage, type WhatsAppProvider } from "@crmwsp/whatsapp";
@@ -378,7 +379,7 @@ export async function processIngestMessage(deps: ProcessorDeps, data: unknown): 
       const [llm] = await tx
         .select({ id: llmConnections.id })
         .from(llmConnections)
-        .where(and(eq(llmConnections.isActive, true), eq(llmConnections.lastTestOk, true)))
+        .where(and(isActiveChatConnection, eq(llmConnections.lastTestOk, true)))
         .limit(1);
       // A subscription lapsed past its grace period (ADR 0013) keeps ingesting but runs no AI.
       scheduleAiTurn = Boolean(llm) && !(await isTenantAiPaused(tx)) && !(await isSubscriptionRestricted(tx, now));
