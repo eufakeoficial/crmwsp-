@@ -16,6 +16,7 @@ import { ChannelCard } from "./ChannelCard";
 import { ChannelsTabs, type ChannelsTabId } from "./ChannelsTabs";
 import { ConnectChannelPanel } from "./ConnectChannelPanel";
 import { GupshupGuide } from "./GupshupGuide";
+import { EditCredentialsPanel } from "./EditCredentialsPanel";
 import { PartnerCredentialsPanel } from "./PartnerCredentialsPanel";
 
 export function ChannelsView() {
@@ -27,6 +28,7 @@ export function ChannelsView() {
   const [connecting, setConnecting] = useState<boolean | null>(null);
   const [confirmRotate, setConfirmRotate] = useState<Channel | null>(null);
   const [partnerFor, setPartnerFor] = useState<Channel | null>(null);
+  const [credentialsFor, setCredentialsFor] = useState<Channel | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [d360PartnerId, setD360PartnerId] = useState<string | null>(null);
   const { message, show } = useToast();
@@ -191,6 +193,7 @@ export function ChannelsView() {
               busy={busyId === c.id}
               onRotate={() => setConfirmRotate(c)}
               onPartner={() => setPartnerFor(c)}
+              onCredentials={() => setCredentialsFor(c)}
               onToggle={() => void act(c.id, () => channelsApi.setStatus(c.id, c.status === "disabled" ? "active" : "disabled"), c.status === "disabled" ? "Canal activado" : "Canal desactivado")}
             >
               {confirmRotate?.id === c.id ? (
@@ -210,6 +213,22 @@ export function ChannelsView() {
                     </Button>
                   </div>
                 </div>
+              ) : null}
+              {credentialsFor?.id === c.id ? (
+                <EditCredentialsPanel
+                  channel={c}
+                  onClose={() => setCredentialsFor(null)}
+                  onNoKeys={(err) => {
+                    setCredentialsFor(null);
+                    setError(err);
+                  }}
+                  onSaved={(updated) => {
+                    replace(updated);
+                    setCredentialsFor(null);
+                    setError(null);
+                    show("Credenciales actualizadas. El webhook sigue igual.");
+                  }}
+                />
               ) : null}
               {partnerFor?.id === c.id ? (
                 <PartnerCredentialsPanel

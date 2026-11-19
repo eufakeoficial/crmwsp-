@@ -16,6 +16,7 @@ import {
   templateLintRequestSchema,
   type TemplateLintResponse,
   updateChannelRequestSchema,
+  updateGupshupCredentialsRequestSchema,
   type Channel,
   type ChannelListResponse,
   type Dialog360Config,
@@ -685,6 +686,56 @@ export class ChannelsController {
       const rows = await tx.select().from(messageTemplates).where(eq(messageTemplates.channelConnectionId, id)).orderBy(asc(messageTemplates.name), asc(messageTemplates.language));
       return { updated: plan.updates.length, imported: plan.inserts.length, rejections: plan.rejections, items: rows.map(toTemplateDto) };
     });
+  }
+
+  /**
+   * Replaces the Gupshup API key and app name of a channel in place (e.g. after the browser autofilled a
+   * wrong key). Unlike reconnecting, the webhook token is kept so nothing must be re-pasted in Gupshup.
+   * The new credentials are verified against Gupshup first; the key is never logged, audited or returned.
+   */
+  @Patch(":id/credentials")
+  @Roles("owner", "admin")
+  async updateCredentials(
+    @CurrentTenantDb() db: TenantDb,
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: HttpRequest,
+  ): Promise<Channel> {
+    if (!isUuid(id)) throw new NotFoundError();
+    const input = parseOrThrow(updateGupshupCredentialsRequestSchema, body);
+    if (!this.cipher) throw new EncryptionNotConfiguredError();
+    const current = await db.run(async (tx) => {
+      const [ch] = await tx.select({ provider: channelConnections.provider }).from(channelConnections).where(eq(channelConnections.id, id));
+      return ch;
+    });
+    if (!current) throw new NotFoundError();
+    if (current.provider !== "gupshup") throw new ValidationError("Solo los canales de Gupshup tienen API key editable.");
+    await this.assertGupshupCredentials(input.apiKey, input.appName);
+    const credentials = this.cipher.encrypt(input.apiKey, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
+    try {
+      const row = await db.run(async (tx) => {
+        const [updated] = await tx
+          .update(channelConnections)
+          .set({ externalAppId: input.appName, credentialsEncrypted: credentials, updatedAt: new Date() })
+          .where(eq(channelConnections.id, id))
+          .returning();
+        if (!updated) throw new NotFoundError();
+        await writeAudit(tx, {
+          tenantId: db.tenantId,
+          userId: db.userId,
+          entity: "channel_connection",
+          entityId: id,
+          action: "channel.credentials_updated",
+          diff: { appName: input.appName },
+          ip: req.ip,
+        });
+        return updated;
+      });
+      return this.toDto(row, true, redact(input.apiKey));
+    } catch (err) {
+      if (pgCode(err) === PG_UNIQUE_VIOLATION) throw new ConflictError("Esa app de Gupshup ya está conectada a otro canal.");
+      throw err;
+    }
   }
 
   @Patch(":id")

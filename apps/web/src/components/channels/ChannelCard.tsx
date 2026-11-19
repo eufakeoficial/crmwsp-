@@ -2,7 +2,7 @@
 
 import type { Channel } from "@crmwsp/contracts";
 import type { ReactNode } from "react";
-import { FileText, KeyRound, Power, RefreshCw } from "lucide-react";
+import { FileText, KeyRound, Pencil, Power, RefreshCw } from "lucide-react";
 import { Button, Card, StatusChip, type Tone } from "@/components/ui";
 import { WebhookUrlBox } from "./WebhookUrlBox";
 
@@ -32,6 +32,7 @@ export function ChannelCard({
   onRotate,
   onToggle,
   onPartner,
+  onCredentials,
   children,
 }: {
   channel: Channel;
@@ -40,6 +41,7 @@ export function ChannelCard({
   onRotate: () => void;
   onToggle: () => void;
   onPartner: () => void;
+  onCredentials: () => void;
   /** Inline area below the actions (rotate confirmation, partner credentials form). */
   children?: ReactNode;
 }) {
@@ -94,6 +96,11 @@ export function ChannelCard({
           {channel.provider === "gupshup" ? (
             <Button size="sm" variant="outline" disabled={busy} onClick={onRotate}>
               <RefreshCw aria-hidden className="size-4" />Rotar token
+            </Button>
+          ) : null}
+          {channel.provider === "gupshup" ? (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onCredentials}>
+              <Pencil aria-hidden className="size-4" />Editar credenciales
             </Button>
           ) : null}
           {channel.provider === "gupshup" ? (

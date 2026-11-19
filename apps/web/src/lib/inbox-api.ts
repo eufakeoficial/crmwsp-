@@ -3,6 +3,7 @@ import {
   type Connect360dialogRequest,
   type CreateGupshupChannelRequest,
   type SetPartnerCredentialsRequest,
+  type UpdateGupshupCredentialsRequest,
   type ReactionEmoji,
   type UpdateConversationRequest,
   attachmentUrlResponseSchema,
@@ -44,6 +45,8 @@ export const channelsApi = {
     request("/channels/360dialog/connect", { method: "POST", body: input, schema: channelListResponseSchema }),
   setPartnerCredentials: (id: string, input: SetPartnerCredentialsRequest) =>
     request(`/channels/${id}/partner-credentials`, { method: "PUT", body: input, schema: channelSchema }),
+  updateCredentials: (id: string, input: UpdateGupshupCredentialsRequest) =>
+    request(`/channels/${id}/credentials`, { method: "PATCH", body: input, schema: channelSchema }),
   rotateWebhookToken: (id: string) =>
     request(`/channels/${id}/rotate-webhook-token`, { method: "POST", schema: channelSchema }),
   setStatus: (id: string, status: "active" | "disabled") =>

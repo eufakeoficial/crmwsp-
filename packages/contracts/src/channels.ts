@@ -20,6 +20,13 @@ export const createGupshupChannelRequestSchema = z.object({
   path: ["partnerToken"],
 });
 
+/** PATCH /channels/:id/credentials: replaces the Gupshup API key + app name in place (the webhook token is kept). Write-only key. */
+export const updateGupshupCredentialsRequestSchema = z.object({
+  appName: z.string().trim().min(1).max(100),
+  apiKey: z.string().trim().min(8).max(512),
+});
+export type UpdateGupshupCredentialsRequest = z.infer<typeof updateGupshupCredentialsRequestSchema>;
+
 /** PUT /channels/:id/partner-credentials. The token is write-only: it is never returned. */
 export const setPartnerCredentialsRequestSchema = z.object({
   gupshupAppId: z.string().trim().min(1).max(128),
