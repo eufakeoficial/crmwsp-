@@ -2,6 +2,8 @@ import type { Conversation, InboxConversation } from "@crmwsp/contracts";
 import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { ATTACHMENT_LABELS, activityOf } from "@/lib/inbox-state";
+import { listAiTone } from "@/lib/ai-status";
+import { AiStatusDot } from "./AiStatusPill";
 import { compactRelative } from "./inbox-meta";
 
 export interface TagMeta {
@@ -33,6 +35,7 @@ export function ConversationItem({
   const preview = last ? `${last.direction === "outbound" ? "Tú: " : ""}${last.preview ?? ATTACHMENT_LABELS[last.type]}` : "Sin mensajes";
   const tagEmojis = (inbox?.contactTags ?? []).map((t) => ({ name: t, emoji: tagMeta?.get(t)?.emoji ?? "🏷" }));
   const assigneeName = c.assignee ? (c.assignee.name ?? c.assignee.email) : null;
+  const ai = listAiTone({ aiMode: c.aiMode, status: c.status, inboxStatus: inbox?.inboxStatus, assigneeName });
   return (
     <li className={cn("flex min-h-[88px] items-stretch border-b border-line pl-3", selected ? "bg-lime-soft" : "hover:bg-paper-2")}>
       {onCheck ? (
@@ -55,6 +58,7 @@ export function ConversationItem({
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex items-center gap-2">
             <b className={cn("min-w-0 flex-1 truncate text-[15px]", unread ? "font-extrabold" : "font-semibold")}>{title}</b>
+            <AiStatusDot tone={ai.tone} label={`IA: ${ai.label}`} />
             {unread ? <span data-testid="unread-badge" role="img" aria-label="Sin leer" className="size-2.5 flex-none rounded-full bg-focus" /> : null}
             <time dateTime={activityOf(c)} className="flex-none text-xs text-muted">{compactRelative(activityOf(c))}</time>
           </span>

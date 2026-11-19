@@ -40,6 +40,7 @@ export function Composer({
   slot,
   channelConnectionId,
   onSendTemplate,
+  pauseHint,
 }: {
   blocked: boolean;
   windowWarning: boolean;
@@ -50,7 +51,10 @@ export function Composer({
   /** With both set, a closed window offers the approved-template picker. */
   channelConnectionId?: string;
   onSendTemplate?: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
+  /** One-line hint shown after the first reply sent from this composer. Omit when the AI would not pause. */
+  pauseHint?: string | null;
 }) {
+  const [hintShown, setHintShown] = useState(false);
   const [mode, setMode] = useState<Mode>("reply");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -106,6 +110,7 @@ export function Composer({
     void onSend(trimmed).finally(() => {
       inFlight.current = false;
       setSending(false);
+      if (pauseHint) setHintShown(true);
     });
   }
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -240,6 +245,7 @@ export function Composer({
         </Button>
       </div>
       {improveError ? <p role="alert" className="m-0 text-xs font-semibold text-danger">{improveError}</p> : null}
+      {hintShown && pauseHint ? <p data-testid="pause-hint" className="m-0 text-xs text-muted">{pauseHint}</p> : null}
     </div>
   );
 }
