@@ -170,9 +170,38 @@ describe("testConnection", () => {
       () => json(chatBody("p")),
       () => json({ data: [{ index: 0, embedding: [1] }] }),
       () => json({ text: "" }),
+      () => json(chatBody("ok")),
     );
     const r = await p.testConnection({ modelCheap: "a", modelStrong: "b" });
-    expect(r).toMatchObject({ ok: true, capabilities: { structuredOutput: true, embeddings: true, transcription: true } });
+    expect(r).toMatchObject({ ok: true, capabilities: { structuredOutput: true, embeddings: true, transcription: true, vision: true } });
+    expect(r.error).toBeUndefined();
+  });
+  it("probes vision with a 1x1 PNG data URI and treats a clear rejection as no vision", async () => {
+    const { p, fetch } = make(
+      () => json(chatBody('{"ok":true}')),
+      () => json(chatBody("p")),
+      () => json({ data: [{ index: 0, embedding: [1] }] }),
+      () => json({ text: "" }),
+      () => json({ error: { message: "image input not supported" } }, 400),
+    );
+    const r = await p.testConnection({ modelCheap: "a", modelStrong: "b", modelVision: "v" });
+    expect(r.capabilities.vision).toBe(false);
+    expect(r.ok).toBe(true);
+    const body = bodyOf(fetch, 4);
+    expect(body.model).toBe("v");
+    expect(body.messages[0].content[1].image_url.url).toMatch(/^data:image\/png;base64,iVBOR/);
+  });
+  it("leaves vision unknown on auth/network errors without failing the test", async () => {
+    const { p } = make(
+      () => json(chatBody('{"ok":true}')),
+      () => json(chatBody("p")),
+      () => json({ data: [{ index: 0, embedding: [1] }] }),
+      () => json({ text: "" }),
+      () => json({}, 401),
+    );
+    const r = await p.testConnection({ modelCheap: "a", modelStrong: "b" });
+    expect(r.ok).toBe(true);
+    expect(r.capabilities.vision).toBeUndefined();
     expect(r.error).toBeUndefined();
   });
   it("annotates failing capabilities without throwing", async () => {
@@ -185,7 +214,7 @@ describe("testConnection", () => {
     );
     const r = await p.testConnection({ modelCheap: "a", modelStrong: "b" });
     expect(r.ok).toBe(true);
-    expect(r.capabilities).toEqual({ structuredOutput: false, embeddings: false, transcription: false });
+    expect(r.capabilities).toEqual({ structuredOutput: false, embeddings: false, transcription: false, vision: false });
     expect(r.error).toMatch(/embeddings.*transcription/);
     expect(r.error).not.toContain(API_KEY);
   });

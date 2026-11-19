@@ -60,6 +60,12 @@ const embedResponseSchema = z.object({
 
 const transcribeResponseSchema = z.object({ text: z.string(), duration: z.number().nonnegative().optional() });
 
+/** 1x1 transparent PNG used to probe image inputs (ADR 0025). */
+export const TINY_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+/** HTTP statuses that clearly say "this model/endpoint does not accept that input". */
+const VISION_REJECTED_STATUSES = [400, 404, 415, 422];
+
 /** 0.1 s of 8 kHz mono 16-bit silence, used by `testConnection` and the transcription-only probe (ADR 0024). */
 export function tinyWav(): Uint8Array {
   const samples = 800;
@@ -218,7 +224,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
   async testConnection(req: ConnectionTestRequest): Promise<ConnectionTestResult> {
     const started = Date.now();
     const errors: string[] = [];
-    const caps = { structuredOutput: false, embeddings: false, transcription: false };
+    const caps: ConnectionTestResult["capabilities"] = { structuredOutput: false, embeddings: false, transcription: false };
     let ok = true;
     const describe = (e: unknown) => (e instanceof LlmProviderError ? e.message : "Unexpected error");
 
@@ -254,6 +260,18 @@ export class OpenAICompatibleProvider implements LLMProvider {
       caps.transcription = true;
     } catch (e) {
       errors.push(`transcription: ${describe(e)}`);
+    }
+    try {
+      await this.chat({
+        model: req.modelVision ?? req.modelCheap,
+        messages: [{ role: "user", content: "Reply with: ok", images: [{ mimeType: "image/png", data: Buffer.from(TINY_PNG_BASE64, "base64") }] }],
+        maxTokens: 5,
+        temperature: 0,
+      });
+      caps.vision = true;
+    } catch (e) {
+      // Only a clear rejection means "no vision"; network/auth/quota errors leave it unknown and never fail the test.
+      if (e instanceof LlmProviderError && e.status !== undefined && VISION_REJECTED_STATUSES.includes(e.status)) caps.vision = false;
     }
     const result: ConnectionTestResult = { ok, capabilities: caps, latencyMs: Date.now() - started };
     if (errors.length > 0) result.error = errors.join("; ");

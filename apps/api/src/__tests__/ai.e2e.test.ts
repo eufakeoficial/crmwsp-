@@ -243,13 +243,13 @@ describe.skipIf(!hasEnv)("AI settings, knowledge and approvals (e2e, real Postgr
       expect(res.statusCode).toBe(200);
       const result = aiTestResultSchema.parse(res.json());
       expect(result.ok).toBe(true);
-      expect(result.capabilities).toEqual({ structuredOutput: true, embeddings: true, transcription: false });
+      expect(result.capabilities).toEqual({ structuredOutput: true, embeddings: true, transcription: false, vision: true });
       expect(res.body).not.toContain(API_KEY);
       expect(seen.length).toBeGreaterThan(0);
       expect(seen.every((r) => r.url.startsWith("https://api.openai.com/v1/") && r.auth === `Bearer ${API_KEY}`)).toBe(true);
 
       const get = aiConnectionSchema.parse((await asA("GET", "/ai/connection")).json());
-      expect(get.capabilities).toEqual({ structuredOutput: true, embeddings: true, transcription: false });
+      expect(get.capabilities).toEqual({ structuredOutput: true, embeddings: true, transcription: false, vision: true });
       expect(get.lastTestOk).toBe(true);
       expect(get.lastTestedAt).not.toBeNull();
     });

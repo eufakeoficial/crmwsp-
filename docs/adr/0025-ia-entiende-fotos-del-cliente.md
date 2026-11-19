@@ -38,10 +38,12 @@ el turno normal incluye **una** imagen y el modelo responde a la intención del 
 ## Fuera de alcance
 
 - El simulador no admite imágenes.
-- `capabilities.vision` no tiene hoy UI ni prueba de conexión: se fija en la fila de la conexión.
-  Exponerla en Ajustes de IA queda como trabajo posterior.
 - La calidad real de la lectura depende del modelo y no se verifica con tests (proveedores
   simulados).
+
+## Detección de visión
+
+La prueba de conexión de chat envía además un PNG de 1x1 como `image_url` (data URI) a `visionModel` o `modelCheap`. Éxito: `capabilities.vision = true`. Rechazo claro (HTTP 400/404/415/422): `false`. Errores de red, auth o cuota: queda sin cambios y no hace fallar la prueba. La prueba conserva `visionModel` y demás claves guardadas. Ajustes de IA muestra "Lectura de imágenes: disponible / no disponible" (sin visión, la IA no ve las fotos). La sonda verifica que el endpoint acepta imágenes, no la calidad de la lectura.
 
 ## Consecuencias
 
