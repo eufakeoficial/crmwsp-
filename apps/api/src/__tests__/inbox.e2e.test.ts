@@ -413,6 +413,23 @@ describe.skipIf(!hasEnv)("channels, inbox, outbound and SSE (e2e, real Postgres 
       expect(audit).toHaveLength(2);
     });
 
+    it("POST /conversations/ai-mode/bulk sets the mode on open conversations of the caller tenant only", async () => {
+      const before = await migrator.db.select({ aiMode: conversations.aiMode }).from(conversations).where(eq(conversations.id, s.convB));
+      const forbidden = await inject({ method: "POST", url: "/conversations/ai-mode/bulk", payload: { aiMode: "auto" }, cookie: s.cookieC, tenant: s.tenantA });
+      expect(forbidden.statusCode).toBe(403);
+      expect((await asA("POST", "/conversations/ai-mode/bulk", { aiMode: "bogus" })).statusCode).toBe(400);
+      const res = await asA("POST", "/conversations/ai-mode/bulk", { aiMode: "auto" });
+      expect(res.statusCode).toBe(200);
+      const { updated } = res.json() as { updated: number };
+      expect(updated).toBeGreaterThan(0);
+      const rowsA = await migrator.db.select({ aiMode: conversations.aiMode, status: conversations.status }).from(conversations).where(eq(conversations.tenantId, s.tenantA));
+      expect(rowsA.filter((r) => r.status !== "resolved").every((r) => r.aiMode === "auto")).toBe(true);
+      const after = await migrator.db.select({ aiMode: conversations.aiMode }).from(conversations).where(eq(conversations.id, s.convB));
+      expect(after[0]!.aiMode).toBe(before[0]!.aiMode);
+      const audit = await migrator.db.select().from(auditEvents).where(eq(auditEvents.entityId, s.tenantA));
+      expect(audit.find((e) => e.action === "conversation.ai_mode_bulk_updated")?.diff).toMatchObject({ aiMode: "auto", count: updated });
+    });
+
     it("assignee must be a member of the tenant", async () => {
       const id = s.convA[1]!;
       const foreign = await asA("PATCH", `/conversations/${id}`, { assignedUserId: s.userB, lockVersion: 0 });

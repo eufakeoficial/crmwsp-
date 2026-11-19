@@ -1,12 +1,12 @@
 "use client";
 
-import type { InboxConversation, TagDto, TenantMember } from "@crmwsp/contracts";
+import type { AiMode, InboxConversation, TagDto, TenantMember } from "@crmwsp/contracts";
 import { AlarmClock, ArrowLeft, Bot, CircleCheck, MailOpen, PanelRight, RotateCcw, Tag } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
-import { REMINDER_PRESETS, TAG_COLORS, localInputToIso } from "./inbox-meta";
+import { AI_MODE_OPTIONS, REMINDER_PRESETS, TAG_COLORS, localInputToIso } from "./inbox-meta";
 import { MenuItem, Popover } from "./Popover";
 
 /** Inline text dropdown under the contact name: looks like a link, behaves like a select. */
@@ -43,6 +43,7 @@ export function ConversationHeader({
   onToggleStatus,
   onMarkUnread,
   onPause,
+  onSetAiMode,
 }: {
   conversation: InboxConversation;
   /** null when GET /tenant/members is forbidden (agent role): only "Yo" / "Sin asignar". */
@@ -64,6 +65,8 @@ export function ConversationHeader({
   onMarkUnread: () => void;
   /** minutes = null resumes now. */
   onPause: (minutes: number | null) => void;
+  /** Changes this conversation's AI mode (separate from the pause control). */
+  onSetAiMode: (mode: AiMode) => void;
 }) {
   const { contact, assignee } = conversation;
   const title = contact.name ?? "Contacto desconocido";
@@ -139,7 +142,19 @@ export function ConversationHeader({
             WhatsApp
           </button>
         </div>
-        <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[12px] font-semibold text-muted">
+        <select
+          aria-label="Modo de IA de esta conversación"
+          title="Modo de IA de esta conversación"
+          className="ml-auto h-8 max-w-60 cursor-pointer rounded-lg border border-line-2 bg-white px-2 text-[12px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={busy}
+          value={conversation.aiMode}
+          onChange={(e) => onSetAiMode(e.target.value as AiMode)}
+        >
+          {AI_MODE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <label className="flex cursor-pointer items-center gap-1.5 text-[12px] font-semibold text-muted">
           <input type="checkbox" checked={hideSystem} onChange={(e) => onHideSystem(e.target.checked)} className="size-4 cursor-pointer accent-ink" />
           Ocultar mensajes del sistema
         </label>

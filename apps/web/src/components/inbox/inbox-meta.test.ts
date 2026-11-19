@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compactRelative, folderCount, folderFixesStatus, folderParams, localInputToIso, localTimeIn, originLabel } from "./inbox-meta";
+import { AI_MODE_OPTIONS, aiModeLabel, compactRelative, folderCount, folderFixesStatus, folderParams, localInputToIso, localTimeIn, originLabel } from "./inbox-meta";
 
 const NOW = new Date("2026-10-20T12:00:00Z");
 
@@ -54,5 +54,21 @@ describe("contact panel helpers", () => {
   it("converts a datetime-local value to ISO", () => {
     expect(localInputToIso("")).toBeNull();
     expect(localInputToIso("2026-10-21T09:30")).toMatch(/^2026-10-21T\d{2}:30:00\.000Z$/);
+  });
+});
+
+describe("AI mode labels", () => {
+  it("offers the three modes in order with neutral Spanish labels", () => {
+    expect(AI_MODE_OPTIONS.map((o) => o.value)).toEqual(["off", "assist", "auto"]);
+    expect(AI_MODE_OPTIONS.map((o) => o.label)).toEqual([
+      "IA apagada",
+      "IA asistente (redacta, tú envías)",
+      "IA automática (responde sola)",
+    ]);
+  });
+  it("gives a short label per mode", () => {
+    expect(aiModeLabel("off")).toBe("Apagada");
+    expect(aiModeLabel("assist")).toBe("Asistente");
+    expect(aiModeLabel("auto")).toBe("Automática");
   });
 });
