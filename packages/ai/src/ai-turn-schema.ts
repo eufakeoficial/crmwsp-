@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AI_CLAIM_KINDS, REACTION_EMOJIS, SALES_STAGES, aiTurnOutputSchema, normalizeReactionEmoji } from "@crmwsp/contracts";
 import type { AiTurnOutput } from "@crmwsp/contracts";
 import type { ResponseFormat } from "./provider/types.js";
+import { sanitizeReplyText } from "./reply-sanitizer.js";
 
 /*
  * OpenAI strict `json_schema` requires every property to be listed in `required` and
@@ -64,6 +65,14 @@ export function normalizeAiTurnOutput(raw: unknown): unknown {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
   const out: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
   if (out.reply === null) delete out.reply;
+  // Customer-facing text never carries chunk ids or citation markers (they live in claims).
+  if (typeof out.reply === "object" && out.reply !== null && !Array.isArray(out.reply)) {
+    const reply = { ...(out.reply as Record<string, unknown>) };
+    if (typeof reply.text === "string") reply.text = sanitizeReplyText(reply.text);
+    // Nothing left to say once the markers are gone: no reply (the policy hands off).
+    if (reply.text === "") delete out.reply;
+    else out.reply = reply;
+  }
   // Playbook detection is best effort: null, absent or off-list values never fail the turn.
   if (typeof out.salesStage !== "string" || !(SALES_STAGES as readonly string[]).includes(out.salesStage)) delete out.salesStage;
   if (typeof out.objection !== "string" || out.objection === "" || out.objection.length > 40) delete out.objection;
