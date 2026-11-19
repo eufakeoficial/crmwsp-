@@ -1,4 +1,4 @@
-import { Building2, AlertCircle, BookOpen, Bot, CalendarDays, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, MessageSquareText, Rocket, Package, Plug, Settings, Users2, Workflow, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { Building2, AlertCircle, BookOpen, Bot, CalendarDays, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, MessageSquareText, Rocket, Package, Plug, Settings, Users2, Workflow, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, Wallet, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -27,6 +27,7 @@ export const SETTINGS_SECTIONS: readonly NavItem[] = [
   { key: "settings-templates", label: "Plantillas de negocio", href: "/app/settings/templates", icon: LayoutTemplate },
   { key: "settings-currency", label: "Moneda", href: "/app/settings/currency", icon: Coins },
   { key: "settings-plan", label: "Plan y uso", href: "/app/settings/plan", icon: CreditCard },
+  { key: "settings-billing", label: "Suscripción", href: "/app/settings/billing", icon: Wallet },
   { key: "settings-ads", label: "Anuncios", href: "/app/settings/ads", icon: Megaphone },
   { key: "settings-developers", label: "Claves de API", href: "/app/settings/developers", icon: Code2 },
   { key: "settings-owner-mode", label: "Control por WhatsApp", href: "/app/settings/owner-mode", icon: Smartphone },
@@ -101,6 +102,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { key: "settings-integrations", label: "Integraciones", href: "/app/settings/integrations", icon: Plug },
       { key: "settings-currency", label: "Moneda", href: "/app/settings/currency", icon: Coins },
       { key: "settings-plan", label: "Plan y uso", href: "/app/settings/plan", icon: CreditCard },
+      { key: "settings-billing", label: "Suscripción", href: "/app/settings/billing", icon: Wallet },
       { key: "settings-templates", label: "Plantillas de negocio", href: "/app/settings/templates", icon: LayoutTemplate },
       { key: "settings-developers", label: "Claves de API", href: "/app/settings/developers", icon: Code2 },
       { key: "settings-ads", label: "Anuncios", href: "/app/settings/ads", icon: Megaphone },
