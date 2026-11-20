@@ -1,3 +1,4 @@
+import { probePng } from "../vision.js";
 import { z } from "zod";
 import { LlmProviderError, ResponseFormatUnsupportedError } from "../errors.js";
 import type {
@@ -60,9 +61,6 @@ const embedResponseSchema = z.object({
 
 const transcribeResponseSchema = z.object({ text: z.string(), duration: z.number().nonnegative().optional() });
 
-/** 1x1 transparent PNG used to probe image inputs (ADR 0025). */
-export const TINY_PNG_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 /** HTTP statuses that clearly say "this model/endpoint does not accept that input". */
 const VISION_REJECTED_STATUSES = [400, 404, 415, 422];
 
@@ -264,7 +262,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     try {
       await this.chat({
         model: req.modelVision ?? req.modelCheap,
-        messages: [{ role: "user", content: "Reply with: ok", images: [{ mimeType: "image/png", data: Buffer.from(TINY_PNG_BASE64, "base64") }] }],
+        messages: [{ role: "user", content: "Reply with: ok", images: [{ mimeType: "image/png", data: probePng() }] }],
         maxTokens: 5,
         temperature: 0,
       });

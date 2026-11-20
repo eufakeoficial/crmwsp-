@@ -19,6 +19,8 @@ export interface TurnImageCandidate {
   messageId: string;
   externalMediaId: string | null;
   mimeType: string | null;
+  /** Size recorded on the attachment row; lets an oversize photo be skipped without downloading it. */
+  sizeBytes?: number | null;
 }
 
 export interface TurnImage {
@@ -61,6 +63,7 @@ export interface LoadTurnImagePorts {
 export async function loadTurnImage(cand: TurnImageCandidate, p: LoadTurnImagePorts): Promise<TurnImageOutcome> {
   if (!p.supported) return { status: "unseen", reason: "provider_without_vision" };
   if (!p.loadMedia || !cand.externalMediaId) return { status: "unseen", reason: "media_unavailable" };
+  if (typeof cand.sizeBytes === "number" && cand.sizeBytes > MAX_TURN_IMAGE_BYTES) return { status: "unseen", reason: "image_too_large" };
   try {
     const media = await p.loadMedia({
       tenantId: p.tenantId,

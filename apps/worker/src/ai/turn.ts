@@ -5,6 +5,7 @@ import {
   buildAiTurnMessages,
   sanitizeTurnReply,
   estimateCost,
+  resolveVisionModel,
   type ChatResult,
   type LLMProvider,
   type PromptChunk,
@@ -453,11 +454,11 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
   const imageMessageId = receipt ? undefined : pickTurnImageMessageId(history);
   if (imageMessageId && !(await findPendingPaymentOrder(tx, conv.contactId))) {
     const [img] = await tx
-      .select({ externalMediaId: attachments.externalMediaId, mimeType: attachments.mimeType })
+      .select({ externalMediaId: attachments.externalMediaId, mimeType: attachments.mimeType, sizeBytes: attachments.sizeBytes })
       .from(attachments)
       .where(eq(attachments.messageId, imageMessageId))
       .limit(1);
-    image = { messageId: imageMessageId, externalMediaId: img?.externalMediaId ?? null, mimeType: img?.mimeType ?? null };
+    image = { messageId: imageMessageId, externalMediaId: img?.externalMediaId ?? null, mimeType: img?.mimeType ?? null, sizeBytes: img?.sizeBytes ?? null };
   }
   const [playbookRow] = await tx.select({ enabled: salesPlaybooks.enabled, config: salesPlaybooks.config }).from(salesPlaybooks).limit(1);
   const playbook = resolvePlaybook(playbookRow);
@@ -726,10 +727,7 @@ ${IMAGE_NOT_SEEN_MARKER}`.trim() : placeholder(m),
   );
 }
 
-function visionModelFor(conn: LlmConnection): string {
-  const configured = conn.capabilities.visionModel;
-  return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : conn.modelCheap;
-}
+const visionModelFor = resolveVisionModel;
 
 
 /** Stores the transcript once (first writer wins) and books the transcription cost in the ledger. */

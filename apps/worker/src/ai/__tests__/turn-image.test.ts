@@ -35,6 +35,12 @@ describe("loadTurnImage", () => {
     const out = await loadTurnImage(cand, ports());
     expect(out).toMatchObject({ status: "ready", image: { messageId: "m2", mimeType: "image/jpeg" } });
   });
+  it("skips an oversize photo by its recorded size without downloading it", async () => {
+    const loadMedia = vi.fn(async () => ({ data: new Uint8Array([1]), mimeType: "image/png" }));
+    const out = await loadTurnImage({ ...cand, sizeBytes: MAX_TURN_IMAGE_BYTES + 1 }, ports({ loadMedia }));
+    expect(out).toEqual({ status: "unseen", reason: "image_too_large" });
+    expect(loadMedia).not.toHaveBeenCalled();
+  });
   it.each([
     ["no vision", { supported: false }, "provider_without_vision"],
     ["no loader", { loadMedia: undefined }, "media_unavailable"],
