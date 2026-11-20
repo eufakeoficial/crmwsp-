@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
-import { assertSafeBaseUrl } from "@crmwsp/ai";
+import { assertSafeBaseUrl, resolveVisionModel } from "@crmwsp/ai";
 import { redact, type CipherBox } from "@crmwsp/crypto";
 import {
   AI_PROVIDER_BASE_URLS,
@@ -97,6 +97,7 @@ export class AiController {
         structuredOutput: caps.structuredOutput === true,
         embeddings: caps.embeddings === true,
         transcription: caps.transcription === true,
+        vision: caps.vision === true,
       },
       lastTestedAt: row.lastTestedAt ? row.lastTestedAt.toISOString() : null,
       lastTestOk: row.lastTestOk,
@@ -201,7 +202,7 @@ export class AiController {
     const [row] = await db.run((tx) => tx.select().from(llmConnections).where(isActiveChatConnection));
     if (!row) throw new ValidationError("No AI connection is configured");
     const started = Date.now();
-    const noCaps: AiCapabilities = { structuredOutput: false, embeddings: false, transcription: false };
+    const noCaps: AiCapabilities = { structuredOutput: false, embeddings: false, transcription: false, vision: row.capabilities.vision === true };
     let apiKey = "";
     let result: AiTestResult;
     try {
@@ -209,8 +210,9 @@ export class AiController {
       if (!row.apiKeyEncrypted) throw new Error("no key");
       apiKey = this.cipher.decrypt(row.apiKeyEncrypted, { tenantId: db.tenantId, purpose: LLM_API_KEY_PURPOSE });
       const provider = this.providers.create({ baseUrl: row.baseUrl, apiKey });
-      const r = await provider.testConnection({ modelCheap: row.modelCheap, modelStrong: row.modelStrong ?? row.modelCheap });
-      result = { ok: r.ok, capabilities: r.capabilities, latencyMs: r.latencyMs };
+      const r = await provider.testConnection({ modelCheap: row.modelCheap, modelStrong: row.modelStrong ?? row.modelCheap, modelVision: resolveVisionModel(row) });
+      // Inconclusive vision probe (network/auth): keep what was stored.
+      result = { ok: r.ok, capabilities: { ...r.capabilities, vision: r.capabilities.vision ?? row.capabilities.vision === true }, latencyMs: r.latencyMs };
       if (r.error) result.error = r.error;
     } catch (err) {
       // Never a 500 for provider/setup failures; the message is sanitized below.
@@ -226,7 +228,8 @@ export class AiController {
       await tx
         .update(llmConnections)
         .set({
-          capabilities: result.capabilities,
+          // Merge: `visionModel` (and any other stored key) survives a re-test.
+          capabilities: { ...row.capabilities, ...result.capabilities, vision: result.capabilities.vision === true },
           lastTestedAt: new Date(),
           lastTestOk: result.ok,
           updatedAt: new Date(),

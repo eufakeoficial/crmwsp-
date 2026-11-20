@@ -1,4 +1,5 @@
 export * from "./errors.js";
+export * from "./vision.js";
 export * from "./provider/index.js";
 export * from "./pricing.js";
 export * from "./prompts/index.js";

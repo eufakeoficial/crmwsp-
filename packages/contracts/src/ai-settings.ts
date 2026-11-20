@@ -36,6 +36,8 @@ export const aiCapabilitiesSchema = z.object({
   structuredOutput: z.boolean(),
   embeddings: z.boolean(),
   transcription: z.boolean(),
+  /** The chat model reads images (ADR 0025). Optional for older clients/payloads. */
+  vision: z.boolean().optional(),
 });
 export type AiCapabilities = z.infer<typeof aiCapabilitiesSchema>;
 

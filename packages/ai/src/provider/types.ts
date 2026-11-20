@@ -71,10 +71,18 @@ export interface ConnectionTestRequest {
   modelEmbedding?: string;
   /** Defaults to `whisper-1`. */
   modelTranscription?: string;
+  /** Model probed for image inputs; defaults to `modelCheap`. */
+  modelVision?: string;
 }
 export interface ConnectionTestResult {
   ok: boolean;
-  capabilities: { structuredOutput: boolean; embeddings: boolean; transcription: boolean };
+  capabilities: {
+    structuredOutput: boolean;
+    embeddings: boolean;
+    transcription: boolean;
+    /** Absent when the probe was inconclusive (network/auth/quota): the stored value must be kept. */
+    vision?: boolean;
+  };
   latencyMs: number;
   error?: string;
 }

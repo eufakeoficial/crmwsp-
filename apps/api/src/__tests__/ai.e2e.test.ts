@@ -243,15 +243,37 @@ describe.skipIf(!hasEnv)("AI settings, knowledge and approvals (e2e, real Postgr
       expect(res.statusCode).toBe(200);
       const result = aiTestResultSchema.parse(res.json());
       expect(result.ok).toBe(true);
-      expect(result.capabilities).toEqual({ structuredOutput: true, embeddings: true, transcription: false });
+      expect(result.capabilities).toEqual({ structuredOutput: true, embeddings: true, transcription: false, vision: true });
       expect(res.body).not.toContain(API_KEY);
       expect(seen.length).toBeGreaterThan(0);
       expect(seen.every((r) => r.url.startsWith("https://api.openai.com/v1/") && r.auth === `Bearer ${API_KEY}`)).toBe(true);
 
       const get = aiConnectionSchema.parse((await asA("GET", "/ai/connection")).json());
-      expect(get.capabilities).toEqual({ structuredOutput: true, embeddings: true, transcription: false });
+      expect(get.capabilities).toEqual({ structuredOutput: true, embeddings: true, transcription: false, vision: true });
       expect(get.lastTestOk).toBe(true);
       expect(get.lastTestedAt).not.toBeNull();
+    });
+
+    it("vision probe uses capabilities.visionModel when set and modelCheap otherwise, keeping visionModel", async () => {
+      const visionModels: string[] = [];
+      factory.fetchImpl = async (input, init) => {
+        const url = String(input);
+        if (url.endsWith("/chat/completions")) {
+          const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ content: unknown }> };
+          if (JSON.stringify(body.messages).includes("data:image/png")) visionModels.push(body.model);
+          return jsonResponse({ model: body.model, choices: [{ message: { content: '{"ok":true}' }, finish_reason: "stop" }], usage: { prompt_tokens: 5, completion_tokens: 3 } });
+        }
+        if (url.endsWith("/embeddings")) return jsonResponse({ data: [{ index: 0, embedding: [0.1] }], usage: { prompt_tokens: 1 } });
+        return jsonResponse({ error: { message: "not found" } }, 404);
+      };
+      const [row] = await migrator.db.select().from(llmConnections).where(eq(llmConnections.tenantId, s.tenantA));
+      await asA("POST", "/ai/connection/test");
+      expect(visionModels.at(-1)).toBe(row!.modelCheap);
+      await migrator.db.update(llmConnections).set({ capabilities: { ...row!.capabilities, visionModel: "vision-special" } }).where(eq(llmConnections.id, row!.id));
+      await asA("POST", "/ai/connection/test");
+      expect(visionModels.at(-1)).toBe("vision-special");
+      const [after] = await migrator.db.select().from(llmConnections).where(eq(llmConnections.id, row!.id));
+      expect(after!.capabilities).toMatchObject({ vision: true, visionModel: "vision-special" });
     });
 
     it("test never answers 500 on provider failures: ok:false with a sanitized error", async () => {

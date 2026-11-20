@@ -5,6 +5,7 @@ import {
   buildAiTurnMessages,
   sanitizeTurnReply,
   estimateCost,
+  resolveVisionModel,
   type ChatResult,
   type LLMProvider,
   type PromptChunk,
@@ -58,6 +59,7 @@ import { isInsufficientQuota, quotaNotification } from "./quota-notice.js";
 import { contactAutomationsPaused, routeHandoff } from "../inbox/routing.js";
 import { applyConversationHandoff, runAction } from "./actions.js";
 import { extractReceipt, findPendingPaymentOrder, handleReceipt, pgReceiptPorts, type ReceiptImage } from "./receipt.js";
+import { IMAGE_NOT_SEEN_MARKER, loadTurnImage, pickTurnImageMessageId, withImageNotSeenNote, type TurnImage, type TurnImageCandidate } from "./turn-image.js";
 import { maybeWarnBudget, readBudget } from "./budget.js";
 import { withRedisLock } from "./lock.js";
 import {
@@ -103,6 +105,8 @@ export type AiTurnResult =
 
 interface ModelCall {
   model: string;
+  /** The call carried a customer photo (ledger meta only). */
+  vision?: boolean;
   result: ChatResult<AiTurnOutput>;
 }
 
@@ -163,21 +167,25 @@ async function callModel(
   provider: LLMProvider,
   conn: LlmConnection,
   chatMessages: ReturnType<typeof buildAiTurnMessages>,
+  /** Set when the prompt carries a photo: the vision model is used for every attempt. */
+  visionModel?: string,
 ): Promise<ModelCall[]> {
   const ask = (model: string) => provider.chat({ model, messages: chatMessages, responseFormat: aiTurnResponseFormat });
+  const vision = visionModel !== undefined ? { vision: true } : {};
   const calls: ModelCall[] = [];
+  const cheap = visionModel ?? conn.modelCheap;
   try {
-    const result = await ask(conn.modelCheap);
-    if (result.parsed) return [{ model: conn.modelCheap, result }];
-    calls.push({ model: conn.modelCheap, result });
+    const result = await ask(cheap);
+    if (result.parsed) return [{ model: cheap, result, ...vision }];
+    calls.push({ model: cheap, result, ...vision });
   } catch (err) {
     if (!isInvalidOutput(err)) throw err;
   }
   // Invalid structured output: one retry with the strong model (falls back to the cheap one if unset).
-  const strong = conn.modelStrong ?? conn.modelCheap;
+  const strong = visionModel ?? conn.modelStrong ?? conn.modelCheap;
   try {
     const result = await ask(strong);
-    if (result.parsed) return [...calls, { model: strong, result }];
+    if (result.parsed) return [...calls, { model: strong, result, ...vision }];
   } catch (err) {
     if (!isInvalidOutput(err)) throw err;
   }
@@ -277,6 +285,8 @@ interface Prepared {
   transcripts: Map<string, string>;
   /** Trigger image while the contact has a `pending_payment` order: a receipt to review (T8). */
   receipt?: ReceiptImage;
+  /** Latest ordinary customer photo to look at in this turn (ADR 0025); never set together with `receipt`. */
+  image?: TurnImageCandidate;
   /** Tenant sales playbook (defaults, disabled, when never saved) and the stage detected on the previous AI reply. */
   playbook: PlaybookConfig;
   previousStage: SalesStage | null;
@@ -440,6 +450,16 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
       receipt = { attachmentId: img?.id ?? null, externalMediaId: img?.externalMediaId ?? null, mimeType: img?.mimeType ?? null, order };
     }
   }
+  let image: TurnImageCandidate | undefined;
+  const imageMessageId = receipt ? undefined : pickTurnImageMessageId(history);
+  if (imageMessageId && !(await findPendingPaymentOrder(tx, conv.contactId))) {
+    const [img] = await tx
+      .select({ externalMediaId: attachments.externalMediaId, mimeType: attachments.mimeType, sizeBytes: attachments.sizeBytes })
+      .from(attachments)
+      .where(eq(attachments.messageId, imageMessageId))
+      .limit(1);
+    image = { messageId: imageMessageId, externalMediaId: img?.externalMediaId ?? null, mimeType: img?.mimeType ?? null, sizeBytes: img?.sizeBytes ?? null };
+  }
   const [playbookRow] = await tx.select({ enabled: salesPlaybooks.enabled, config: salesPlaybooks.config }).from(salesPlaybooks).limit(1);
   const playbook = resolvePlaybook(playbookRow);
   let previousStage: SalesStage | null = null;
@@ -472,6 +492,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
       playbook,
       previousStage,
       ...(receipt ? { receipt } : {}),
+      ...(image ? { image } : {}),
     },
   };
 }
@@ -556,6 +577,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
 
   // 2. Provider calls, outside any transaction (no pooled connection held while the LLM thinks).
   let calls: ModelCall[];
+  let imageUnseen = false;
   let hits: ChunkHit[] = [];
   let customerText = "";
   /** Objection ids offered in this turn's prompt: the only ones the model may report back. */
@@ -620,12 +642,30 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       sourceTitles = r.sourceTitles;
     }
 
+    // Ordinary customer photo (ADR 0025): one image, bound to the tenant's vision-capable chat connection.
+    let turnImage: TurnImage | undefined;
+    if (phase1.prep.image) {
+      const loaded = await loadTurnImage(phase1.prep.image, {
+        tenantId,
+        conversationId: c.conversationId,
+        supported: conn.capabilities.vision === true,
+        loadMedia: deps.loadMedia,
+        logger,
+      });
+      if (loaded.status === "ready") turnImage = loaded.image;
+      else {
+        imageUnseen = true;
+        logger.warn(`ai-turn ${triggerMessageId} photo not viewed (${loaded.reason})`);
+      }
+    }
+    const unseenId = imageUnseen ? phase1.prep.image?.messageId : undefined;
     const promptMessages: PromptConversationMessage[] = history
       .filter((m) => m.author !== "system")
       .map((m) => ({
         messageId: m.id,
         author: m.author === "contact" ? "contact" : m.author === "ai" ? "ai" : "agent",
-        text: placeholder(m),
+        text: m.id === unseenId ? `${m.body?.trim() ?? ""}
+${IMAGE_NOT_SEEN_MARKER}`.trim() : placeholder(m),
         at: m.createdAt.toISOString(),
       }));
     const retrievedChunks: PromptChunk[] = hits.map((h) => {
@@ -643,10 +683,11 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       nowIso: now.toISOString(),
       timeZone,
       playbook: playbookCtx,
+      ...(turnImage ? { image: turnImage } : {}),
     });
     // Best-effort "typing..." for the customer while the model thinks (never awaited, never throws).
     startTypingIndicator(deps, { tenantId, conversationId: c.conversationId, triggerMessageId, now });
-    calls = await callModel(provider, conn, chatMessages);
+    calls = await callModel(provider, conn, chatMessages, turnImage ? visionModelFor(conn) : undefined);
   } catch (err) {
     const reason = handoffReasonFor(err);
     if (reason === null) throw err;
@@ -680,15 +721,13 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       confidenceThreshold,
       customerText,
       queryEmbeddingTokens,
+      imageUnseen,
       playbook: { enabled: playbook.enabled, offeredObjectionIds },
     }),
   );
 }
 
-function visionModelFor(conn: LlmConnection): string {
-  const configured = conn.capabilities.visionModel;
-  return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : conn.modelCheap;
-}
+const visionModelFor = resolveVisionModel;
 
 
 /** Stores the transcript once (first writer wins) and books the transcription cost in the ledger. */
@@ -750,6 +789,7 @@ async function recordUsage(
         outputTokens: usage.outputTokens,
         promptVersion: PROMPT_VERSION,
         structuredMode: call.result.structuredMode ?? null,
+        ...(call.vision ? { vision: true, purpose: "customer_image" } : {}),
         verified: cost.verified,
         priceKnown: cost.known,
         unit: "usd_microcents",
@@ -782,6 +822,8 @@ interface PersistInput {
   /** Customer text of this turn: tells a courtesy handoff from a request for a person (ADR 0023). */
   customerText: string;
   queryEmbeddingTokens: { model: string; tokens: number } | undefined;
+  /** The customer sent a photo the AI could not look at: the reply is only ever a draft with a note. */
+  imageUnseen: boolean;
   /** Sales playbook state of the turn: detection is stored only while it is enabled. */
   playbook: { enabled: boolean; offeredObjectionIds: string[] };
 }
@@ -909,6 +951,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
     // Hard send gates on top of the policy: WhatsApp 24 h session window and text length.
     let draftReason: string | null = null;
     if (mode === "assist" || evaluation.reply.draft) draftReason = evaluation.reply.reason;
+    else if (p.imageUnseen) draftReason = "customer photo not viewed by the AI; draft only";
     else if (!sessionWindowOpen(conv.lastInboundAt, now)) draftReason = "whatsapp 24h window closed; draft only";
     else if (reply.text.length > WHATSAPP_TEXT_MAX) draftReason = "reply exceeds 4096 characters; draft only";
 
@@ -920,7 +963,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
           conversationId,
           messageId: triggerMessageId,
           type: "draft_reply",
-          payload: { text: reply.text, claims: reply.claims, ...detected },
+          payload: { text: p.imageUnseen ? withImageNotSeenNote(reply.text) : reply.text, claims: reply.claims, ...detected },
           citations,
           confidence: String(output.confidence),
           decision: "approve",
