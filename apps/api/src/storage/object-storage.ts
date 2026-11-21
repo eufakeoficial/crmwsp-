@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { StorageNotConfiguredError } from "@crmwsp/contracts";
 
@@ -7,6 +7,7 @@ export interface ObjectStorage {
   put(key: string, body: Uint8Array, contentType: string): Promise<void>;
   /** Short-lived GET URL. Never a permanent public link. */
   signedGetUrl(key: string, expiresInSeconds: number): Promise<string>;
+  exists(key: string): Promise<boolean>;
   delete(key: string): Promise<void>;
 }
 
@@ -55,6 +56,17 @@ export class S3ObjectStorage implements ObjectStorage {
 
   signedGetUrl(key: string, expiresInSeconds: number): Promise<string> {
     return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.cfg.bucket, Key: key }), { expiresIn: expiresInSeconds });
+  }
+
+  async exists(key: string): Promise<boolean> {
+    try {
+      await this.client.send(new HeadObjectCommand({ Bucket: this.cfg.bucket, Key: key }));
+      return true;
+    } catch (err) {
+      const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (e.name === "NotFound" || e.name === "NoSuchKey" || e.$metadata?.httpStatusCode === 404) return false;
+      throw err;
+    }
   }
 
   async delete(key: string): Promise<void> {

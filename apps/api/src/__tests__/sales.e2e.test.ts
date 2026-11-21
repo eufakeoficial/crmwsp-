@@ -64,6 +64,9 @@ class MemoryStorage implements ObjectStorage {
   async signedGetUrl(key: string, expiresInSeconds: number): Promise<string> {
     return `https://storage.test/${key}?X-Expires=${expiresInSeconds}&sig=abc`;
   }
+  async exists(key: string): Promise<boolean> {
+    return this.objects.has(key);
+  }
   async delete(key: string): Promise<void> {
     this.objects.delete(key);
   }
