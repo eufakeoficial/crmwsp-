@@ -105,3 +105,9 @@ export type TenantMembersResponse = z.infer<typeof tenantMembersResponseSchema>;
 
 /** Header carrying the active tenant on tenant-scoped requests. */
 export const TENANT_HEADER = "x-tenant-id";
+
+/**
+ * Header for read-only "view as": an owner/admin asks the API to answer exactly as it would for a
+ * lower-ranked member of the active tenant. Honoured by GET/HEAD only.
+ */
+export const VIEW_AS_HEADER = "x-view-as-user";
