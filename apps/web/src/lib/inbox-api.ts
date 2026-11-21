@@ -6,6 +6,7 @@ import {
   type SetPartnerCredentialsRequest,
   type UpdateGupshupCredentialsRequest,
   type ReactionEmoji,
+  type SendMediaMessageRequest,
   type UpdateConversationRequest,
   attachmentUrlResponseSchema,
   bulkAiModeResponseSchema,
@@ -21,6 +22,7 @@ import {
   conversationSchema,
   messageListResponseSchema,
   messageSchema,
+  outboundMediaUploadSchema,
 } from "@crmwsp/contracts";
 import { request } from "./api";
 
@@ -89,6 +91,13 @@ export const conversationsApi = {
       body: { text, clientMessageId },
       schema: messageSchema,
     }),
+  uploadMedia: (id: string, file: File) => {
+    const form = new FormData();
+    form.set("file", file);
+    return request(`/conversations/${id}/media`, { method: "POST", body: form, schema: outboundMediaUploadSchema });
+  },
+  sendMedia: (id: string, input: SendMediaMessageRequest) =>
+    request(`/conversations/${id}/media-messages`, { method: "POST", body: input, schema: messageSchema }),
   /** Agent reaction to a contact message; `null` removes it. */
   react: (id: string, messageId: string, emoji: ReactionEmoji | null) =>
     request(`/conversations/${id}/messages/${messageId}/reaction`, {

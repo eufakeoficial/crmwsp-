@@ -54,6 +54,7 @@ export function ConversationThread({
   actions,
   onHideSystem,
   onSend,
+  onSendImage,
   onSendNote,
   onSendTemplate,
   onReact,
@@ -79,6 +80,7 @@ export function ConversationThread({
   actions: ThreadActions;
   onHideSystem: (hide: boolean) => void;
   onSend: (text: string) => Promise<void>;
+  onSendImage?: (file: File, caption: string) => Promise<boolean>;
   onSendNote: (text: string) => Promise<boolean>;
   onSendTemplate: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
   onReact: (messageId: string, emoji: ReactionEmoji | null) => Promise<void>;
@@ -113,6 +115,7 @@ export function ConversationThread({
           windowWarning={isOutsideServiceWindow(conversation.lastInboundAt)}
           slot={composerSlot}
           onSend={onSend}
+          onSendImage={onSendImage}
           onSendNote={onSendNote}
           channelConnectionId={conversation.channelConnectionId}
           onSendTemplate={onSendTemplate}
