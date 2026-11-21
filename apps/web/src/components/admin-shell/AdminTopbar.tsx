@@ -1,6 +1,6 @@
 "use client";
 
-import { Menu, Search } from "lucide-react";
+import { Menu, Search, Store } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LogoMark } from "@/components/brand/Logo";
@@ -43,6 +43,9 @@ export function AdminTopbar({ drawerOpen, onToggleDrawer, onCloseDrawer }: { dra
         <div className="flex flex-none items-center gap-2.5 min-[640px]:ml-auto">
           <Link href="/app" className={`hidden min-h-[42px] items-center rounded-full bg-white/10 px-3.5 text-[13px] font-bold whitespace-nowrap text-white no-underline min-[640px]:flex ${DARK_FOCUS}`}>
             Ir a mi negocio
+          </Link>
+          <Link href="/app" aria-label="Ir a mi negocio" className={`grid size-[42px] place-items-center rounded-full bg-white/10 text-white no-underline min-[640px]:hidden ${DARK_FOCUS}`}>
+            <Store aria-hidden className="size-5" />
           </Link>
           <UserMenu tone="lime" />
         </div>
