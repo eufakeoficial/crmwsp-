@@ -12,6 +12,7 @@ import { Alert, Avatar, Badge, Button, Card, Modal } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { errorMessage } from "@/lib/messages";
 import { teamApi, teamErrorMessage } from "@/lib/team-api";
+import { canViewAsMember, storeViewAs } from "@/lib/view-as";
 
 type State =
   | { status: "loading" }
@@ -62,6 +63,20 @@ export default function TeamPage() {
     }
   }
 
+  async function startViewAs(m: TenantMember) {
+    if (!tenantId) return;
+    setBusyId(m.userId);
+    setActionError(undefined);
+    try {
+      await teamApi.viewAs(m.userId); // audited by the API; also validates the rule server-side
+      storeViewAs({ tenantId, userId: m.userId, name: m.name ?? m.email, role: m.role });
+      window.location.assign("/app/inbox");
+    } catch (err) {
+      setActionError(teamErrorMessage(err));
+      setBusyId(null);
+    }
+  }
+
   const ownerCount = state.status === "ready" ? state.members.filter((m) => m.role === "owner").length : 0;
   const canEdit = (m: TenantMember) => (actor === "owner" ? !(m.role === "owner" && ownerCount <= 1) : actor === "admin" && m.role !== "owner" && m.role !== "admin");
 
@@ -105,8 +120,15 @@ export default function TeamPage() {
                         <p className="m-0 truncate text-xs text-muted">{m.email}</p>
                       </div>
                     </div>
-                    {editable ? (
+                    {editable || canViewAsMember(actor, m, me.user.id) ? (
                       <div className="flex items-center gap-2">
+                        {canViewAsMember(actor, m, me.user.id) ? (
+                          <Button size="sm" variant="ghost" disabled={busyId === m.userId} onClick={() => void startViewAs(m)}>
+                            Ver como
+                          </Button>
+                        ) : null}
+                        {editable ? (
+                          <>
                         <select
                           aria-label={`Rol de ${m.name ?? m.email}`}
                           value={m.role}
@@ -123,6 +145,10 @@ export default function TeamPage() {
                         <Button size="sm" variant="ghost" disabled={busyId === m.userId} onClick={() => setRemoving(m)}>
                           Quitar
                         </Button>
+                          </>
+                        ) : (
+                          <Badge>{ROLE_LABELS[m.role]}</Badge>
+                        )}
                       </div>
                     ) : (
                       <Badge>{ROLE_LABELS[m.role]}</Badge>

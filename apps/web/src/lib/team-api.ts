@@ -16,6 +16,8 @@ export const teamApi = {
   resend: (id: string) => request(`/team/invitations/${id}/resend`, { method: "POST", schema: teamInvitationSchema }),
   revoke: (id: string) => request(`/team/invitations/${id}`, { method: "DELETE" }),
   changeRole: (userId: string, role: MembershipRole) => request(`/team/members/${userId}`, { method: "PATCH", body: { role } }),
+  /** Records the start of a read-only "view as" (audited by the API). */
+  viewAs: (userId: string) => request(`/team/members/${userId}/view-as`, { method: "POST" }),
   remove: (userId: string) => request(`/team/members/${userId}`, { method: "DELETE" }),
   preview: (token: string) => request(`/invitations/${encodeURIComponent(token)}`, { schema: invitationPreviewSchema }),
   accept: (token: string, body: AcceptInvitationRequest = {}) =>
