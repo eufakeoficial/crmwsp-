@@ -10,10 +10,11 @@ import { ConversationsController } from "./conversations.controller.js";
 import { InboxCatalogController } from "./inbox-catalog.controller.js";
 import { InboxV2Controller } from "./inbox-v2.controller.js";
 import { OUTBOUND_QUEUE, outboundQueueName } from "./outbound.constants.js";
+import { OutboundMediaController } from "./outbound-media.controller.js";
 
 @Module({
   imports: [AuthModule, EventsModule, BillingModule],
-  controllers: [ConversationsController, ContactsController, AttachmentsController, InboxV2Controller, InboxCatalogController],
+  controllers: [ConversationsController, ContactsController, AttachmentsController, InboxV2Controller, InboxCatalogController, OutboundMediaController],
   providers: [
     {
       provide: OUTBOUND_QUEUE,
