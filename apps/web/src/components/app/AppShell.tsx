@@ -6,6 +6,7 @@ import { AppMenuSheet } from "./AppMenuSheet";
 import { cn } from "@/lib/cn";
 import { AppSidebar, type NavCounts } from "./AppSidebar";
 import { AppTopbar } from "./AppTopbar";
+import { MobileTabBar } from "./MobileTabBar";
 import { isActive } from "./nav-items";
 import { canViewAi } from "./roles";
 import { useSession } from "./SessionProvider";
@@ -34,13 +35,14 @@ export function AppShell({ children, counts: baseCounts }: { children: ReactNode
         Saltar al contenido
       </a>
       <AppSidebar rail={inbox} counts={counts} />
-      <AppTopbar hideOnDesktop={inbox} menuOpen={open} onToggleMenu={() => setOpen((v) => !v)} />
+      <AppTopbar hideOnDesktop={inbox} showMenuButton={inbox} menuOpen={open} onToggleMenu={() => setOpen((v) => !v)} />
       <main id="app-content" tabIndex={-1} className={cn(
           "min-w-0 outline-none",
           inbox ? "px-0 pt-[68px] pb-0 desk:pt-0 desk:pl-[72px]" : "px-[clamp(12px,3vw,28px)] pt-[68px] pb-24 desk:pl-[calc(232px+clamp(12px,3vw,28px))]",
         )}>
         {children}
       </main>
+      {inbox ? null : <MobileTabBar pathname={pathname} menuOpen={open} onOpenMenu={() => setOpen((v) => !v)} />}
       {open ? <AppMenuSheet onClose={() => setOpen(false)} counts={counts} /> : null}
     </>
   );

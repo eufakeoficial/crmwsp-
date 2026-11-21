@@ -14,7 +14,7 @@ import { useSession } from "./SessionProvider";
 const ROUND = "grid size-9 flex-none place-items-center rounded-full";
 
 /** Fixed top bar on `paper`: company switcher on the left, bell and primary action on the right. */
-export function AppTopbar({ menuOpen, onToggleMenu, hideOnDesktop = false }: { menuOpen: boolean; onToggleMenu: () => void; hideOnDesktop?: boolean }) {
+export function AppTopbar({ menuOpen, onToggleMenu, hideOnDesktop = false, showMenuButton = true }: { menuOpen: boolean; onToggleMenu: () => void; hideOnDesktop?: boolean; showMenuButton?: boolean }) {
   const { tenant } = useSession();
   const [searchOpen, setSearchOpen] = useState(false);
   useEffect(() => {
@@ -50,7 +50,7 @@ export function AppTopbar({ menuOpen, onToggleMenu, hideOnDesktop = false }: { m
         aria-label="Menú"
         aria-expanded={menuOpen}
         aria-controls="app-menu-sheet"
-        className={`${ROUND} cursor-pointer bg-royal text-white desk:hidden`}
+        className={cn(ROUND, "cursor-pointer bg-royal text-white desk:hidden", !showMenuButton && "hidden")}
       >
         <Menu aria-hidden className="size-5" />
       </button>
