@@ -523,6 +523,7 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
                     }}
                     onHideSystem={setHideSystem}
                     onSend={thread.send}
+                    onSendImage={thread.sendImage}
                     onSendNote={sendNote}
                     onSendTemplate={thread.sendTemplate}
                     onReact={thread.react}
