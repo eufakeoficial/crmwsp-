@@ -82,8 +82,12 @@ export function SalesDashboard() {
       {data && t ? (
         <div className="grid gap-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Conversaciones nuevas" value={formatNumber(t.newConversations)} icon={MessageCircle} />
-            <KpiCard label="Leads nuevos" value={formatNumber(t.newLeads)} icon={UserPlus} />
+            <Link href="/app/inbox" className="block no-underline text-inherit">
+              <KpiCard label="Conversaciones nuevas" value={formatNumber(t.newConversations)} icon={MessageCircle} />
+            </Link>
+            <Link href="/app/contacts" className="block no-underline text-inherit">
+              <KpiCard label="Leads nuevos" value={formatNumber(t.newLeads)} icon={UserPlus} />
+            </Link>
             <KpiCard label="Compradores" value={formatNumber(t.buyers)} icon={Users} />
             <KpiCard label="Conversión" value={formatBp(t.conversionBp)} icon={Percent} note="compradores / leads" />
             <KpiCard label="Ingresos" value={revenueText} icon={CircleDollarSign} className="sm:col-span-2" />
