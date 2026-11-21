@@ -81,6 +81,21 @@ describe("tenant lifecycle (setup -> trial -> grace -> restricted)", () => {
     expect(applyTenantAccess(PLANS.pro, "restricted").limits.contacts).toBe(0);
   });
 
+  it("an own (BYOK) AI key lifts the ai_messages cap, but setup and restricted access still block", () => {
+    expect(applyTenantAccess(PLANS.start, "trial", { ownAiKey: true }).limits.ai_messages).toBeNull();
+    expect(applyTenantAccess(PLANS.pro, "active", { ownAiKey: true }).limits.ai_messages).toBeNull();
+    expect(applyTenantAccess(PLANS.start, "unbilled", { ownAiKey: true }).limits.ai_messages).toBeNull();
+    expect(applyTenantAccess(PLANS.start, "grace", { ownAiKey: true }).limits.ai_messages).toBeNull();
+    // Other limits are untouched.
+    expect(applyTenantAccess(PLANS.start, "active", { ownAiKey: true }).limits.contacts).toBe(PLANS.start.limits.contacts);
+    // Without an own key (SaaS credits) the plan cap applies.
+    expect(applyTenantAccess(PLANS.start, "active", { ownAiKey: false }).limits.ai_messages).toBe(PLANS.start.limits.ai_messages);
+    // Setup keeps its simulator cap and restricted access removes the AI even with BYOK.
+    expect(applyTenantAccess(PLANS.start, "setup", { ownAiKey: true }).limits.ai_messages).toBe(SETUP_AI_MESSAGES);
+    expect(applyTenantAccess(PLANS.pro, "restricted", { ownAiKey: true }).limits.ai_messages).toBe(0);
+    expect(applyTenantAccess(PLANS.pro, "payment_required", { ownAiKey: true }).limits.ai_messages).toBe(0);
+  });
+
   it("daysLeft rounds up and never goes negative", () => {
     expect(daysLeft(at(7), at(6.5))).toBe(1);
     expect(daysLeft(at(7), at(1))).toBe(6);

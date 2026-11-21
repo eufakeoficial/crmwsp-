@@ -17,7 +17,7 @@ const STATUS: Record<KnowledgeSource["status"], { label: string; tone: Tone }> =
 };
 const KIND: Record<KnowledgeSource["kind"], string> = { csv: "CSV", pdf: "PDF", faq: "FAQ", text: "Texto" };
 
-export function SourceList({ sources, canEdit, onDeleted, onError }: { sources: KnowledgeSource[]; canEdit: boolean; onDeleted: () => void; onError: (msg: string) => void }) {
+export function SourceList({ sources, canEdit, onDeleted, onError, onAdd }: { sources: KnowledgeSource[]; canEdit: boolean; onDeleted: () => void; onError: (msg: string) => void; onAdd?: (() => void) | undefined }) {
   const [target, setTarget] = useState<KnowledgeSource | null>(null);
 
   async function remove(s: KnowledgeSource) {
@@ -30,7 +30,18 @@ export function SourceList({ sources, canEdit, onDeleted, onError }: { sources: 
     }
   }
 
-  if (sources.length === 0) return <EmptyState title="Aún no hay fuentes">{canEdit ? "Sube tu lista de precios o pega tus preguntas frecuentes para empezar." : "Pide a un administrador que añada conocimiento."}</EmptyState>;
+  if (sources.length === 0) {
+    return (
+      <EmptyState title="Aún no hay fuentes">
+        {canEdit ? "Sube tu lista de precios o pega tus preguntas frecuentes para empezar." : "Pide a un administrador que añada conocimiento."}
+        {canEdit && onAdd ? (
+          <span className="mt-4 block">
+            <Button onClick={onAdd}>Agregar fuente</Button>
+          </span>
+        ) : null}
+      </EmptyState>
+    );
+  }
   return (
     <section id="sources" aria-label="Fuentes de conocimiento">
       <ul className="m-0 flex list-none flex-col gap-2 p-0">

@@ -4,7 +4,8 @@ import type { Channel } from "@crmwsp/contracts";
 import { createGupshupChannelRequestSchema } from "@crmwsp/contracts";
 import { ExternalLink } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { Alert, Button, Card, Input, Label, Spinner } from "@/components/ui";
+import { AiAssistButton, Alert, Button, Card, Input, Label, Spinner } from "@/components/ui";
+import { buildApiKeyPrompt, buildWebhookPrompt } from "@/lib/ai-assist-prompts";
 import { ApiError } from "@/lib/api";
 import { channelsApi } from "@/lib/inbox-api";
 import { channelErrorMessage, isEncryptionNotConfigured } from "@/lib/messages";
@@ -89,6 +90,7 @@ export function ConnectChannelPanel({ onClose, onCreated, onNoKeys }: { onClose:
           <div className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
             <b>Crea la app de WhatsApp</b>
             <span className="text-sm text-muted">En la consola de Gupshup crea una app de WhatsApp y copia el nombre de la app y su API key.</span>
+            <AiAssistButton prompt={buildApiKeyPrompt({ appName: appName.trim() || null })} label="Hacerlo con IA: obtener la API key" />
           </div>
         </li>
         <li className="flex items-start gap-3">
@@ -106,20 +108,22 @@ export function ConnectChannelPanel({ onClose, onCreated, onNoKeys }: { onClose:
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="ch-app">Nombre de la app en Gupshup</Label>
                   <Input id="ch-app" autoComplete="off" placeholder="MiEmpresaApp" value={appName} onChange={(e) => setAppName(e.target.value)} required />
+                  <span className="text-xs text-muted">En la consola de Gupshup, dentro de tu app de WhatsApp: es el nombre que le diste al crearla.</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="ch-key">API key de Gupshup</Label>
-                  <Input id="ch-key" type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
-                  <span className="text-xs text-muted">Se guarda cifrada y no se vuelve a mostrar.</span>
+                  <Input id="ch-key" type="password" autoComplete="new-password" data-1p-ignore data-lpignore="true" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
+                  <span className="text-xs text-muted">En la consola de Gupshup, dentro de tu app de WhatsApp, en la sección de API key. Se guarda cifrada y no se vuelve a mostrar.</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="ch-partner-app">ID de app de Gupshup (opcional)</Label>
-                  <Input id="ch-partner-app" autoComplete="off" value={partnerAppId} onChange={(e) => setPartnerAppId(e.target.value)} />
+                  <Label htmlFor="ch-partner-app">ID de app de Gupshup (opcional, necesario para plantillas)</Label>
+                  <Input id="ch-partner-app" autoComplete="off" data-1p-ignore data-lpignore="true" value={partnerAppId} onChange={(e) => setPartnerAppId(e.target.value)} />
+                  <span className="text-xs text-muted">En la consola de Gupshup, dentro de tu app de WhatsApp: aparece como App ID en los detalles de la app.</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="ch-partner-token">Token de Partner (opcional)</Label>
-                  <Input id="ch-partner-token" type="password" autoComplete="off" value={partnerToken} onChange={(e) => setPartnerToken(e.target.value)} />
-                  <span className="text-xs text-muted">Necesarios para crear y sincronizar plantillas de WhatsApp. Se guarda cifrado y no se vuelve a mostrar. Puedes agregarlos después.</span>
+                  <Label htmlFor="ch-partner-token">Token de Partner (opcional, necesario para plantillas)</Label>
+                  <Input id="ch-partner-token" type="password" autoComplete="new-password" data-1p-ignore data-lpignore="true" value={partnerToken} onChange={(e) => setPartnerToken(e.target.value)} />
+                  <span className="text-xs text-muted">En el portal de Partner de Gupshup, en la sección de tokens de tu cuenta. Se guarda cifrado y no se vuelve a mostrar. Puedes agregarlo después.</span>
                 </div>
                 <Alert>{error}</Alert>
                 <div className="flex justify-end gap-2">
@@ -140,6 +144,8 @@ export function ConnectChannelPanel({ onClose, onCreated, onNoKeys }: { onClose:
               <>
                 <p className="m-0 text-sm">El número <b>{created.phoneE164}</b> ya está activo. Falta un último paso en Gupshup:</p>
                 {created.webhookUrl ? <WebhookUrlBox url={created.webhookUrl} /> : null}
+                {created.webhookUrl ? <span className="text-xs text-muted">Esta URL es privada: no la compartas. Si se filtra, usa Rotar token.</span> : null}
+                {created.webhookUrl ? <AiAssistButton prompt={buildWebhookPrompt({ appName: created.appName })} label="Hacerlo con IA: configurar el webhook" /> : null}
                 <p className="m-0 text-sm text-muted">Pégala en <b>Gupshup → Callback URL</b>. Después podrás recibir mensajes en el Inbox.</p>
                 <p className="m-0 rounded-2xl bg-warning-soft px-4 py-3 text-sm font-semibold text-warning">
                   La API key no se vuelve a mostrar. Solo verás sus últimos caracteres ({created.apiKeyHint ?? "••••"}).

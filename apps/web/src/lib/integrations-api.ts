@@ -6,6 +6,7 @@ import {
   commerceConnectionListSchema,
   commerceConnectionSchema,
   mercadoPagoConnectionSchema,
+  wooConnectCodeResponseSchema,
 } from "@crmwsp/contracts";
 import { request } from "./api";
 
@@ -18,6 +19,8 @@ export const integrationsApi = {
   disable: (provider: CommerceProviderId) => request(`/integrations/commerce/${provider}`, { method: "DELETE" }),
   syncCatalog: (provider: CatalogProviderId) => request(`/integrations/commerce/${provider}/sync`, { method: "POST", schema: catalogSyncResultSchema }),
   syncShopify: () => integrationsApi.syncCatalog("shopify"),
+  createWooConnectCode: () =>
+    request("/integrations/commerce/woocommerce/connect-code", { method: "POST", schema: wooConnectCodeResponseSchema }),
   getMercadoPago: () => request("/payments/mercadopago/connection", { schema: mercadoPagoConnectionSchema }),
   saveMercadoPago: (input: UpsertMercadoPagoConnectionRequest) =>
     request("/payments/mercadopago/connection", { method: "PUT", body: input, schema: mercadoPagoConnectionSchema }),

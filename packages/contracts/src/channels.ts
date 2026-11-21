@@ -20,6 +20,32 @@ export const createGupshupChannelRequestSchema = z.object({
   path: ["partnerToken"],
 });
 
+/** PATCH /channels/:id/credentials: replaces the Gupshup API key + app name in place (the webhook token is kept). Write-only key. */
+export const updateGupshupCredentialsRequestSchema = z.object({
+  appName: z.string().trim().min(1).max(100),
+  apiKey: z.string().trim().min(8).max(512),
+});
+export type UpdateGupshupCredentialsRequest = z.infer<typeof updateGupshupCredentialsRequestSchema>;
+
+/** POST /channels/:id/reveal-api-key (owner only, ADR 0022). The password is re-checked on every call. */
+export const revealChannelApiKeyRequestSchema = z
+  .object({
+    password: z.string().min(1).max(256),
+  })
+  .strict();
+export type RevealChannelApiKeyRequest = z.infer<typeof revealChannelApiKeyRequestSchema>;
+
+/** Seconds the web shows a revealed key before hiding it. */
+export const REVEALED_API_KEY_TTL_SECONDS = 30;
+
+export const revealChannelApiKeyResponseSchema = z
+  .object({
+    apiKey: z.string().min(1),
+    expiresInSeconds: z.number().int().positive(),
+  })
+  .strict();
+export type RevealChannelApiKeyResponse = z.infer<typeof revealChannelApiKeyResponseSchema>;
+
 /** PUT /channels/:id/partner-credentials. The token is write-only: it is never returned. */
 export const setPartnerCredentialsRequestSchema = z.object({
   gupshupAppId: z.string().trim().min(1).max(128),
@@ -36,11 +62,18 @@ export type CreateGupshupChannelRequest = z.infer<typeof createGupshupChannelReq
  * a client id and the connected channel ids. `phoneE164` is only needed when the Hub does not expose it.
  */
 export const connect360dialogRequestSchema = z.object({
-  clientId: z.string().trim().min(1).max(128).optional(),
+  /** Required: every channel id is verified against this client through the Partner API. */
+  clientId: z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/),
   channelIds: z.array(z.string().trim().regex(/^[A-Za-z0-9_-]{1,128}$/)).min(1).max(10),
   phoneE164: e164PhoneSchema.optional(),
+  /** Single-use value issued by POST /channels/360dialog/connect-state before the redirect. */
+  state: z.string().trim().regex(/^[A-Za-z0-9_-]{32,128}$/),
 });
 export type Connect360dialogRequest = z.infer<typeof connect360dialogRequestSchema>;
+
+/** POST /channels/360dialog/connect-state: short-lived, single-use, bound to the tenant + user. */
+export const dialog360ConnectStateSchema = z.object({ state: z.string(), expiresAt: isoDateTimeSchema });
+export type Dialog360ConnectState = z.infer<typeof dialog360ConnectStateSchema>;
 
 /** GET /channels/360dialog/config: lets the web app build the Connect URL without baking the partner id in. */
 export const dialog360ConfigSchema = z.object({ partnerId: z.string().nullable() });
@@ -77,3 +110,48 @@ export const updateChannelRequestSchema = z.object({
   status: z.enum(["active", "disabled"]),
 });
 export type UpdateChannelRequest = z.infer<typeof updateChannelRequestSchema>;
+
+/** Last activity of one channel, derived from conversations and messages (no extra tables). */
+export const channelHealthSchema = z.object({
+  channelId: uuidSchema,
+  /** Last inbound customer message through this channel; null when none yet. */
+  lastInboundAt: isoDateTimeSchema.nullable(),
+  /** Result of the last outbound send that reached a final state (sent/delivered/read/failed); null when none. */
+  lastOutbound: z
+    .object({
+      ok: z.boolean(),
+      at: isoDateTimeSchema,
+      /** Short provider error text (e.g. "Authentication Failed") when `ok` is false. */
+      error: z.string().nullable(),
+      /** HTTP status stored with the failed send (e.g. 401 for rejected credentials); null/absent when unknown. */
+      errorStatus: z.number().int().nullable().optional(),
+    })
+    .nullable(),
+});
+export type ChannelHealth = z.infer<typeof channelHealthSchema>;
+
+export const channelHealthListResponseSchema = z.object({ items: z.array(channelHealthSchema) });
+export type ChannelHealthListResponse = z.infer<typeof channelHealthListResponseSchema>;
+
+/** Gupshup wallet balance below this amount (USD) shows a low-balance warning. */
+export const GUPSHUP_LOW_BALANCE_USD = 2;
+
+/** GET /channels/:id/balance. `unavailable` = the balance could not be read (never an error for the UI); `partner_required` = no Partner token on the channel. */
+export const walletBalanceSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("ok"),
+    amount: z.number(),
+    /** ISO currency code as reported by Gupshup; null when the response did not include it. */
+    currency: z.string().nullable(),
+    low: z.boolean(),
+  }),
+  z.object({ status: z.literal("unavailable") }),
+  /** The balance is only readable with the Partner token (Partner API); the channel has none configured. */
+  z.object({ status: z.literal("partner_required") }),
+]);
+export type WalletBalance = z.infer<typeof walletBalanceSchema>;
+
+/** True when the balance is in USD and under {@link GUPSHUP_LOW_BALANCE_USD}. Unknown currency never warns. */
+export function isLowWalletBalance(amount: number, currency: string | null): boolean {
+  return currency?.toUpperCase() === "USD" && amount < GUPSHUP_LOW_BALANCE_USD;
+}

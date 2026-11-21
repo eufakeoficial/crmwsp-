@@ -2,9 +2,10 @@
 
 import type { PaymentReview, PaymentReviewStatus } from "@crmwsp/contracts";
 import Link from "next/link";
+import { cn } from "@/lib/cn";
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
-import { Alert, Button, Card, Chip, ReasonDialog } from "@/components/ui";
+import { Alert, Button, Card, CHIP_ROW, Chip, ReasonDialog } from "@/components/ui";
 import { formatDateTime, formatMoneyMinor } from "@/lib/format";
 import { attachmentsApi } from "@/lib/inbox-api";
 import { errorMessage } from "@/lib/messages";
@@ -114,7 +115,7 @@ export function PaymentReviewsView() {
         title="Comprobantes de pago"
         subtitle="Revisa los comprobantes de pago que envían tus clientes. La IA los lee, pero solo una persona confirma el pago."
       />
-      <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Estado">
+      <div className={cn(CHIP_ROW, "mb-4")} role="group" aria-label="Estado">
         {(Object.keys(STATUS_LABELS) as PaymentReviewStatus[]).map((s) => (
           <Chip key={s} active={s === status} onClick={() => setStatus(s)}>
             {STATUS_LABELS[s]}

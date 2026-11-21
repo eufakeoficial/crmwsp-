@@ -9,11 +9,11 @@ import {
   type CatalogSyncResult,
   type CommerceConnectionList,
   type CommerceConnectionView,
+  type WooConnectCodeResponse,
 } from "@crmwsp/contracts";
-import { redact, type CipherBox } from "@crmwsp/crypto";
+import type { CipherBox } from "@crmwsp/crypto";
 import { and, commerceConnections, eq, type CommerceConnection } from "@crmwsp/db";
 import { connectorFor, isCatalogProvider, type CommerceProvider, type FetchLike } from "@crmwsp/integrations";
-import { generateWebhookToken } from "@crmwsp/whatsapp";
 import { CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { CIPHER_BOX } from "../channels/channels.constants.js";
@@ -22,8 +22,10 @@ import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { writeAudit } from "../inbox/audit.js";
 import { isCommerceProvider } from "./commerce-webhook.service.js";
-import { COMMERCE_FETCH, commerceAccessTokenPurpose, commerceWebhookSecretPurpose, commerceWebhookUrlFor } from "./integrations.constants.js";
-import { resolveStoreCredentials } from "./store-credentials.js";
+import { upsertCommerceConnection } from "./commerce-connection.upsert.js";
+import { CONNECT_CODE_TTL_SECONDS, formatConnectCode, generateConnectCode, hashConnectCode } from "./connect-code.js";
+import { CONNECT_CODE_REPOSITORY, type ConnectCodeRepository } from "./connect-code.repository.js";
+import { COMMERCE_FETCH, commerceAccessTokenPurpose, commerceWebhookUrlFor } from "./integrations.constants.js";
 import { PgCommerceTx } from "./pg-commerce-ledger.js";
 
 function toView(row: CommerceConnection): CommerceConnectionView {
@@ -51,6 +53,7 @@ export class IntegrationsController {
   constructor(
     @Inject(CIPHER_BOX) private readonly cipher: CipherBox | null,
     @Inject(COMMERCE_FETCH) private readonly fetchImpl: FetchLike,
+    @Inject(CONNECT_CODE_REPOSITORY) private readonly connectCodes: ConnectCodeRepository,
   ) {}
 
   @Get()
@@ -67,52 +70,35 @@ export class IntegrationsController {
     const provider = providerOrNotFound(p);
     const input = parseOrThrow(upsertCommerceConnectionRequestSchema, body);
     if (!this.cipher) throw new EncryptionNotConfiguredError();
-    const creds = resolveStoreCredentials(provider, input);
-    const webhookSecretEncrypted = this.cipher.encrypt(input.webhookSecret, { tenantId: db.tenantId, purpose: commerceWebhookSecretPurpose(provider) });
-    const accessTokenEncrypted = creds.accessToken
-      ? this.cipher.encrypt(creds.accessToken, { tenantId: db.tenantId, purpose: commerceAccessTokenPurpose(provider) })
-      : undefined;
-    const hint = redact(input.webhookSecret);
-    const row = await db.run(async (tx) => {
-      const now = new Date();
-      const [saved] = await tx
-        .insert(commerceConnections)
-        .values({
-          tenantId: db.tenantId,
-          provider,
-          webhookSecretEncrypted,
-          accessTokenEncrypted: accessTokenEncrypted ?? null,
-          secretHint: hint,
-          shopDomain: creds.shopDomain ?? null,
-          webhookToken: generateWebhookToken(),
-          status: "active",
-        })
-        .onConflictDoUpdate({
-          target: [commerceConnections.tenantId, commerceConnections.provider],
-          // The webhook token is kept: rotating secrets must not break the configured URL.
-          set: {
-            webhookSecretEncrypted,
-            ...(accessTokenEncrypted ? { accessTokenEncrypted } : {}),
-            ...(creds.shopDomain ? { shopDomain: creds.shopDomain } : {}),
-            secretHint: hint,
-            status: "active",
-            updatedAt: now,
-          },
-        })
-        .returning();
-      if (!saved) throw new Error("upsert returned no row");
+    const row = await db.run((tx) =>
+      upsertCommerceConnection(tx, this.cipher, { tenantId: db.tenantId, userId: db.userId, provider, input, ip: req.ip }),
+    );
+    return toView(row);
+  }
+
+  /**
+   * Issues a single-use WooCommerce connect code (15 min) for the WordPress plugin. Only its SHA-256
+   * is stored; issuing a new one voids the previous unused code.
+   */
+  @Post("woocommerce/connect-code")
+  @Roles("owner", "admin")
+  async issueWooConnectCode(@CurrentTenantDb() db: TenantDb, @Req() req: HttpRequest): Promise<WooConnectCodeResponse> {
+    const code = generateConnectCode();
+    const expiresAt = await db.run(async (tx) => {
+      const exp = await this.connectCodes.issue(tx, db.tenantId, db.userId, hashConnectCode(code), CONNECT_CODE_TTL_SECONDS);
+      if (!exp) throw new ConflictError("The workspace cannot connect stores right now");
       await writeAudit(tx, {
         tenantId: db.tenantId,
         userId: db.userId,
         entity: "commerce_connection",
-        entityId: saved.id,
-        action: "commerce_connection.saved",
-        diff: { provider, secretHint: hint, shopDomain: saved.shopDomain, accessTokenChanged: !!accessTokenEncrypted },
+        entityId: db.tenantId,
+        action: "commerce_connection.connect_code_issued",
+        diff: { provider: "woocommerce", expiresAt: exp.toISOString() },
         ip: req.ip,
       });
-      return saved;
+      return exp;
     });
-    return toView(row);
+    return { code: formatConnectCode(code), expiresAt: expiresAt.toISOString() };
   }
 
   /** Disables the connection: its webhook URL stops resolving (401). Rows are kept for audit. */

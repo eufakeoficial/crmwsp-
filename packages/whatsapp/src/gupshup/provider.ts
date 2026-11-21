@@ -93,6 +93,52 @@ function mapTemplateCategory(raw: string | undefined): ProviderTemplateCategory 
   }
 }
 
+/**
+ * Outcome of checking an API key + app name against Gupshup. `unverified` means Gupshup could not
+ * answer (network, timeout, 5xx, unrecognised 4xx): callers must NOT block on it.
+ */
+export type GupshupCredentialCheck =
+  | { status: "valid" }
+  | { status: "invalid_credentials" }
+  | { status: "invalid_app" }
+  | { status: "unverified"; reason: string };
+
+/** Gupshup wallet balance. `currency` is null when the response did not name one. */
+export interface GupshupWalletBalance {
+  amount: number;
+  currency: string | null;
+}
+
+const BALANCE_KEY = /^(balance|currentbalance|walletbalance|availablebalance|amount|credits?)$/i;
+const CURRENCY_KEY = /^(currency|currencycode)$/i;
+
+const toNumber = (v: unknown): number | null => {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v.trim())) return Number(v);
+  return null;
+};
+
+/**
+ * Defensive parse: the documented `walletResponse` object is passed in; stay tolerant: look (up to
+ * 3 levels deep) for a numeric balance-like field and a 3-letter currency. Unknown shape -> null.
+ */
+export function parseWalletBalance(body: unknown, depth = 0): GupshupWalletBalance | null {
+  if (typeof body !== "object" || body === null || Array.isArray(body) || depth > 3) return null;
+  const obj = body as Record<string, unknown>;
+  let amount: number | null = null;
+  let currency: string | null = null;
+  for (const [k, v] of Object.entries(obj)) {
+    if (amount === null && BALANCE_KEY.test(k)) amount = toNumber(v);
+    if (currency === null && CURRENCY_KEY.test(k) && typeof v === "string" && /^[A-Za-z]{3}$/.test(v.trim())) currency = v.trim().toUpperCase();
+  }
+  if (amount !== null) return { amount, currency };
+  for (const v of Object.values(obj)) {
+    const nested = parseWalletBalance(v, depth + 1);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 export class GupshupProvider implements WhatsAppProvider {
   readonly name = "gupshup";
   private readonly fetchImpl: typeof globalThis.fetch;
@@ -211,6 +257,30 @@ export class GupshupProvider implements WhatsAppProvider {
     }));
   }
 
+  /**
+   * Marks an inbound message as read and shows the typing indicator
+   * (https://partner-docs.gupshup.io/docs/mark-message-as-readtyping-indicator).
+   * Partner API only: `POST {partner}/partner/app/{appId}/v1/event` with `Authorization: <partner app token>`.
+   * Without partner credentials on the channel it is a silent no-op (the `apikey` API has no such endpoint).
+   */
+  async sendTypingIndicator(conn: WhatsAppConnection, inboundExternalMessageId: string): Promise<void> {
+    if (!conn.partnerAppId || !conn.partnerToken || !inboundExternalMessageId) return;
+    await this.request(`${this.partnerBaseUrl}/partner/app/${encodeURIComponent(conn.partnerAppId)}/v1/event`, {
+      method: "POST",
+      headers: { authorization: conn.partnerToken, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        type: "message-event",
+        message: {
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: inboundExternalMessageId,
+          typing_indicator: { type: "text" },
+        },
+      }),
+      redirect: "error",
+    });
+  }
+
   /** Partner API templates URL + app token. Throws (non-retryable) when the channel has no partner credentials. */
   private partnerTemplates(conn: WhatsAppConnection): { url: string; token: string } {
     if (!conn.partnerAppId || !conn.partnerToken) {
@@ -323,6 +393,60 @@ export class GupshupProvider implements WhatsAppProvider {
     return { externalId: parsed.data.messageId };
   }
 
+  /**
+   * Read-only credential check: GET {baseUrl}/sm/api/v1/template/list/{appName} with the `apikey` header.
+   * 401/403 -> invalid key; 2xx -> valid; other 4xx -> invalid app only when Gupshup's text mentions the app;
+   * anything else (network, timeout, 5xx, other 4xx) -> unverified. Never logs or returns the key.
+   */
+  async verifyCredentials(apiKey: string, appName: string): Promise<GupshupCredentialCheck> {
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.baseUrl}/sm/api/v1/template/list/${encodeURIComponent(appName)}`, {
+        method: "GET",
+        headers: { apikey: apiKey, accept: "application/json" },
+        redirect: "error",
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch {
+      return { status: "unverified", reason: "network error" };
+    }
+    if (res.ok) {
+      await res.body?.cancel().catch(() => undefined);
+      return { status: "valid" };
+    }
+    const detail = await gupshupErrorDetail(res);
+    if (res.status === 401 || res.status === 403) return { status: "invalid_credentials" };
+    if (res.status >= 400 && res.status < 500 && /app/i.test(detail)) return { status: "invalid_app" };
+    return { status: "unverified", reason: `HTTP ${res.status}${detail ? `: ${detail}` : ""}` };
+  }
+
+  /**
+   * Reads the wallet balance via the Partner API (documented at
+   * https://partner-docs.gupshup.io/reference/get_partner-app-appid-wallet-balance):
+   * GET {partnerBaseUrl}/partner/app/{appId}/wallet/balance, `Authorization: <partner app token>` (no Bearer),
+   * body `{ status, walletResponse: { currency, currentBalance, overDraftLimit } }`.
+   * Never throws: network errors, non-2xx and unrecognised shapes return null. Never logs the token.
+   */
+  async getWalletBalanceViaPartner(creds: { appId: string; partnerToken: string }): Promise<GupshupWalletBalance | null> {
+    try {
+      const res = await this.fetchImpl(`${this.partnerBaseUrl}/partner/app/${encodeURIComponent(creds.appId)}/wallet/balance`, {
+        method: "GET",
+        headers: { Authorization: creds.partnerToken, accept: "application/json" },
+        redirect: "error",
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => undefined);
+        return null;
+      }
+      const body: unknown = JSON.parse(await res.text());
+      const wallet = typeof body === "object" && body !== null ? (body as Record<string, unknown>)["walletResponse"] : undefined;
+      return parseWalletBalance(wallet);
+    } catch {
+      return null;
+    }
+  }
+
   /** Performs the request; maps network errors and non-2xx to GupshupProviderError. */
   private async request(url: string, init: RequestInit): Promise<Response> {
     let res: Response;
@@ -334,8 +458,31 @@ export class GupshupProvider implements WhatsAppProvider {
     }
     if (!res.ok) {
       const retryable = res.status >= 500 || res.status === 429 || res.status === 408;
-      throw new GupshupProviderError(`Gupshup responded with HTTP ${res.status}`, retryable, res.status);
+      const detail = await gupshupErrorDetail(res);
+      throw new GupshupProviderError(`Gupshup responded with HTTP ${res.status}${detail ? `: ${detail}` : ""}`, retryable, res.status);
     }
     return res;
+  }
+}
+
+/**
+ * Gupshup's own short error text (e.g. "Authentication Failed", "Invalid App Details") so a failed
+ * send says WHY. Only the `message` field of a JSON body, stripped to safe characters and capped:
+ * the response never carries our apikey, and arbitrary bodies are not echoed.
+ */
+async function gupshupErrorDetail(res: Response): Promise<string> {
+  try {
+    const text = await res.text();
+    let msg: unknown = text;
+    try {
+      const body: unknown = JSON.parse(text);
+      msg = typeof body === "object" && body !== null ? (body as Record<string, unknown>)["message"] : undefined;
+    } catch {
+      // Plain-text body (e.g. "Portal User Not Found With APIKey"): use it as is.
+    }
+    if (typeof msg !== "string") return "";
+    return msg.replace(/[^\p{L}\p{N} .,:_'()-]/gu, "").trim().slice(0, 120);
+  } catch {
+    return "";
   }
 }

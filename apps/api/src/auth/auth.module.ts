@@ -19,6 +19,8 @@ import { SessionGuard } from "./session.guard.js";
 import { TenantGuard } from "./tenant.guard.js";
 import { BusinessCategoryService } from "../settings/business-category.service.js";
 
+import { META_CAPI, createMetaCapiFromEnv } from "../tracking/meta-capi.js";
+
 const CLIENT_IP_HOOK = Symbol("CLIENT_IP_HOOK");
 
 @Module({
@@ -34,6 +36,7 @@ const CLIENT_IP_HOOK = Symbol("CLIENT_IP_HOOK");
     { provide: AUTH_IP_RATE_LIMIT, useValue: DEFAULT_AUTH_IP_RATE_LIMIT },
     { provide: ACCOUNT_BACKOFF, useValue: DEFAULT_ACCOUNT_BACKOFF },
     { provide: RATE_LIMIT_STORE, useFactory: defaultRateLimitStore },
+    { provide: META_CAPI, useFactory: () => createMetaCapiFromEnv() },
     { provide: AUTH_MAILER, useFactory: () => createMailerFromEnv() },
     // Pins request.ip to the real client IP (common/client-ip.ts) on every route.
     {

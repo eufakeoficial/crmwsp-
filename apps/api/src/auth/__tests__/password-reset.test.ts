@@ -89,6 +89,19 @@ describe("password reset", () => {
     await expect(service.resetPassword({ token: tokenFrom(sent[0]), password: "una-clave-nueva-1" }, client)).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it("caps reset mails per email at 3/hour regardless of IP, answering the same (F6)", async () => {
+    const { service, sent, calls } = setup(100);
+    for (let i = 0; i < 5; i++) {
+      await expect(service.forgotPassword({ email: "ana@x.test" }, { ip: `10.0.1.${i}`, userAgent: "vitest" })).resolves.toBeUndefined();
+    }
+    await flush();
+    expect(sent).toHaveLength(3);
+    expect(calls).toHaveLength(3);
+    // Another email is not affected.
+    await service.forgotPassword({ email: "otra@x.test" }, client);
+    expect(calls).toHaveLength(4);
+  });
+
   it("is rate limited per IP and email", async () => {
     const { service } = setup(2);
     await service.forgotPassword({ email: "nobody@x.test" }, client);

@@ -5,7 +5,7 @@ import type { AdRecommendation, AdReport, AdReportGroupBy, AdReportRow, MetaAdsS
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { SettingsFrame } from "@/components/ai/AccessGate";
-import { Alert, Button, Card, Chip, Input, Label } from "@/components/ui";
+import { Alert, Button, Card, CHIP_ROW, Chip, Input, Label } from "@/components/ui";
 import { MetaAdsCard, RecommendationSettingsCard } from "./MetaAdsCard";
 import { adsApi } from "@/lib/ads-api";
 import { defaultCurrency, useCurrencySettings } from "@/lib/currency-api";
@@ -268,7 +268,7 @@ function Body({ canEdit }: { canEdit: boolean }) {
       <Card className="flex flex-col gap-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="m-0 text-[19px]">Rendimiento</h2>
-          <div className="flex gap-2" role="group" aria-label="Agrupar por">
+          <div className={CHIP_ROW} role="group" aria-label="Agrupar por">
             {GROUPS.map((g) => (
               <Chip key={g.id} active={groupBy === g.id} onClick={() => setGroupBy(g.id)}>
                 {g.label}

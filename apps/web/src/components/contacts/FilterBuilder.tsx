@@ -59,7 +59,7 @@ export function FilterBuilder({ filter, onChange, tags, segments, currency, onSa
             aria-label="Coincidencia"
             value={filter.match}
             onChange={(e) => onChange({ ...filter, match: e.target.value as ContactFilter["match"] })}
-            className="h-8 rounded-full border-[1.5px] border-line-2 bg-white px-2 text-[12px] font-bold"
+            className="h-9 rounded-full border-[1.5px] border-line-2 bg-paper px-3 text-sm font-medium"
           >
             <option value="all">todas</option>
             <option value="any">cualquiera</option>
@@ -67,7 +67,7 @@ export function FilterBuilder({ filter, onChange, tags, segments, currency, onSa
         </label>
       ) : null}
       {filter.conditions.map((c, i) => (
-        <span key={i} className="inline-flex h-8 items-center gap-1 rounded-full border-[1.5px] border-ink bg-ink pl-3 pr-1 text-[12px] font-bold text-white">
+        <span key={i} className="inline-flex h-9 items-center gap-1 rounded-full border-[1.5px] border-royal bg-royal pl-4 pr-1 text-sm font-semibold text-white">
           <button type="button" className="cursor-pointer bg-transparent p-0 text-white" onClick={() => setEditing(i)}>
             {describeCondition(c, { segments })}
           </button>

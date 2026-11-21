@@ -1,12 +1,14 @@
 export * from "./types.js";
 export * from "./provider.js";
 export * from "./webhook-token.js";
-export { GupshupProvider, GupshupProviderError } from "./gupshup/provider.js";
-export type { GupshupProviderOptions } from "./gupshup/provider.js";
+export { GupshupProvider, GupshupProviderError, parseWalletBalance } from "./gupshup/provider.js";
+export type { GupshupCredentialCheck, GupshupProviderOptions, GupshupWalletBalance } from "./gupshup/provider.js";
 export { Dialog360Provider, Dialog360ProviderError, templateExternalId, parseTemplateExternalId } from "./dialog360/provider.js";
 export type { Dialog360ProviderOptions } from "./dialog360/provider.js";
 export { RoutingWhatsAppProvider, BSP_HEADER } from "./router.js";
 export type { BspName } from "./router.js";
 export { createDefaultWhatsAppProvider } from "./default.js";
-export { Dialog360PartnerClient, extractChannelPhone } from "./dialog360/partner.js";
-export type { Dialog360PartnerOptions } from "./dialog360/partner.js";
+export { Dialog360PartnerClient, extractChannelClientId, extractChannelPhone } from "./dialog360/partner.js";
+export type { Dialog360ChannelInfo, Dialog360PartnerOptions } from "./dialog360/partner.js";
+export { GupshupProfileClient, GupshupProfileError, profileErrorMessage } from "./gupshup/profile.js";
+export type { GupshupBusinessProfile, GupshupPartnerCreds, GupshupProfileClientOptions, GupshupProfileUpdate } from "./gupshup/profile.js";

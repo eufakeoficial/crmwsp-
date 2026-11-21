@@ -20,7 +20,7 @@ export interface IngestedStripeEvent {
   inserted: boolean;
 }
 
-/** Port over `ingest_stripe_billing_event` (SECURITY DEFINER, migration 0081). */
+/** Port over `ingest_stripe_billing_event` (SECURITY DEFINER, migration 0102). */
 export interface StripeBillingEventStore {
   ingest(dedupeKey: string, customerId: string | null, payload: unknown): Promise<IngestedStripeEvent | null>;
 }

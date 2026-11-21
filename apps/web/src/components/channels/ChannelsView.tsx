@@ -1,37 +1,48 @@
 "use client";
 
-import type { Channel } from "@crmwsp/contracts";
-import { Lock, Plug } from "lucide-react";
+import type { Channel, ChannelHealth } from "@crmwsp/contracts";
+import { Lock, MailCheck, Plug } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { useSession } from "@/components/app/SessionProvider";
 import { Alert, Banner, Button, Toast } from "@/components/ui";
 import { canManageChannels } from "@/components/app/roles";
 import { useToast } from "@/lib/hooks/use-toast";
-import { buildDialog360ConnectUrl } from "@/lib/dialog360";
+import { canRevealApiKey } from "@/lib/reveal-api-key";
+import { buildDialog360ConnectUrl, DIALOG360_STATE_KEY } from "@/lib/dialog360";
 import { channelsApi } from "@/lib/inbox-api";
-import { channelErrorMessage, isEncryptionNotConfigured } from "@/lib/messages";
+import { api } from "@/lib/api";
+import { EMAIL_NOT_VERIFIED_TEXT, channelErrorMessage, errorMessage, isEmailNotVerified, isEncryptionNotConfigured } from "@/lib/messages";
 import { ChannelCard } from "./ChannelCard";
+import { ChannelsTabs, type ChannelsTabId } from "./ChannelsTabs";
 import { ConnectChannelPanel } from "./ConnectChannelPanel";
+import { GupshupGuide } from "./GupshupGuide";
+import { EditCredentialsPanel } from "./EditCredentialsPanel";
 import { PartnerCredentialsPanel } from "./PartnerCredentialsPanel";
 
 export function ChannelsView() {
-  const { tenant } = useSession();
+  const { me, tenant } = useSession();
   const canManage = canManageChannels(tenant?.role);
   const [channels, setChannels] = useState<Channel[] | null>(null);
+  const [health, setHealth] = useState<Map<string, ChannelHealth>>(new Map());
   const [error, setError] = useState<unknown>(null);
   // null = follow the default (panel open only while there are no channels).
   const [connecting, setConnecting] = useState<boolean | null>(null);
   const [confirmRotate, setConfirmRotate] = useState<Channel | null>(null);
   const [partnerFor, setPartnerFor] = useState<Channel | null>(null);
+  const [credentialsFor, setCredentialsFor] = useState<Channel | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [d360PartnerId, setD360PartnerId] = useState<string | null>(null);
   const { message, show } = useToast();
+  const [resending, setResending] = useState(false);
+  const [tab, setTab] = useState<ChannelsTabId>("channels");
 
   const load = useCallback(async () => {
     try {
       setChannels((await channelsApi.list()).items);
       setError(null);
+      // Health is informative: a failure here must never hide the channels.
+      channelsApi.health().then((r) => setHealth(new Map(r.items.map((h) => [h.channelId, h]))), () => undefined);
     } catch (err) {
       setError(err);
     }
@@ -59,8 +70,38 @@ export function ChannelsView() {
     }
   }
 
-  const panelOpen = canManage && (connecting ?? channels?.length === 0);
+  // The server issues a single-use state bound to this user; the callback must send it back.
+  async function startDialog360(partnerId: string) {
+    try {
+      const { state } = await channelsApi.dialog360ConnectState();
+      try {
+        window.sessionStorage.setItem(DIALOG360_STATE_KEY, state);
+      } catch {
+        // Storage blocked: the state still travels in the redirect URL.
+      }
+      window.location.assign(buildDialog360ConnectUrl(partnerId, window.location.origin, state));
+    } catch (err) {
+      setError(err);
+    }
+  }
+
+  async function resendVerification() {
+    setResending(true);
+    try {
+      await api.resendVerification();
+      show(`Te enviamos un correo a ${me.user.email}.`);
+    } catch (err) {
+      show(errorMessage(err));
+    } finally {
+      setResending(false);
+    }
+  }
+
   const noKeys = isEncryptionNotConfigured(error);
+  const isOwner = tenant?.role === "owner";
+  // Connecting WhatsApp waits for the owner's verified email (API: 403 EMAIL_NOT_VERIFIED).
+  const emailBlocked = (isOwner && me.user.emailVerified === false) || isEmailNotVerified(error);
+  const panelOpen = canManage && !emailBlocked && (connecting ?? channels?.length === 0);
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -68,16 +109,33 @@ export function ChannelsView() {
         {canManage ? (
           <div className="flex flex-wrap gap-2">
             {d360PartnerId ? (
-              <Button variant="whatsapp" onClick={() => window.location.assign(buildDialog360ConnectUrl(d360PartnerId, window.location.origin))}>
+              <Button variant="whatsapp" disabled={emailBlocked} onClick={() => void startDialog360(d360PartnerId)}>
                 <Plug aria-hidden className="size-5" />Conectar con 360dialog (mantén tu WhatsApp Business)
               </Button>
             ) : null}
-            <Button variant={d360PartnerId ? "outline" : "whatsapp"} aria-expanded={panelOpen} onClick={() => setConnecting(!panelOpen)}>
+            <Button variant={d360PartnerId ? "outline" : "whatsapp"} disabled={emailBlocked} aria-expanded={panelOpen} onClick={() => setConnecting(!panelOpen)}>
               <Plug aria-hidden className="size-5" />{panelOpen ? "Cerrar guía de conexión" : channels && channels.length > 0 ? "Conectar otro número" : "Conectar WhatsApp (Gupshup)"}
             </Button>
           </div>
         ) : null}
       </div>
+      {emailBlocked ? (
+        <div className="mb-4">
+          <Banner tone="info" icon={MailCheck}>
+            <b>{EMAIL_NOT_VERIFIED_TEXT}.</b>{" "}
+            {isOwner
+              ? "Te enviamos un enlace al registrarte. Mientras tanto puedes configurar todo lo demás."
+              : "Quien creó la cuenta debe confirmar su correo."}
+            {isOwner ? (
+              <span className="mt-2 block">
+                <Button variant="outline" size="sm" disabled={resending} onClick={() => void resendVerification()}>
+                  {resending ? "Enviando…" : "Reenviar correo"}
+                </Button>
+              </span>
+            ) : null}
+          </Banner>
+        </div>
+      ) : null}
       {noKeys ? (
         <div className="mb-4">
           <Banner tone="info" icon={Lock}>
@@ -103,11 +161,31 @@ export function ChannelsView() {
           />
         </div>
       ) : null}
+      <ChannelsTabs
+        selected={tab}
+        onSelect={setTab}
+        panels={{
+          guide: (
+            <GupshupGuide
+              canConnect={canManage && !emailBlocked}
+              onConnect={() => {
+                setConnecting(true);
+                setTab("channels");
+              }}
+            />
+          ),
+          channels: (
+            <>
       {channels === null && !error ? (
         <p className="text-muted" aria-busy="true">Cargando canales…</p>
       ) : channels && channels.length === 0 ? (
         panelOpen ? null : <EmptyState title="Aún no hay canales">
-          {canManage ? "Primer paso: conecta tu número de WhatsApp con el botón de arriba para empezar a recibir mensajes." : "Pide a un administrador que conecte un número de WhatsApp."}
+          {canManage ? (
+            <>
+              Primer paso: conecta tu número de WhatsApp para empezar a recibir mensajes.
+              <span className="mt-4 block"><Button variant="whatsapp" size="sm" disabled={emailBlocked} onClick={() => setConnecting(true)}>Conectar WhatsApp</Button></span>
+            </>
+          ) : "Pide a un administrador que conecte un número de WhatsApp."}
         </EmptyState>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -116,9 +194,12 @@ export function ChannelsView() {
               key={c.id}
               channel={c}
               canManage={canManage}
+              canRevealKey={canRevealApiKey(tenant?.role)}
               busy={busyId === c.id}
               onRotate={() => setConfirmRotate(c)}
               onPartner={() => setPartnerFor(c)}
+              onCredentials={() => setCredentialsFor(c)}
+              health={health.get(c.id)}
               onToggle={() => void act(c.id, () => channelsApi.setStatus(c.id, c.status === "disabled" ? "active" : "disabled"), c.status === "disabled" ? "Canal activado" : "Canal desactivado")}
             >
               {confirmRotate?.id === c.id ? (
@@ -138,6 +219,22 @@ export function ChannelsView() {
                     </Button>
                   </div>
                 </div>
+              ) : null}
+              {credentialsFor?.id === c.id ? (
+                <EditCredentialsPanel
+                  channel={c}
+                  onClose={() => setCredentialsFor(null)}
+                  onNoKeys={(err) => {
+                    setCredentialsFor(null);
+                    setError(err);
+                  }}
+                  onSaved={(updated) => {
+                    replace(updated);
+                    setCredentialsFor(null);
+                    setError(null);
+                    show("Credenciales actualizadas. El webhook sigue igual.");
+                  }}
+                />
               ) : null}
               {partnerFor?.id === c.id ? (
                 <PartnerCredentialsPanel
@@ -159,6 +256,10 @@ export function ChannelsView() {
           ))}
         </div>
       )}
+            </>
+          ),
+        }}
+      />
       <Toast message={message} />
     </>
   );

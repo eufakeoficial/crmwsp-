@@ -1,11 +1,12 @@
 "use client";
 
 import type { Order } from "@crmwsp/contracts";
+import { cn } from "@/lib/cn";
 import { Columns3, List } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
-import { Alert, Button, Chip } from "@/components/ui";
+import { Alert, Button, CHIP_ROW, Chip } from "@/components/ui";
 import { ordersApi } from "@/lib/commerce-api";
 import { formatMoneyMinor } from "@/lib/format";
 import { errorMessage } from "@/lib/messages";
@@ -63,7 +64,7 @@ export function OrdersView() {
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader title="Pedidos" subtitle="Las ventas confirmadas: qué se pidió, si está pagado y si ya se entregó." />
-        <div className="flex gap-1.5" role="group" aria-label="Vista">
+        <div className={CHIP_ROW} role="group" aria-label="Vista">
           <Chip active={mode === "list"} onClick={() => setMode("list")}>
             <List aria-hidden className="mr-1.5 size-4" />Lista
           </Chip>
@@ -74,7 +75,7 @@ export function OrdersView() {
       </div>
 
       {mode === "list" ? (
-        <div className="mb-4 flex flex-wrap gap-1.5" role="group" aria-label="Filtrar por estado">
+        <div className={cn(CHIP_ROW, "mb-4")} role="group" aria-label="Filtrar por estado">
           <Chip active={status === "all"} onClick={() => setStatus("all")}>Todos</Chip>
           {ORDER_STATUS_ORDER.map((s) => (
             <Chip key={s} active={status === s} onClick={() => setStatus(s)}>{ORDER_STATUS_LABELS[s]}</Chip>
@@ -87,8 +88,8 @@ export function OrdersView() {
       {orders === null ? (
         <p className="text-muted" aria-busy="true">Cargando pedidos…</p>
       ) : orders.length === 0 && !error ? (
-        <EmptyState title="Aún no hay pedidos">
-          {status === "all" || mode === "board" ? "Los pedidos creados por tu equipo o por la IA aparecerán aquí." : "No hay pedidos con este estado."}
+        <EmptyState title="Aún no hay pedidos" {...(status === "all" || mode === "board" ? { action: { href: "/app/quotes", label: "Ver presupuestos" } } : {})}>
+          {status === "all" || mode === "board" ? "Los pedidos nacen de un presupuesto aceptado: crea o acepta uno y aparecerá aquí." : "No hay pedidos con este estado."}
         </EmptyState>
       ) : mode === "list" ? (
         <OrdersList orders={orders} />

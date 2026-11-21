@@ -9,7 +9,7 @@ import { Integrations } from "@/components/landing/Integrations";
 import { LandingJsonLd } from "@/components/landing/JsonLd";
 import { LandingStyles } from "@/components/landing/LandingStyles";
 import { LandingMotion } from "@/components/landing/motion";
-import { Collaboration, Comparison, Differentiators, Faq, Features, FinalCta, HowItWorks, LookingTo, PricingTeaser, ProblemSolution, Proof, Showcase, WhatIs } from "@/components/landing/Sections";
+import { Collaboration, Comparison, Differentiators, Faq, Features, FinalCta, HowItWorks, LookingTo, Pricing, ProblemSolution, Proof, Showcase, WhatIs } from "@/components/landing/Sections";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 
@@ -43,7 +43,7 @@ export default async function HomePage() {
         <HowItWorks />
         <LookingTo />
         <Proof />
-        <PricingTeaser />
+        <Pricing />
         <Faq />
         <FinalCta />
       </main>

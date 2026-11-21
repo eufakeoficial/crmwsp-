@@ -520,17 +520,94 @@
       "breakpoints": true
     },
     {
-      "idx": 80,
+      "idx": 90,
       "version": "7",
-      "when": 1792800000000,
-      "tag": "0080_message_templates_rejection_reason",
+      "when": 1792900000000,
+      "tag": "0090_channel_connect_hardening",
       "breakpoints": true
     },
     {
-      "idx": 81,
+      "idx": 91,
       "version": "7",
-      "when": 1792810000000,
-      "tag": "0081_stripe_subscription_billing",
+      "when": 1792910000000,
+      "tag": "0091_email_lifecycle_candidates_keyset",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1792920000000,
+      "tag": "0092_email_lifecycle_candidates_cycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1792930000000,
+      "tag": "0093_coupon_over_cap_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1792940000000,
+      "tag": "0094_security_definer_arg_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1792950000000,
+      "tag": "0095_email_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1792960000000,
+      "tag": "0096_woocommerce_connect_codes",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1792970000000,
+      "tag": "0097_trial_claims_owner_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1792980000000,
+      "tag": "0098_notification_ai_credentials_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1792990000000,
+      "tag": "0099_notification_channel_credentials_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1793000000000,
+      "tag": "0100_llm_connection_purpose",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1793010000000,
+      "tag": "0101_message_templates_rejection_reason",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1793020000000,
+      "tag": "0102_stripe_subscription_billing",
       "breakpoints": true
     }
   ]

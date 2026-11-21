@@ -6,7 +6,7 @@ import type { AiHandoffItem } from "@crmwsp/contracts";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { canViewAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
-import { Alert, Button, Card, Chip, Toast } from "@/components/ui";
+import { Alert, Button, Card, CHIP_ROW, Chip, Toast } from "@/components/ui";
 import { reasonLabel, waitingLabel } from "@/lib/ai-runs";
 import { aiRunsApi } from "@/lib/ai-runs-api";
 import { formatDateTime } from "@/lib/format";
@@ -85,7 +85,7 @@ function Body() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtros">
+      <div className={CHIP_ROW} role="group" aria-label="Filtros">
         <Chip active={filter === "all"} onClick={() => setFilter("all")}>
           Todas
         </Chip>
@@ -121,7 +121,7 @@ function Body() {
                 <div className="mt-auto flex flex-wrap gap-2">
                   <Link
                     href={`/app/inbox?conversation=${h.conversationId}`}
-                    className="inline-flex h-8 items-center rounded-full bg-ink px-3 text-[13px] font-bold text-white no-underline hover:bg-ink-2"
+                    className="inline-flex h-9 items-center rounded-full bg-ink px-4 text-sm font-semibold text-white no-underline hover:bg-ink-2"
                   >
                     Abrir en la bandeja
                   </Link>

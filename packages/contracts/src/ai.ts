@@ -115,6 +115,11 @@ export const aiTurnOutputSchema = z.strictObject({
   confidence: confidenceSchema,
   needsHuman: z.boolean(),
   reason: z.string().max(2000),
+  /**
+   * Set by the server-side sanitizer (never by the model) when the proposed reply was only
+   * internal ids/citation markers. The policy engine then hands off to a human.
+   */
+  replyDropped: z.literal(true).optional(),
 });
 export type AiTurnOutput = z.infer<typeof aiTurnOutputSchema>;
 

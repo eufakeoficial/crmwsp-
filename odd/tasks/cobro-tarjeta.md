@@ -15,7 +15,7 @@ MercadoPago is a documented next step (ADR 0022), not implemented.
 - Subscription events only mirror state (informational); access follows `paid_until`.
 
 ## Tasks
-- [x] T1 (0df16f1) Migration 0081 (table + RLS + 4 SECURITY DEFINER functions) + Drizzle schema + tenant isolation / write-denied / idempotency DB tests - packages/db/src/__tests__/stripe-billing-isolation.test.ts
+- [x] T1 (0df16f1) Migration 0102 (table + RLS + 4 SECURITY DEFINER functions) + Drizzle schema + tenant isolation / write-denied / idempotency DB tests - packages/db/src/__tests__/stripe-billing-isolation.test.ts
 - [x] T2 (0df16f1) Contracts (`startCardCheckoutRequestSchema`, `cardBillingSchema`, job name) + domain `packages/billing/src/stripe.ts` (RED observed: missing module, then GREEN)
 - [x] T3 (d30b870) Adapter `packages/payments/src/stripe-billing` (customer, Checkout, portal, event normalization; mocked fetch only)
 - [x] T4 (d30b870) Worker `settleStripeBillingEvent` + DB-gated tests (paid once, replay ignored, renewal stacking, wrong amount/price/not-paid, foreign customer, reordered events)

@@ -18,6 +18,7 @@ import {
   withTenant,
   type LlmConnection,
   type Transaction,
+  isActiveChatConnection,
 } from "@crmwsp/db";
 import { sumLines, type CatalogCandidate } from "@crmwsp/domain";
 import { and, asc, eq, sql } from "drizzle-orm";
@@ -326,7 +327,7 @@ export function pgOrderFlowPorts(
     },
     async llm(): Promise<LlmAccess | undefined> {
       const conn = await withTenant(deps.db, job.tenantId, async (tx) => {
-        const [c] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)).limit(1);
+        const [c] = await tx.select().from(llmConnections).where(isActiveChatConnection).limit(1);
         if (!c || !c.lastTestOk) return undefined;
         return { c, budget: await readBudget(tx, c) };
       });

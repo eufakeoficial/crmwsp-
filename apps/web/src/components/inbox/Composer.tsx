@@ -40,6 +40,7 @@ export function Composer({
   slot,
   channelConnectionId,
   onSendTemplate,
+  pauseHint,
 }: {
   blocked: boolean;
   windowWarning: boolean;
@@ -50,7 +51,10 @@ export function Composer({
   /** With both set, a closed window offers the approved-template picker. */
   channelConnectionId?: string;
   onSendTemplate?: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
+  /** One-line hint shown after the first reply sent from this composer. Omit when the AI would not pause. */
+  pauseHint?: string | null;
 }) {
+  const [hintShown, setHintShown] = useState(false);
   const [mode, setMode] = useState<Mode>("reply");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -106,6 +110,7 @@ export function Composer({
     void onSend(trimmed).finally(() => {
       inFlight.current = false;
       setSending(false);
+      if (pauseHint) setHintShown(true);
     });
   }
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -140,6 +145,10 @@ export function Composer({
     const before = text;
     try {
       const res = await improveTextApi.improve(trimmed, style);
+      if (res.unchanged) {
+        setImproveError("No pude mejorar este texto sin cambiar su sentido.");
+        return;
+      }
       setUndo(before);
       setText(res.text);
     } catch (err) {
@@ -162,7 +171,7 @@ export function Composer({
             aria-selected={mode === m}
             onClick={() => setMode(m)}
             className={cn(
-              "-mb-px h-9 cursor-pointer border-0 border-b-2 bg-transparent px-1 text-[13px]",
+              "-mb-px h-11 cursor-pointer border-0 border-b-2 bg-transparent px-2 text-sm focus-visible:outline-2 focus-visible:outline-royal",
               mode === m ? (m === "note" ? "border-gold font-extrabold text-ink" : "border-ink font-extrabold text-ink") : "border-transparent font-semibold text-muted hover:text-ink",
             )}
           >
@@ -203,7 +212,7 @@ export function Composer({
         />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <Popover label="Emoji" disabled={replyBlocked} triggerClassName="bg-transparent hover:bg-paper" trigger={<Smile aria-hidden className="size-[18px]" />} panelClassName="w-64">
+        <Popover label="Emoji" placement="up" disabled={replyBlocked} triggerClassName="bg-transparent hover:bg-paper" trigger={<Smile aria-hidden className="size-[18px]" />} panelClassName="w-64">
           {(close) => (
             <div className="grid grid-cols-8 gap-0.5">
               {COMMON_EMOJIS.map((e) => (
@@ -216,7 +225,7 @@ export function Composer({
         </Popover>
         <CannedPicker onPick={pick} disabled={replyBlocked} />
         {note ? null : (
-          <Popover label="Mejorar texto" disabled={replyBlocked || improving || trimmed.length === 0} triggerClassName="bg-transparent hover:bg-paper" trigger={<><Sparkles aria-hidden className="size-4" /> {improving ? "Mejorando…" : "Mejorar texto"}</>}>
+          <Popover label="Mejorar texto" placement="up" disabled={replyBlocked || improving || trimmed.length === 0} triggerClassName="bg-transparent hover:bg-paper" trigger={<><Sparkles aria-hidden className="size-4" /> {improving ? "Mejorando…" : "Mejorar texto"}</>}>
             {(close) => (
               <div className="flex flex-col">
                 {IMPROVE_STYLES.map((s) => (
@@ -240,6 +249,7 @@ export function Composer({
         </Button>
       </div>
       {improveError ? <p role="alert" className="m-0 text-xs font-semibold text-danger">{improveError}</p> : null}
+      {hintShown && pauseHint ? <p data-testid="pause-hint" className="m-0 text-xs text-muted">{pauseHint}</p> : null}
     </div>
   );
 }
@@ -255,7 +265,7 @@ function CannedPicker({ onPick, disabled }: { onPick: (c: CannedResponseDto) => 
     );
   };
   return (
-    <Popover label="Respuestas predefinidas" disabled={disabled} triggerClassName="bg-transparent hover:bg-paper" trigger={<MessageSquareText aria-hidden className="size-[18px]" />} panelClassName="w-72">
+    <Popover label="Respuestas predefinidas" placement="up" disabled={disabled} triggerClassName="bg-transparent hover:bg-paper" trigger={<MessageSquareText aria-hidden className="size-[18px]" />} panelClassName="w-72">
       {(close) => (
         <CannedList items={items} failed={failed} load={load} onPick={(c) => { onPick(c); close(); }} />
       )}

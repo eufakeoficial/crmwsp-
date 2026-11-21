@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
-import { Alert } from "@/components/ui";
+import { Alert, buttonClasses } from "@/components/ui";
 import { aiApi } from "@/lib/ai-api";
 import type { AgentConfig, AiConnection, AiUsage } from "@crmwsp/contracts";
 import { errorMessage } from "@/lib/messages";
 import { SettingsFrame } from "./AccessGate";
 import { AgentBehavior } from "./AgentBehavior";
 import { ConnectionSection } from "./ConnectionSection";
+import { TranscriptionSection } from "./TranscriptionSection";
 import { VoiceSection } from "./VoiceSection";
 
 const month = () => new Date().toISOString().slice(0, 7);
@@ -40,13 +41,14 @@ function Body({ canEdit }: { canEdit: boolean }) {
   if (connection === undefined || !agent) return <p className="text-muted" aria-busy="true">Cargando configuración de IA…</p>;
   return (
     <div className="flex max-w-[980px] flex-col gap-4">
-      <ConnectionSection connection={connection} usage={usage} canEdit={canEdit} onChanged={() => void load()} />
-      <AgentBehavior config={agent} currency={connection?.budgetCurrency ?? "EUR"} canEdit={canEdit} onSaved={setAgent} />
       {canEdit ? (
-        <p className="m-0 text-sm">
-          <Link href="/app/settings/ai/simulator" className="underline">Probar el bot en el simulador de conversaciones</Link>
-        </p>
+        <div>
+          <Link href="/app/settings/ai/simulator" className={buttonClasses("outline")}>Probar la IA</Link>
+        </div>
       ) : null}
+      <ConnectionSection connection={connection} usage={usage} canEdit={canEdit} onChanged={() => void load()} />
+      <TranscriptionSection key={`${connection?.provider ?? "none"}-${connection?.lastTestedAt ?? ""}`} canEdit={canEdit} />
+      <AgentBehavior config={agent} currency={connection?.budgetCurrency ?? "EUR"} canEdit={canEdit} onSaved={setAgent} />
       {canEdit ? <VoiceSection canEdit={canEdit} /> : null}
     </div>
   );

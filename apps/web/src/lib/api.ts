@@ -5,6 +5,7 @@ import {
   type LoginRequest,
   type ResetPasswordRequest,
   type SignupRequest,
+  type VerifyEmailRequest,
   errorResponseSchema,
   meResponseSchema,
   tenantMembersResponseSchema,
@@ -115,6 +116,8 @@ export const api = {
   logout: () => request("/auth/logout", { method: "POST" }),
   forgotPassword: (input: ForgotPasswordRequest) => request("/auth/password/forgot", { method: "POST", body: input }),
   resetPassword: (input: ResetPasswordRequest) => request("/auth/password/reset", { method: "POST", body: input }),
+  verifyEmail: (input: VerifyEmailRequest) => request("/auth/verify-email", { method: "POST", body: input }),
+  resendVerification: () => request("/auth/resend-verification", { method: "POST" }),
   me: () => request("/auth/me", { schema: meResponseSchema }),
   members: () => request("/tenant/members", { schema: tenantMembersResponseSchema }),
 };

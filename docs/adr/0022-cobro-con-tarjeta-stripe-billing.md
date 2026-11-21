@@ -51,7 +51,7 @@ sus propios clientes (`payment_connections`, ADR 0012) tampoco cambia.
   tarde no pisa a uno nuevo (`status_event_at`).
 
 ### Datos y seguridad
-- `subscription_billing_accounts` (migración 0081) tiene `tenant_id`, RLS forzada y es de **solo
+- `subscription_billing_accounts` (migración 0102) tiene `tenant_id`, RLS forzada y es de **solo
   lectura** para el rol de la app; toda escritura pasa por funciones SECURITY DEFINER con `search_path`
   fijo (`stripe_billing_account_attach`, `ingest_stripe_billing_event`, `stripe_invoice_settle`,
   `stripe_billing_subscription_sync`). Test de aislamiento entre tenants y de escritura denegada.

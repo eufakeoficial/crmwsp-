@@ -14,6 +14,7 @@ import {
 } from "@crmwsp/contracts";
 import { SettingsFrame } from "@/components/ai/AccessGate";
 import { CardBillingPanel } from "@/components/app/billing/CardBillingPanel";
+import { PaymentQr } from "@/components/app/billing/PaymentQr";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { Alert, Button, Card, Spinner } from "@/components/ui";
@@ -90,8 +91,9 @@ function PendingCharge({ charge }: { charge: SubscriptionChargeDto }) {
       </p>
       {charge.payAddress ? (
         <div className="mt-3 flex flex-col gap-2">
-          <span className="text-sm font-semibold">Dirección de depósito</span>
-          <code className="break-all rounded bg-paper p-2 text-[13px]" data-qr={charge.qrData ?? undefined}>
+          <PaymentQr value={charge.qrData ?? charge.payAddress} />
+          <span className="text-sm font-semibold">Dirección de depósito ({charge.payCurrency.toUpperCase()})</span>
+          <code className="break-all rounded bg-paper p-2 text-[13px]" data-testid="pay-address">
             {charge.payAddress}
           </code>
           <div className="flex gap-2">

@@ -9,6 +9,7 @@ export function Popover({
   trigger,
   children,
   align = "left",
+  placement = "down",
   triggerClassName,
   panelClassName,
   disabled = false,
@@ -17,6 +18,8 @@ export function Popover({
   trigger: ReactNode;
   children: (close: () => void) => ReactNode;
   align?: "left" | "right";
+  /** "up" opens above the trigger: needed for controls docked at the bottom of the viewport (composer). */
+  placement?: "down" | "up";
   triggerClassName?: string | undefined;
   panelClassName?: string | undefined;
   disabled?: boolean;
@@ -66,7 +69,8 @@ export function Popover({
           role="dialog"
           aria-label={label}
           className={cn(
-            "absolute top-full z-30 mt-1.5 max-h-[70vh] min-w-56 overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-[0_12px_32px_rgba(18,18,18,.18)]",
+            "absolute z-30 max-h-[70vh] min-w-56 overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-[0_12px_32px_rgba(18,18,18,.18)]",
+            placement === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5",
             align === "right" ? "right-0" : "left-0",
             panelClassName,
           )}

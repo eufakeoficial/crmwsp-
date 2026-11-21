@@ -22,6 +22,10 @@ describe("dueLifecycleEmails: paid tenants", () => {
     expect(dueLifecycleEmails(paid("2026-12-30"), at("2026-12-27T12:00:00Z"))[0]?.dedupeKey).toBe("renewal-due:t1:2026-12-30");
   });
 
+  it("on the last paid day it says 0 days (vence hoy), never 1", () => {
+    expect(dueLifecycleEmails(paid("2026-11-30"), at("2026-11-30T09:00:00Z"))[0]).toMatchObject({ template: "pago-por-vencer", daysLeft: 0 });
+  });
+
   it("marks read-only once, on the first day after grace, and never for old restrictions", () => {
     expect(templates(paid("2026-11-30"), at("2026-12-03T23:00:00Z"))).toEqual([]);
     expect(dueLifecycleEmails(paid("2026-11-30"), at("2026-12-04T01:00:00Z"))[0]).toMatchObject({

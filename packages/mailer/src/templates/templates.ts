@@ -217,12 +217,15 @@ export const EMAIL_TEMPLATES = {
   "pago-por-vencer": def<{ tenantName: string; plan: string; dueDate: string; daysLeft: number; amount: string; payUrl: string }>({
     kind: "service",
     build: (d) => ({
-      subject: `Tu plan ${d.plan} vence en ${plural(d.daysLeft, "día", "días")}`,
-      preheader: `Renueva antes del ${d.dueDate} para no perder el acceso.`,
+      // daysLeft 0 = the paid period ends today ("vence hoy"), never a misleading "1 día".
+      subject: d.daysLeft <= 0 ? `Tu plan ${d.plan} vence hoy` : `Tu plan ${d.plan} vence en ${plural(d.daysLeft, "día", "días")}`,
+      preheader: d.daysLeft <= 0 ? "Renueva hoy para no perder el acceso." : `Renueva antes del ${d.dueDate} para no perder el acceso.`,
       blocks: [
-        pill("Pago por vencer", "amber"), title("Tu suscripción está por vencer"),
+        pill(d.daysLeft <= 0 ? "Vence hoy" : "Pago por vencer", "amber"), title(d.daysLeft <= 0 ? "Tu suscripción vence hoy" : "Tu suscripción está por vencer"),
         paragraph(`El plan ${d.plan} de ${d.tenantName} vence el ${d.dueDate}. Renueva ahora para evitar interrupciones.`),
-        facts([["Plan", d.plan], ["Vence el", d.dueDate], ["Monto a pagar", d.amount]]),
+        // List price of the tenant's cycle; coupons/credits are applied at checkout, never promised here.
+        facts([["Plan", d.plan], ["Vence el", d.dueDate], ["Precio de lista", d.amount]]),
+        note("Si tienes un cupón o crédito disponible, se descuenta al pagar."),
         button("Pagar ahora", d.payUrl),
         callout("Si el pago no llega a tiempo, la cuenta pasará a solo lectura hasta que se regularice.", "warn"),
       ],

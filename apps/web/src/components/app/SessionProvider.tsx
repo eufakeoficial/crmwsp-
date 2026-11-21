@@ -12,6 +12,8 @@ interface SessionValue {
   me: MeResponse;
   tenant: UserTenant | null;
   selectTenant: (id: string) => void;
+  /** Applies a new company name locally (switcher + header) without refetching /auth/me. */
+  renameTenant: (id: string, name: string) => void;
   logout: () => Promise<void>;
 }
 
@@ -76,6 +78,11 @@ export function SessionProvider({ children, requireTenant = true }: { children: 
     [me],
   );
 
+  const renameTenant = useCallback((id: string, name: string) => {
+    setMe((cur) => (cur ? { ...cur, tenants: cur.tenants.map((t) => (t.id === id ? { ...t, name } : t)) } : cur));
+    setTenant((cur) => (cur && cur.id === id ? { ...cur, name } : cur));
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await api.logout();
@@ -86,7 +93,7 @@ export function SessionProvider({ children, requireTenant = true }: { children: 
     }
   }, [router]);
 
-  const value = useMemo(() => (me ? { me, tenant, selectTenant, logout } : null), [me, tenant, selectTenant, logout]);
+  const value = useMemo(() => (me ? { me, tenant, selectTenant, renameTenant, logout } : null), [me, tenant, selectTenant, renameTenant, logout]);
 
   if (error) {
     return (

@@ -1,12 +1,19 @@
 import { createHash } from "node:crypto";
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from "@nestjs/common";
-import { isDisposableEmail, normalizeSignupEmail } from "@crmwsp/domain";
+import {
+  EMAIL_VERIFICATION_RESEND_LIMIT,
+  EMAIL_VERIFICATION_TTL_HOURS,
+  EMAIL_VERIFICATION_TTL_SECONDS,
+  isDisposableEmail,
+  normalizeSignupEmail,
+} from "@crmwsp/domain";
 import {
   ConflictError,
   ValidationError,
   type ForgotPasswordRequest,
   type LoginRequest,
   type ResetPasswordRequest,
+  type VerifyEmailRequest,
   type MeResponse,
   RateLimitedError,
   type SignupRequest,
@@ -31,6 +38,8 @@ import {
 } from "./rate-limiter.js";
 import { hashSessionToken, newSessionToken } from "./session-token.js";
 
+import { META_CAPI, type MetaCapi } from "../tracking/meta-capi.js";
+
 export interface ClientInfo {
   ip: string | null;
   userAgent: string | null;
@@ -44,6 +53,9 @@ export const PASSWORD_RESET_TTL_SECONDS = 30 * 60;
 const isUniqueViolation = (err: unknown): boolean => (err as { code?: unknown } | null)?.code === "23505";
 
 /** Pseudonymous email reference for logs/audit: sha256(lowercased email), first 16 hex chars. */
+/** Password reset requests per email (any IP): 3 per hour. */
+export const FORGOT_PASSWORD_EMAIL_RATE_LIMIT = { limit: 3, windowMs: 60 * 60 * 1000 } as const;
+
 export const hashEmail = (email: string): string =>
   createHash("sha256").update(email.trim().toLowerCase(), "utf8").digest("hex").slice(0, 16);
 
@@ -54,7 +66,11 @@ export class AuthService implements OnModuleInit {
   private readonly logger = new Logger("Auth");
   private readonly limiter: StoreRateLimiter;
   private readonly ipLimiter: StoreRateLimiter;
+  /** Per email, independent of IP: caps reset mails a rotating-IP attacker can trigger. */
+  private readonly forgotEmailLimiter: StoreRateLimiter;
   private readonly backoff: AccountBackoff;
+  /** Per user: caps verification resends (3/hour). */
+  private readonly resendVerificationLimiter: StoreRateLimiter;
   private dummyHash = "";
 
   constructor(
@@ -66,10 +82,13 @@ export class AuthService implements OnModuleInit {
     @Inject(ACCOUNT_BACKOFF) backoff: BackoffOptions,
     @Inject(AUTH_MAILER) private readonly mailer: Mailer,
     @Optional() @Inject(BusinessCategoryService) private readonly categories?: BusinessCategoryService,
+    @Optional() @Inject(META_CAPI) private readonly metaCapi?: MetaCapi | null,
   ) {
     this.limiter = new StoreRateLimiter(rateLimit, store, "auth");
     this.ipLimiter = new StoreRateLimiter(ipRateLimit, store, "auth");
+    this.forgotEmailLimiter = new StoreRateLimiter(FORGOT_PASSWORD_EMAIL_RATE_LIMIT, store, "auth");
     this.backoff = new AccountBackoff(store, backoff);
+    this.resendVerificationLimiter = new StoreRateLimiter(EMAIL_VERIFICATION_RESEND_LIMIT, store, "auth");
   }
 
   async onModuleInit(): Promise<void> {
@@ -123,11 +142,21 @@ export class AuthService implements OnModuleInit {
       });
     }
     await this.audit([tenantId], "auth.signup", userId, { ua: ua(client) }, client);
-    // Welcome email after the signup committed; never blocks or fails the signup.
-    const ctx = emailContextFromEnv();
-    this.mailInBackground("bienvenida", () =>
-      templateMessage(input.email, "bienvenida", { name: input.name, tenantName: input.tenantName, appUrl: siteLink(ctx, "/app") }, ctx),
-    );
+    // Welcome + verification email after the signup committed; never blocks or fails the signup.
+    await this.sendVerification(userId).catch((err: unknown) => {
+      this.logger.warn(`verification email not issued (${err instanceof Error ? err.name : "unknown"})`);
+    });
+    // Meta Conversions API: only with the visitor's consent; detached so it never delays or fails the signup.
+    if (input.tracking?.consent && this.metaCapi) {
+      void this.metaCapi.sendCompleteRegistration({
+        eventId: input.tracking.eventId,
+        email: input.email,
+        ip: client.ip,
+        userAgent: client.userAgent,
+        fbp: input.tracking.fbp,
+        fbc: input.tracking.fbc,
+      });
+    }
     return { token: await this.openSession(userId, client), userId };
   }
 
@@ -160,6 +189,12 @@ export class AuthService implements OnModuleInit {
       await this.ipLimiter.consume(`ip:${client.ip ?? "-"}`);
       await this.limiter.consume(`forgot:${client.ip ?? "-"}:${input.email}`);
     });
+    // Over the per-email cap the request is silently dropped (same 200 as always): no 429 that a
+    // third party could use to block the owner's reset, and no mail flood from rotating IPs.
+    if (!(await this.forgotEmailLimiter.hit(`forgot-email:${hashEmail(input.email)}`))) {
+      this.logger.warn({ event: "auth.password_reset_email_limited", email: hashEmail(input.email), ip: client.ip });
+      return;
+    }
     const token = newSessionToken();
     const row = await this.repo.requestPasswordReset(input.email, hashSessionToken(token), PASSWORD_RESET_TTL_SECONDS, client.ip);
     this.logger.log({ event: "auth.password_reset_requested", email: hashEmail(input.email), ip: client.ip, knownUser: Boolean(row) });
@@ -189,6 +224,43 @@ export class AuthService implements OnModuleInit {
     await this.auditUser(userId, "auth.password_reset", { ua: ua(client), sessionsRevoked: true }, client);
   }
 
+  /** Confirms the email from a valid single-use token (public link). */
+  async verifyEmail(input: VerifyEmailRequest, client: ClientInfo): Promise<void> {
+    await this.limited("verify", "", client, async () => {
+      await this.ipLimiter.consume(`ip:${client.ip ?? "-"}`);
+      await this.limiter.consume(`verify:${client.ip ?? "-"}`);
+    });
+    const userId = await this.repo.consumeEmailVerification(hashSessionToken(input.token));
+    if (!userId) throw new ValidationError("Invalid or expired verification link");
+    this.logger.log({ event: "auth.email_verified", userId, ip: client.ip });
+    await this.auditUser(userId, "auth.email_verified", { ua: ua(client) }, client);
+  }
+
+  /** Sends a new verification link (previous ones stop working). 3 per hour per user. */
+  async resendVerification(user: RequestUser, client: ClientInfo): Promise<void> {
+    if (!(await this.resendVerificationLimiter.hit(`verify-resend:${user.id}`))) {
+      this.logger.warn({ event: "auth.rate_limited", kind: "verify_resend", userId: user.id, ip: client.ip });
+      throw new RateLimitedError();
+    }
+    await this.sendVerification(user.id);
+  }
+
+  /** Issues a hashed 24h token and mails the link; nothing for already verified users. */
+  private async sendVerification(userId: string): Promise<void> {
+    const token = newSessionToken();
+    const row = await this.repo.issueEmailVerification(userId, hashSessionToken(token), EMAIL_VERIFICATION_TTL_SECONDS);
+    if (!row) return;
+    const ctx = emailContextFromEnv();
+    this.mailInBackground("bienvenida-verificacion", () =>
+      templateMessage(
+        row.email,
+        "bienvenida-verificacion",
+        { name: row.name ?? "", verifyUrl: siteLink(ctx, `/verify/${token}`), hours: EMAIL_VERIFICATION_TTL_HOURS },
+        ctx,
+      ),
+    );
+  }
+
   async logout(token: string | undefined, client: ClientInfo = { ip: null, userAgent: null }): Promise<void> {
     if (!token) return;
     const tokenHash = hashSessionToken(token);
@@ -214,9 +286,9 @@ export class AuthService implements OnModuleInit {
   }
 
   async me(user: RequestUser): Promise<MeResponse> {
-    const tenants = await this.repo.listUserTenants(user.id);
+    const [tenants, emailVerified] = await Promise.all([this.repo.listUserTenants(user.id), this.repo.isEmailVerified(user.id)]);
     return {
-      user: { id: user.id, email: user.email, name: user.name },
+      user: { id: user.id, email: user.email, name: user.name, emailVerified },
       tenants: tenants.map((t) => ({ ...t, id: t.id as TenantId })),
     };
   }
@@ -230,7 +302,7 @@ export class AuthService implements OnModuleInit {
    * Runs the limit checks; a hit is logged (warn) before the 429 propagates. No DB lookup on this
    * path (a rate-limited flood must stay cheap), so auth.rate_limited is log-only.
    */
-  private async limited(kind: "login" | "signup" | "forgot" | "reset", email: string, client: ClientInfo, checks: () => Promise<void>): Promise<void> {
+  private async limited(kind: "login" | "signup" | "forgot" | "reset" | "verify", email: string, client: ClientInfo, checks: () => Promise<void>): Promise<void> {
     try {
       await checks();
     } catch (err) {

@@ -5,6 +5,7 @@ import {
   loginRequestSchema,
   resetPasswordRequestSchema,
   signupRequestSchema,
+  verifyEmailRequestSchema,
 } from "@crmwsp/contracts";
 import { type HttpReply, type HttpRequest, type RequestUser, headerValue } from "../common/http.js";
 import { clientIp } from "../common/client-ip.js";
@@ -72,6 +73,23 @@ export class AuthController {
   ): Promise<{ ok: true }> {
     await this.auth.resetPassword(parseOrThrow(resetPasswordRequestSchema, body), clientInfo(req));
     clearSessionCookie(reply);
+    return { ok: true };
+  }
+
+  /** Public: the link from the verification email. 400 VALIDATION_ERROR when invalid/expired/used. */
+  @Post("verify-email")
+  @Public({ sameOrigin: true })
+  @HttpCode(200)
+  async verifyEmail(@Body() body: unknown, @Req() req: HttpRequest): Promise<{ ok: true }> {
+    await this.auth.verifyEmail(parseOrThrow(verifyEmailRequestSchema, body), clientInfo(req));
+    return { ok: true };
+  }
+
+  /** Authenticated: mails a new verification link (max 3 per hour per user). */
+  @Post("resend-verification")
+  @HttpCode(200)
+  async resendVerification(@CurrentUser() user: RequestUser, @Req() req: HttpRequest): Promise<{ ok: true }> {
+    await this.auth.resendVerification(user, clientInfo(req));
     return { ok: true };
   }
 

@@ -4,6 +4,7 @@ import {
   PROMPT_VERSION,
   aiTurnResponseFormat,
   buildAiTurnMessages,
+  sanitizeTurnReply,
   estimateCost,
   type ChatMessage,
   type ChatResult,
@@ -32,6 +33,7 @@ import {
   usageLedger,
   type ChunkHit,
   type LlmConnection,
+  isActiveChatConnection,
 } from "@crmwsp/db";
 import { dryRunTurn, toTenantPolicies, type SimulatedChunk } from "@crmwsp/domain";
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
@@ -101,11 +103,11 @@ export class SimulatorService {
 
   async simulate(db: TenantDb, req: SimulateRequest, now = new Date()): Promise<SimulationResult> {
     const ctx = await db.run(async (tx) => {
-      const [conn] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)).limit(1);
-      const [tenant] = await tx.select({ name: tenants.name }).from(tenants).limit(1);
+      const [conn] = await tx.select().from(llmConnections).where(isActiveChatConnection).limit(1);
+      const [tenant] = await tx.select({ name: tenants.name, timezone: tenants.timezone }).from(tenants).limit(1);
       const [config] = await tx.select().from(agentConfigs).where(eq(agentConfigs.isActive, true)).limit(1);
       const budget = conn ? await readBudget(tx, conn) : undefined;
-      return { conn, tenantName: tenant?.name ?? "", config, budgetExceeded: budget?.exceeded === true };
+      return { conn, tenantName: tenant?.name ?? "", timeZone: tenant?.timezone ?? "UTC", config, budgetExceeded: budget?.exceeded === true };
     });
     const conn = ctx.conn;
     if (!conn || !conn.apiKeyEncrypted) throw new ValidationError("Connect and test an AI provider before simulating");
@@ -153,19 +155,21 @@ export class SimulatorService {
           return { chunkId: h.id, content: h.content, ...(title ? { title } : {}) };
         }),
         nowIso: now.toISOString(),
+        timeZone: ctx.timeZone,
       });
       await callModel(provider, conn, chatMessages, calls);
 
       const final = calls[calls.length - 1]!;
       const chunks = new Map<string, SimulatedChunk>(hits.map((h) => [h.id, { sourceTitle: titles.get(h.sourceId) ?? null, content: h.content }]));
       const report = dryRunTurn({
-        output: final.result.parsed as AiTurnOutput,
+        output: sanitizeTurnReply(final.result.parsed as AiTurnOutput, { chunkIds: hits.map((h) => h.id) }),
         chunks,
         contextIds: new Set(messageIds),
         confidenceThreshold: ctx.config ? Number(ctx.config.confidenceThreshold) : DEFAULT_CONFIDENCE_THRESHOLD,
         approvalThresholdMinor: Number(ctx.config?.approvalThresholdMinor ?? 0n),
         policies: toTenantPolicies(ctx.config?.policies ?? {}),
         now,
+        customerText: query,
       });
       const usage = summarizeUsage(calls, embedding);
       return { promptSource, model: final.model, retrievedChunks: hits.length, usage, ...report };

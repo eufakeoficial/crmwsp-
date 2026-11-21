@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { createHash, randomBytes } from "node:crypto";
+import { Body, Controller, Get, Header, HttpCode, Inject, Logger, Optional, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import type { CipherBox } from "@crmwsp/crypto";
 import { redact } from "@crmwsp/crypto";
 import {
@@ -15,26 +16,40 @@ import {
   templateLintRequestSchema,
   type TemplateLintResponse,
   updateChannelRequestSchema,
+  updateGupshupCredentialsRequestSchema,
+  revealChannelApiKeyRequestSchema,
+  type RevealChannelApiKeyResponse,
   type Channel,
+  type ChannelHealthListResponse,
   type ChannelListResponse,
+  type WalletBalance,
+  isLowWalletBalance,
   type Dialog360Config,
+  type Dialog360ConnectState,
   type MessageTemplateDto,
   type MessageTemplateListResponse,
   type SyncTemplatesResponse,
 } from "@crmwsp/contracts";
-import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, type ChannelConnection, type MessageTemplate, type Transaction } from "@crmwsp/db";
+import { and, asc, channelConnections, eq, inArray, isUuid, messageTemplates, sql, type ChannelConnection, type MessageTemplate, type Transaction } from "@crmwsp/db";
 import { lintTemplate, normalizeRejectionReason, planTemplateSync } from "@crmwsp/domain";
-import { generateWebhookToken, type Dialog360PartnerClient, type WhatsAppProvider } from "@crmwsp/whatsapp";
-import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
+import { TtlCache } from "./wallet-cache.js";
+import { buildChannelHealth, type InboundRow, type OutboundRow } from "./channel-health.js";
+import { generateWebhookToken, type Dialog360PartnerClient, type GupshupCredentialCheck, type GupshupWalletBalance, type WhatsAppProvider } from "@crmwsp/whatsapp";
+import { CurrentTenant, CurrentTenantDb, CurrentUser, Roles } from "../auth/decorators.js";
+import { hashPassword, verifyPassword } from "../auth/password.js";
+import { StoreRateLimiter } from "../auth/rate-limiter.js";
+import { RATE_LIMIT_STORE, defaultRateLimitStore, type CounterStore } from "../common/rate-limit-store.js";
+import { REVEAL_API_KEY_LIMIT, REVEAL_API_KEY_WINDOW_MS, revealApiKey, type RevealFailureReason } from "./api-key-reveal.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
-import type { HttpRequest, RequestTenant } from "../common/http.js";
+import { EmailVerifiedGuard } from "../auth/email-verified.guard.js";
+import { DB_HANDLE, type DbHandle, type HttpRequest, type RequestTenant, type RequestUser } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { ActivationGuard } from "../billing/activation.guard.js";
 import { PlanLimitsService } from "../billing/plan-limits.service.js";
 import { PG_UNIQUE_VIOLATION, pgCode, writeAudit } from "../inbox/audit.js";
 import { BusinessCategoryService, CATEGORY_REVIEW_BLOCKS_CHANNELS } from "../settings/business-category.service.js";
-import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_API_KEY_PURPOSE, webhookUrlFor } from "./channels.constants.js";
+import { CHANNEL_PROVIDER, CIPHER_BOX, DIALOG360_PARTNER, GUPSHUP_API_KEY_PURPOSE, GUPSHUP_VERIFIER, GUPSHUP_WALLET, webhookUrlFor } from "./channels.constants.js";
 
 function redactedHint(row: ChannelConnection, cipher: CipherBox): string | null {
   if (!row.credentialsEncrypted) return null;
@@ -64,6 +79,26 @@ function toTemplateDto(row: MessageTemplate): MessageTemplateDto {
 
 const ADMIN_ROLES =new Set(["owner", "admin"]);
 
+/** Lifetime of a 360dialog Connect `state` (the user completes Embedded Signup within it). */
+export const CONNECT_STATE_TTL_SECONDS = 900;
+
+/** SHA-256 of the connect state: the raw value never reaches the database. */
+export function hashConnectState(state: string): Buffer {
+  return createHash("sha256").update(state, "utf8").digest();
+}
+
+/** Checks a Gupshup API key + app name against Gupshup before the channel is saved. */
+export type GupshupCredentialVerifier = (apiKey: string, appName: string) => Promise<GupshupCredentialCheck>;
+
+export const GUPSHUP_INVALID_KEY_MESSAGE = "La API key no es válida para esa cuenta de Gupshup.";
+export const GUPSHUP_INVALID_APP_MESSAGE = "No existe una app de Gupshup con ese nombre para esta API key.";
+
+/** Reads the Gupshup wallet balance through the Partner API; null = unavailable. */
+export type GupshupWalletReader = (creds: { appId: string; partnerToken: string }) => Promise<GupshupWalletBalance | null>;
+
+/** The balance is cached per channel so the channels page does not hammer Gupshup. */
+export const WALLET_CACHE_TTL_MS = 5 * 60_000;
+
 /** The part of PlanLimitsService the channels need (stubbed in unit tests). */
 export type ChannelPlanLimits = Pick<PlanLimitsService, "assert" | "lock" | "startTrialIfEligible">;
 
@@ -76,7 +111,42 @@ export class ChannelsController {
     @Inject(DIALOG360_PARTNER) private readonly partner: Dialog360PartnerClient | null,
     @Inject(PlanLimitsService) private readonly limits: ChannelPlanLimits,
     @Optional() @Inject(BusinessCategoryService) private readonly categories?: Pick<BusinessCategoryService, "assertCanConnect">,
-  ) {}
+    @Optional() @Inject(GUPSHUP_VERIFIER) private readonly verifyGupshup?: GupshupCredentialVerifier,
+    @Optional() @Inject(GUPSHUP_WALLET) private readonly readWallet?: GupshupWalletReader,
+    @Optional() @Inject(DB_HANDLE) private readonly handle?: DbHandle,
+    @Optional() @Inject(RATE_LIMIT_STORE) store?: CounterStore,
+  ) {
+    this.revealLimiter = new StoreRateLimiter(
+      { limit: REVEAL_API_KEY_LIMIT, windowMs: REVEAL_API_KEY_WINDOW_MS },
+      store ?? defaultRateLimitStore(),
+      "channel-key-reveal",
+    );
+  }
+
+  private readonly revealLimiter: StoreRateLimiter;
+  private dummyHashPromise: Promise<string> | undefined;
+
+  private readonly walletCache = new TtlCache<WalletBalance>(WALLET_CACHE_TTL_MS, 1000);
+
+  private readonly logger = new Logger(ChannelsController.name);
+
+  /**
+   * Rejects wrong Gupshup credentials up front (a bad key otherwise only shows as 401 on every send).
+   * When Gupshup cannot answer the connect proceeds: an outage must not block onboarding.
+   */
+  private async assertGupshupCredentials(apiKey: string, appName: string): Promise<void> {
+    if (!this.verifyGupshup) return;
+    const check = await this.verifyGupshup(apiKey, appName).catch(
+      (): GupshupCredentialCheck => ({ status: "unverified", reason: "verifier failed" }),
+    );
+    if (check.status === "invalid_credentials") {
+      throw new ValidationError(GUPSHUP_INVALID_KEY_MESSAGE, { details: { reason: "gupshup_invalid_credentials" } });
+    }
+    if (check.status === "invalid_app") {
+      throw new ValidationError(GUPSHUP_INVALID_APP_MESSAGE, { details: { reason: "gupshup_invalid_app" } });
+    }
+    if (check.status === "unverified") this.logger.warn(`Gupshup credentials could not be verified (${check.reason}); connecting anyway`);
+  }
 
   /** ADR 0021: no new number while the business category review is pending or rejected (DB trigger too). */
   private async assertCategory(db: TenantDb): Promise<void> {
@@ -120,15 +190,57 @@ export class ChannelsController {
 
   @Post("gupshup")
   @Roles("owner", "admin")
+  @UseGuards(EmailVerifiedGuard)
   async createGupshup(@CurrentTenantDb() db: TenantDb, @Body() body: unknown, @Req() req: HttpRequest): Promise<Channel> {
     const input = parseOrThrow(createGupshupChannelRequestSchema, body);
     if (!this.cipher) throw new EncryptionNotConfiguredError();
     await this.assertCategory(db);
+    await this.assertGupshupCredentials(input.apiKey, input.appName);
     const credentials = this.cipher.encrypt(input.apiKey, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
     const partnerToken = input.partnerToken ? this.cipher.encrypt(input.partnerToken, { tenantId: db.tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE }) : null;
     try {
       const row = await db.run(async (tx) => {
         await this.assertNumbers(tx, db.tenantId, 1);
+        // A disabled Gupshup channel with the same phone is reconnected in place (new app, key and webhook
+        // token) instead of failing on the per-tenant phone uniqueness; its conversations stay attached.
+        const [disabled] = await tx
+          .select({ id: channelConnections.id })
+          .from(channelConnections)
+          .where(
+            and(
+              eq(channelConnections.phoneE164, input.phoneE164),
+              eq(channelConnections.provider, "gupshup"),
+              eq(channelConnections.status, "disabled"),
+            ),
+          )
+          .for("update");
+        if (disabled) {
+          const [reconnected] = await tx
+            .update(channelConnections)
+            .set({
+              externalAppId: input.appName,
+              credentialsEncrypted: credentials,
+              gupshupAppId: partnerToken ? (input.gupshupAppId ?? null) : null,
+              partnerTokenEncrypted: partnerToken,
+              webhookToken: generateWebhookToken(),
+              status: "active",
+              updatedAt: new Date(),
+            })
+            .where(eq(channelConnections.id, disabled.id))
+            .returning();
+          if (!reconnected) throw new Error("update returned no row");
+          await this.limits.startTrialIfEligible(tx, reconnected);
+          await writeAudit(tx, {
+            tenantId: db.tenantId,
+            userId: db.userId,
+            entity: "channel_connection",
+            entityId: reconnected.id,
+            action: "channel.reconnected",
+            diff: { provider: "gupshup", phoneE164: input.phoneE164, appName: input.appName, status: "active" },
+            ip: req.ip,
+          });
+          return reconnected;
+        }
         const [created] = await tx
           .insert(channelConnections)
           .values({
@@ -171,6 +283,27 @@ export class ChannelsController {
   }
 
   /**
+   * Issues the single-use `state` the web app puts in the Connect redirect. Only its SHA-256 is stored,
+   * bound to this tenant + user, valid for CONNECT_STATE_TTL_SECONDS.
+   */
+  @Post("360dialog/connect-state")
+  @Roles("owner", "admin")
+  @UseGuards(EmailVerifiedGuard)
+  @HttpCode(200)
+  async dialog360ConnectState(@CurrentTenantDb() db: TenantDb): Promise<Dialog360ConnectState> {
+    if (!this.partner) throw new EncryptionNotConfiguredError("360dialog partner credentials are not configured");
+    const state = randomBytes(32).toString("base64url");
+    const expiresAt = await db.run(async (tx) => {
+      const [r] = await tx.execute<{ e: string | null }>(
+        sql`select public.channel_connect_state_issue('360dialog', ${hashConnectState(state)}, ${CONNECT_STATE_TTL_SECONDS})::text as e`,
+      );
+      return r?.e ?? null;
+    });
+    if (!expiresAt) throw new Error("connect state could not be issued");
+    return { state, expiresAt: new Date(expiresAt).toISOString() };
+  }
+
+  /**
    * 360dialog Connect callback (Embedded Signup, Coexistence): for each connected channel, creates its API
    * key through the Partner API, stores it encrypted, points the channel webhook at our tokenized URL and
    * creates the channel_connections row. Channels already connected for this tenant are returned untouched
@@ -178,6 +311,7 @@ export class ChannelsController {
    */
   @Post("360dialog/connect")
   @Roles("owner", "admin")
+  @UseGuards(EmailVerifiedGuard)
   @HttpCode(200)
   async connect360dialog(@CurrentTenantDb() db: TenantDb, @Body() body: unknown, @Req() req: HttpRequest): Promise<ChannelListResponse> {
     const input = parseOrThrow(connect360dialogRequestSchema, body);
@@ -186,6 +320,37 @@ export class ChannelsController {
     const partner = this.partner;
     if (!partner) throw new EncryptionNotConfiguredError("360dialog partner credentials are not configured");
     const channelIds = [...new Set(input.channelIds)];
+    const stateHash = hashConnectState(input.state);
+
+    // 1) The redirect must carry a state this tenant + user was issued (unused, unexpired).
+    const stateOk = await db.run(async (tx) => {
+      const [r] = await tx.execute<{ ok: boolean }>(sql`select public.channel_connect_state_check('360dialog', ${stateHash}) as ok`);
+      return r?.ok === true;
+    });
+    if (!stateOk) throw new ForbiddenError("Invalid or expired 360dialog connect state", { details: { reason: "connect_state_invalid" } });
+
+    // 2) Cross-tenant ownership, before ANY Partner API call: minting a key for a channel connected by
+    // another tenant would revoke its key and hijack its inbound traffic.
+    const ownedElsewhere = await db.run(async (tx) => {
+      const rows = await tx.execute<{ id: string }>(
+        sql`select x as id from public.channel_external_owned_elsewhere('360dialog', ARRAY[${sql.join(channelIds.map((id) => sql`${id}`), sql`, `)}]::text[]) as x`,
+      );
+      return [...rows].map((r) => r.id);
+    });
+    if (ownedElsewhere.length > 0) {
+      await db.run((tx) =>
+        writeAudit(tx, {
+          tenantId: db.tenantId,
+          userId: db.userId,
+          entity: "tenant",
+          entityId: db.tenantId,
+          action: "channel.connect_refused",
+          diff: { provider: "360dialog", reason: "owned_by_another_tenant", channelIds: ownedElsewhere, clientId: input.clientId },
+          ip: req.ip,
+        }),
+      );
+      throw new ConflictError("This 360dialog channel is already connected to another account", { details: { reason: "channel_owned_elsewhere" } });
+    }
 
     const existing = await db.run((tx) =>
       tx
@@ -195,15 +360,43 @@ export class ChannelsController {
     );
     const known = new Set(existing.map((r) => r.externalAppId));
     const items: ChannelConnection[] = [...existing];
-    const toCreate = channelIds.filter((id) => !known.has(id)).length;
+    const pending = channelIds.filter((id) => !known.has(id));
     // Fail before any Partner API call: an API key must not be minted for a channel we cannot store.
-    if (toCreate > 0) await this.assertCategory(db);
-    if (toCreate > 0) await db.run((tx) => this.limits.assert(db.tenantId, "whatsapp_numbers", toCreate, tx));
+    if (pending.length > 0) await this.assertCategory(db);
+    if (pending.length > 0) await db.run((tx) => this.limits.assert(db.tenantId, "whatsapp_numbers", pending.length, tx));
 
-    for (const channelId of channelIds) {
-      if (known.has(channelId)) continue;
-      const phone = (await partner.findChannelPhone(channelId)) ?? (channelIds.length === 1 ? input.phoneE164 : undefined);
+    // 3) Read-only Partner check: every new channel must belong to the client of this redirect.
+    const phones = new Map<string, string>();
+    for (const channelId of pending) {
+      const info = await partner.getChannel(channelId);
+      if (!info || info.clientId !== input.clientId) {
+        await db.run((tx) =>
+          writeAudit(tx, {
+            tenantId: db.tenantId,
+            userId: db.userId,
+            entity: "tenant",
+            entityId: db.tenantId,
+            action: "channel.connect_refused",
+            diff: { provider: "360dialog", reason: "client_mismatch", channelId, clientId: input.clientId },
+            ip: req.ip,
+          }),
+        );
+        throw new ForbiddenError("The 360dialog channel does not belong to this client", { details: { reason: "channel_client_mismatch" } });
+      }
+      const phone = info.phone ?? (channelIds.length === 1 ? input.phoneE164 : undefined);
       if (!phone) throw new ValidationError("phoneE164 is required: the phone number of the channel could not be determined");
+      phones.set(channelId, phone);
+    }
+
+    // 4) Consume the state atomically right before minting keys: a replay cannot mint again.
+    const consumed = await db.run(async (tx) => {
+      const [r] = await tx.execute<{ ok: boolean }>(sql`select public.channel_connect_state_consume('360dialog', ${stateHash}) as ok`);
+      return r?.ok === true;
+    });
+    if (!consumed) throw new ForbiddenError("Invalid or expired 360dialog connect state", { details: { reason: "connect_state_invalid" } });
+
+    for (const channelId of pending) {
+      const phone = phones.get(channelId) as string;
       const apiKey = await partner.createChannelApiKey(channelId);
       const webhookToken = generateWebhookToken();
       await partner.setWebhook(apiKey, webhookUrlFor(webhookToken, "360dialog"));
@@ -252,6 +445,78 @@ export class ChannelsController {
     );
     const privileged = ADMIN_ROLES.has(tenant.role);
     return { items: rows.map((r) => this.toDto(r, privileged)) };
+  }
+
+  /**
+   * Last inbound message and last final outbound result of every channel, derived from conversations and
+   * messages (no extra table). Read-only: every role may see it; it carries only short provider error texts.
+   */
+  @Get("health")
+  async health(@CurrentTenantDb() db: TenantDb): Promise<ChannelHealthListResponse> {
+    return db.run(async (tx) => {
+      const channels = await tx.select({ id: channelConnections.id }).from(channelConnections).orderBy(asc(channelConnections.createdAt), asc(channelConnections.id));
+      if (channels.length === 0) return { items: [] };
+      const inbound = await tx.execute<InboundRow>(sql`
+        select channel_connection_id::text as channel_id, max(last_inbound_at)::text as at
+        from conversations
+        group by channel_connection_id`);
+      // Only the last 30 days: bounds the scan on large tenants; older failures are not "current" health.
+      const outbound = await tx.execute<OutboundRow>(sql`
+        select distinct on (c.channel_connection_id)
+          c.channel_connection_id::text as channel_id,
+          m.status::text as status,
+          coalesce(m.sent_at, m.created_at)::text as at,
+          m.error ->> 'message' as error_message,
+          m.error ->> 'code' as error_code,
+          m.error ->> 'status' as error_status
+        from messages m
+        join conversations c on c.id = m.conversation_id
+        where m.direction = 'outbound'
+          and m.status in ('sent', 'delivered', 'read', 'failed')
+          and m.created_at > now() - interval '30 days'
+        order by c.channel_connection_id, m.created_at desc`);
+      return { items: buildChannelHealth(channels.map((c) => c.id), [...inbound], [...outbound]) };
+    });
+  }
+
+  /**
+   * Gupshup wallet balance of the channel (it pays the WhatsApp messages). Owner/admin only because it
+   * uses the stored Partner token (Gupshup only documents the balance on the Partner API); without it the
+   * answer is `partner_required`. Never fails: any other problem answers `unavailable`. Cached for 5 minutes.
+   */
+  @Get(":id/balance")
+  @Roles("owner", "admin")
+  async balance(@CurrentTenantDb() db: TenantDb, @Param("id") id: string): Promise<WalletBalance> {
+    if (!isUuid(id)) throw new NotFoundError();
+    const channel = await db.run(async (tx) => {
+      const [ch] = await tx
+        .select({
+          provider: channelConnections.provider,
+          appId: channelConnections.gupshupAppId,
+          partnerToken: channelConnections.partnerTokenEncrypted,
+        })
+        .from(channelConnections)
+        .where(eq(channelConnections.id, id));
+      return ch;
+    });
+    if (!channel) throw new NotFoundError();
+    const unavailable: WalletBalance = { status: "unavailable" };
+    if (channel.provider !== "gupshup") return unavailable;
+    if (!channel.appId || !channel.partnerToken) return { status: "partner_required" };
+    if (!this.cipher || !this.readWallet) return unavailable;
+    const cacheKey = `${db.tenantId}:${id}`;
+    const hit = this.walletCache.get(cacheKey);
+    if (hit) return hit;
+    let value: WalletBalance = unavailable;
+    try {
+      const partnerToken = this.cipher.decrypt(channel.partnerToken, { tenantId: db.tenantId, purpose: GUPSHUP_PARTNER_TOKEN_PURPOSE });
+      const balance = await this.readWallet({ appId: channel.appId, partnerToken });
+      if (balance) value = { status: "ok", amount: balance.amount, currency: balance.currency, low: isLowWalletBalance(balance.amount, balance.currency) };
+    } catch {
+      // Decryption or reader failure: the UI just hides the balance. Nothing is logged (key material).
+    }
+    this.walletCache.set(cacheKey, value);
+    return value;
   }
 
   @Post(":id/rotate-webhook-token")
@@ -515,6 +780,64 @@ export class ChannelsController {
     });
   }
 
+  /**
+   * Replaces the Gupshup API key and app name of a channel in place (e.g. after the browser autofilled a
+   * wrong key). Unlike reconnecting, the webhook token is kept so nothing must be re-pasted in Gupshup.
+   * The new credentials are verified against Gupshup first; the key is never logged, audited or returned.
+   */
+  @Patch(":id/credentials")
+  @Roles("owner", "admin")
+  async updateCredentials(
+    @CurrentTenantDb() db: TenantDb,
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: HttpRequest,
+  ): Promise<Channel> {
+    if (!isUuid(id)) throw new NotFoundError();
+    const input = parseOrThrow(updateGupshupCredentialsRequestSchema, body);
+    if (!this.cipher) throw new EncryptionNotConfiguredError();
+    const current = await db.run(async (tx) => {
+      const [ch] = await tx.select({ provider: channelConnections.provider, appName: channelConnections.externalAppId }).from(channelConnections).where(eq(channelConnections.id, id));
+      return ch;
+    });
+    if (!current) throw new NotFoundError();
+    if (current.provider !== "gupshup") throw new ValidationError("Solo los canales de Gupshup tienen API key editable.");
+    // The partner app id and token belong to the old app: drop them when the app changes (the request carries no partner credentials).
+    const partnerCleared = current.appName !== input.appName;
+    await this.assertGupshupCredentials(input.apiKey, input.appName);
+    const credentials = this.cipher.encrypt(input.apiKey, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE });
+    try {
+      const row = await db.run(async (tx) => {
+        const [updated] = await tx
+          .update(channelConnections)
+          .set({
+            externalAppId: input.appName,
+            credentialsEncrypted: credentials,
+            ...(partnerCleared ? { gupshupAppId: null, partnerTokenEncrypted: null } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(channelConnections.id, id))
+          .returning();
+        if (!updated) throw new NotFoundError();
+        await writeAudit(tx, {
+          tenantId: db.tenantId,
+          userId: db.userId,
+          entity: "channel_connection",
+          entityId: id,
+          action: "channel.credentials_updated",
+          diff: { appName: input.appName, ...(partnerCleared ? { partnerCleared: true } : {}) },
+          ip: req.ip,
+        });
+        return updated;
+      });
+      this.walletCache.delete(`${db.tenantId}:${id}`);
+      return this.toDto(row, true, redact(input.apiKey));
+    } catch (err) {
+      if (pgCode(err) === PG_UNIQUE_VIOLATION) throw new ConflictError("Esa app de Gupshup ya está conectada a otro canal.");
+      throw err;
+    }
+  }
+
   @Patch(":id")
   @Roles("owner", "admin")
   async update(
@@ -553,5 +876,63 @@ export class ChannelsController {
       return updated;
     });
     return this.toDto(row, true);
+  }
+
+  /**
+   * ADR 0022: reveals the channel API key to the tenant owner after re-checking their password.
+   * Rate limited (5/hour per user+tenant, every attempt counts), audited (never the key nor the
+   * password), and answered with `Cache-Control: no-store`. Nothing here is logged.
+   */
+  @Post(":id/reveal-api-key")
+  @Roles("owner")
+  @HttpCode(200)
+  @Header("Cache-Control", "no-store")
+  @Header("Pragma", "no-cache")
+  async revealApiKey(
+    @CurrentTenantDb() db: TenantDb,
+    @CurrentUser() user: RequestUser,
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Req() req: HttpRequest,
+  ): Promise<RevealChannelApiKeyResponse> {
+    if (!isUuid(id)) throw new NotFoundError();
+    const input = parseOrThrow(revealChannelApiKeyRequestSchema, body);
+    const cipher = this.cipher;
+    if (!cipher) throw new EncryptionNotConfiguredError();
+    const channel = await db.run(async (tx) => {
+      const [ch] = await tx
+        .select({ provider: channelConnections.provider, credentials: channelConnections.credentialsEncrypted })
+        .from(channelConnections)
+        .where(eq(channelConnections.id, id));
+      return ch;
+    });
+    if (!channel) throw new NotFoundError();
+    const credentials = channel.credentials;
+    if ((channel.provider !== "gupshup" && channel.provider !== "360dialog") || !credentials) {
+      throw new ValidationError("Este canal no tiene una API key que se pueda mostrar.");
+    }
+    const audit = (action: string, diff: Record<string, unknown>) =>
+      db.run((tx) => writeAudit(tx, { tenantId: db.tenantId, userId: db.userId, entity: "channel_connection", entityId: id, action, diff, ip: req.ip }));
+    return revealApiKey(
+      {
+        hit: (key) => this.revealLimiter.hit(key),
+        loadPasswordHash: (userId, email) => this.loadPasswordHash(userId, email),
+        dummyHash: () => (this.dummyHashPromise ??= hashPassword(randomBytes(24).toString("hex"))),
+        verifyPassword,
+        decrypt: () => cipher.decrypt(credentials, { tenantId: db.tenantId, purpose: GUPSHUP_API_KEY_PURPOSE }),
+        auditFailure: (reason: RevealFailureReason) => audit("channel.api_key_reveal_failed", { channelId: id, reason }),
+        auditSuccess: () => audit("channel.api_key_revealed", { channelId: id }),
+      },
+      { tenantId: db.tenantId, userId: user.id, email: user.email, password: input.password },
+    );
+  }
+
+  /** Same SECURITY DEFINER lookup as login (the app role cannot read user_credentials). */
+  private async loadPasswordHash(userId: string, email: string): Promise<string | undefined> {
+    if (!this.handle) return undefined;
+    const rows = await this.handle.sql<{ user_id: string; password_hash: string }[]>`
+      select user_id, password_hash from public.auth_login(${email})`;
+    const row = rows[0];
+    return row && row.user_id === userId ? row.password_hash : undefined;
   }
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as c from "../ai-settings.js";
 import {
   AI_PROVIDER_BASE_URLS,
   agentConfigSchema,
@@ -76,5 +77,51 @@ describe("request helpers", () => {
   });
   it("exposes the fixed provider URLs", () => {
     expect(AI_PROVIDER_BASE_URLS.openrouter).toBe("https://openrouter.ai/api/v1");
+  });
+});
+
+describe("transcription connection (ADR 0024)", () => {
+
+  it("defaults to OpenAI and whisper-1 and requires baseUrl for custom", () => {
+    const parsed = c.saveAiTranscriptionConnectionRequestSchema.parse({ apiKey: "sk-test-12345678" });
+    expect(parsed.provider).toBe("openai");
+    expect(parsed.model).toBe("whisper-1");
+    expect(c.saveAiTranscriptionConnectionRequestSchema.safeParse({ provider: "custom", apiKey: "sk-test-12345678" }).success).toBe(false);
+    expect(c.saveAiTranscriptionConnectionRequestSchema.safeParse({ apiKey: "short" }).success).toBe(false);
+  });
+
+  it("status response never carries the key and accepts a null connection", () => {
+    const status = c.aiTranscriptionStatusSchema.parse({
+      connection: {
+        provider: "openai",
+        baseUrl: "https://api.openai.com/v1",
+        apiKeyHint: "…abcd",
+        model: "whisper-1",
+        lastTestedAt: null,
+        lastTestOk: null,
+        apiKey: "sk-should-be-stripped",
+      },
+      source: "dedicated",
+    });
+    expect(status.connection?.purpose).toBe("transcription");
+    expect(JSON.stringify(status)).not.toContain("sk-should-be-stripped");
+    expect(c.aiTranscriptionStatusSchema.parse({ connection: null, source: "none" }).connection).toBeNull();
+    expect(c.aiTranscriptionStatusSchema.safeParse({ connection: null, source: "other" }).success).toBe(false);
+  });
+
+  it("chat connection responses default purpose to chat", () => {
+    const conn = c.aiConnectionSchema.parse({
+      provider: "openrouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      apiKeyHint: null,
+      modelCheap: "m",
+      modelStrong: "m",
+      capabilities: { structuredOutput: true, embeddings: false, transcription: false },
+      lastTestedAt: null,
+      lastTestOk: true,
+      monthlyBudgetMinor: null,
+      budgetCurrency: null,
+    });
+    expect(conn.purpose).toBe("chat");
   });
 });

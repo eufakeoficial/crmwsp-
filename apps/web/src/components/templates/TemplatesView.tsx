@@ -1,6 +1,7 @@
 "use client";
 
 import type { Channel, MessageTemplateDto } from "@crmwsp/contracts";
+import { cn } from "@/lib/cn";
 import { FileText, Lock, Plus, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -8,7 +9,7 @@ import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { canManageChannels } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { PartnerCredentialsDialog } from "@/components/channels/PartnerCredentialsDialog";
-import { Alert, Banner, Button, Card, Chip, StatusChip, Toast, buttonClasses } from "@/components/ui";
+import { Alert, Banner, Button, Card, CHIP_ROW, Chip, StatusChip, Toast, buttonClasses } from "@/components/ui";
 import { useToast } from "@/lib/hooks/use-toast";
 import { formatDateTime } from "@/lib/format";
 import { channelsApi } from "@/lib/inbox-api";
@@ -101,7 +102,7 @@ export function TemplatesView() {
       </div>
 
       {channels && channels.length > 1 ? (
-        <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Canal">
+        <div className={cn(CHIP_ROW, "mb-4")} role="group" aria-label="Canal">
           {channels.map((c) => (
             <Chip key={c.id} active={c.id === channelId} onClick={() => setChannelId(c.id)}>
               {c.phoneE164}

@@ -8,7 +8,7 @@ Branch: feat/sync-plantillas-meta (from feat/integracion). Delivery: local commi
 
 ## Tasks
 - [x] T1 Domain: shared `planTemplateSync` (+ rejection reason), `normalizeRejectionReason`, `templateSendIssue`, status-aware `decideDispatch` (RED observed: missing module, then GREEN) - packages/domain/src/templates/sync.ts
-- [x] T2 DB migration 0080 `message_templates.rejection_reason` (existing tenant table: RLS unchanged; isolation covered by DB-gated worker test) + contracts DTO field
+- [x] T2 DB migration 0101 `message_templates.rejection_reason` (existing tenant table: RLS unchanged; isolation covered by DB-gated worker test) + contracts DTO field
 - [x] T3 Worker/API/webhook: sync (API + worker) and `message_template_status_update` webhook persist the reason; broadcasts, follow-ups and outbound use `templateSendIssue`
 - [x] T4 Web: persisted reason on rejected cards, notice for paused/disabled
 - [x] T5 Adapter test: 360dialog status mapping (PAUSED/FLAGGED/DISABLED/DELETED); BSP HTTP always mocked

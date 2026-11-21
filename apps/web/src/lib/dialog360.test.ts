@@ -9,7 +9,18 @@ describe("buildDialog360ConnectUrl", () => {
   });
 });
 
+describe("buildDialog360ConnectUrl with state", () => {
+  it("appends the encoded state", () => {
+    expect(buildDialog360ConnectUrl("P1", "https://a.test", "abc_DEF-123")).toMatch(/&state=abc_DEF-123$/);
+  });
+});
+
 describe("parseDialog360Callback", () => {
+  it("keeps a well-formed state and drops a malformed one", () => {
+    const st = "s".repeat(43);
+    expect(parseDialog360Callback(`?client=c&channels=ch1&state=${st}`).state).toBe(st);
+    expect(parseDialog360Callback("?channels=ch1&state=bad!").state).toBeUndefined();
+  });
   it("parses bracketed channel lists and the client id", () => {
     expect(parseDialog360Callback("?client=cl_1&channels=[ch1,ch2]")).toEqual({ clientId: "cl_1", channelIds: ["ch1", "ch2"] });
   });

@@ -252,7 +252,7 @@ describe.skipIf(!hasEnv)("send-message processor (Postgres + Redis, mocked Gupsh
       const row = await load(id);
       expect(row.status).toBe("failed");
       expect(row.externalId).toBeNull();
-      expect(row.error).toEqual({ code: "provider_error", message: "Gupshup responded with HTTP 400", status: 400 });
+      expect(row.error).toEqual({ code: "provider_error", message: "Gupshup responded with HTTP 400: Invalid destination", status: 400 });
       expect(JSON.stringify(row.error)).not.toContain(API_KEY);
     });
 

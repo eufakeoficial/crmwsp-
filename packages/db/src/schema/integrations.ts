@@ -4,6 +4,7 @@ import { bytea } from "./channel-connections.js";
 import { orders } from "./commerce.js";
 import { contacts } from "./contacts.js";
 import { tenants } from "./tenants.js";
+import { users } from "./users.js";
 
 export const commerceProviders = ["shopify", "hotmart", "kiwify", "eduzz", "gumroad", "payhip", "tiendanube", "woocommerce"] as const;
 export type CommerceProviderName = (typeof commerceProviders)[number];
@@ -127,3 +128,33 @@ export const commerceEvents = pgTable(
 export type CommerceConnection = typeof commerceConnections.$inferSelect;
 export type ExternalSale = typeof externalSales.$inferSelect;
 export type CommerceEvent = typeof commerceEvents.$inferSelect;
+
+/**
+ * Single-use WooCommerce connect codes (0096). SYSTEM-ONLY: the app role has no privilege on it;
+ * issue / consume go through SECURITY DEFINER `connect_code_issue` / `connect_code_consume`.
+ * Declared here for typing and drizzle-kit diffs only.
+ */
+export const integrationConnectCodes = pgTable(
+  "integration_connect_codes",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: ["woocommerce"] }).notNull().default("woocommerce"),
+    codeHash: bytea("code_hash").notNull().unique("integration_connect_codes_code_hash_unique"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("integration_connect_codes_tenant_idx").on(t.tenantId, t.provider, t.createdAt),
+    check("integration_connect_codes_code_hash_len_check", sql`octet_length(${t.codeHash}) = 32`),
+    check("integration_connect_codes_provider_check", sql`${t.provider} IN ('woocommerce')`),
+  ],
+);
+
+export type IntegrationConnectCode = typeof integrationConnectCodes.$inferSelect;

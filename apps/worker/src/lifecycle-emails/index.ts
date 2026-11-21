@@ -129,13 +129,15 @@ type CandidateRow = {
   tenant_id: string; tenant_name: string; owner_email: string | null; owner_name: string | null; plan: string;
   paid_until: string | Date | null; setup_ends_at: string | Date | null; trial_started_at: string | Date | null;
   trial_ends_at: string | Date | null; trial_denied_at: string | Date | null;
+  /** Period of the last paid (non-coupon) charge: 365 = annual, else monthly (0092). */
+  last_period_days?: number | null;
 };
 
 const asDate = (v: string | Date | null): Date | null => (v === null ? null : v instanceof Date ? v : new Date(v));
 const asDay = (v: string | Date | null): string | null => (v === null ? null : v instanceof Date ? v.toISOString().slice(0, 10) : v.slice(0, 10));
 
 /** Builds the message of one due lifecycle email. Exported for tests. */
-export function lifecycleMessage(to: string, row: Pick<CandidateRow, "tenant_name" | "plan">, e: LifecycleEmail, ctx: EmailContext): MailMessage {
+export function lifecycleMessage(to: string, row: Pick<CandidateRow, "tenant_name" | "plan" | "last_period_days">, e: LifecycleEmail, ctx: EmailContext): MailMessage {
   const billing = siteLink(ctx, BILLING_PATH);
   switch (e.template) {
     case "prueba-iniciada":
@@ -148,7 +150,9 @@ export function lifecycleMessage(to: string, row: Pick<CandidateRow, "tenant_nam
       const plan = isPlanId(row.plan) ? PLANS[row.plan] : PLANS.start;
       return templateMessage(to, e.template, {
         tenantName: row.tenant_name, plan: plan.name, dueDate: formatDay(e.dueDate), daysLeft: e.daysLeft,
-        amount: `${formatAmount(plan.priceMonthlyUsd, "usd")} al mes`, payUrl: billing,
+        // List price of the cycle the tenant pays (annual when its last paid charge was 365 days).
+        amount: row.last_period_days === 365 ? `${formatAmount(plan.priceAnnualUsd, "usd")} al año` : `${formatAmount(plan.priceMonthlyUsd, "usd")} al mes`,
+        payUrl: billing,
       }, ctx);
     }
     case "cuenta-solo-lectura":
@@ -156,11 +160,25 @@ export function lifecycleMessage(to: string, row: Pick<CandidateRow, "tenant_nam
   }
 }
 
-export async function runTenantLifecycleEmails(deps: LifecycleEmailDeps): Promise<number> {
+/** Candidates per page and max pages per tick (keyset over tenant id; F2: no tenant starves). */
+export const LIFECYCLE_PAGE_SIZE = 500;
+export const LIFECYCLE_MAX_PAGES = 20;
+
+/** Every lifecycle candidate, paging with a keyset cursor until a short page (bounded per tick). */
+export async function* lifecycleCandidates(db: Database, pageSize = LIFECYCLE_PAGE_SIZE, maxPages = LIFECYCLE_MAX_PAGES): AsyncGenerator<CandidateRow> {
+  let after: string | null = null;
+  for (let page = 0; page < maxPages; page++) {
+    const rows: CandidateRow[] = [...(await db.execute<CandidateRow>(sql`select * from public.email_lifecycle_candidates_page(${after}::uuid, ${pageSize})`))];
+    for (const r of rows) yield r;
+    if (rows.length < pageSize) return;
+    after = rows[rows.length - 1]!.tenant_id;
+  }
+}
+
+export async function runTenantLifecycleEmails(deps: LifecycleEmailDeps, pageSize = LIFECYCLE_PAGE_SIZE): Promise<number> {
   const now = (deps.now ?? (() => new Date()))();
-  const rows = await deps.db.execute<CandidateRow>(sql`select * from public.email_lifecycle_candidates(500)`);
   let sent = 0;
-  for (const r of rows) {
+  for await (const r of lifecycleCandidates(deps.db, pageSize)) {
     if (!r.owner_email) continue;
     const to = r.owner_email;
     const due = dueLifecycleEmails(

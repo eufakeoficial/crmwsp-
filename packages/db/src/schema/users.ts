@@ -14,6 +14,8 @@ export const users = pgTable(
     name: text("name"),
     authProvider: text("auth_provider"),
     authProviderId: text("auth_provider_id"),
+    /** NULL until the email is confirmed (0095); pre-0095 users were backfilled as verified. */
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("users_email_lower_unique").on(sql`lower(${t.email})`)],

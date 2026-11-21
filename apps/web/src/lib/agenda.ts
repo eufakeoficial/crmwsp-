@@ -37,6 +37,22 @@ export function zonedInstant(date: string, hhmm: string, tz: string): Date {
   return new Date(t);
 }
 
+/** End-of-day bound of a weekly window (the API accepts "24:00"; <input type="time"> cannot show it). */
+export const END_OF_DAY = "24:00";
+
+/**
+ * Value for an end-time <input type="time">: "24:00" is shown as "00:00". An END of 00:00 is never a
+ * valid window (start < end), so "00:00" unambiguously means midnight at the end of the day.
+ */
+export function endTimeToInput(end: string): string {
+  return end === END_OF_DAY ? "00:00" : end;
+}
+
+/** Inverse of endTimeToInput: "00:00" picked as an end time is stored as "24:00" (round trip). */
+export function endTimeFromInput(value: string): string {
+  return value === "00:00" ? END_OF_DAY : value;
+}
+
 /** UTC instant of 00:00 local time of `date` in `tz`. */
 export function zonedMidnight(date: string, tz: string): Date {
   return zonedInstant(date, "00:00", tz);

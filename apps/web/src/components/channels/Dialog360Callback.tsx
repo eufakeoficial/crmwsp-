@@ -7,9 +7,28 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { PageHeader } from "@/components/app/EmptyState";
 import { Alert, Button, Card, Input, Label } from "@/components/ui";
 import { ApiError } from "@/lib/api";
-import { parseDialog360Callback, type Dialog360CallbackParams } from "@/lib/dialog360";
+import { DIALOG360_STATE_KEY, parseDialog360Callback, type Dialog360CallbackParams } from "@/lib/dialog360";
 import { channelsApi } from "@/lib/inbox-api";
 import { channelErrorMessage } from "@/lib/messages";
+
+function clearStoredState() {
+  try {
+    window.sessionStorage.removeItem(DIALOG360_STATE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/** Spanish copy for the refusals of the hardened connect flow; the rest uses the channel messages. */
+function dialog360ErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.status === 403) {
+    return "El enlace de conexión expiró o no es válido. Vuelve a Canales e inicia la conexión otra vez.";
+  }
+  if (err instanceof ApiError && err.status === 409) {
+    return "Ese número de 360dialog ya está conectado a otra cuenta. Si es tuyo, escríbenos a soporte.";
+  }
+  return channelErrorMessage(err);
+}
 
 type State =
   | { kind: "working" }
@@ -30,11 +49,17 @@ export function Dialog360Callback() {
     if (!p) return;
     setState({ kind: "working" });
     try {
+      if (!p.clientId || !p.state) {
+        setState({ kind: "invalid" });
+        return;
+      }
       const res = await channelsApi.connect360dialog({
-        ...(p.clientId ? { clientId: p.clientId } : {}),
+        clientId: p.clientId,
+        state: p.state,
         channelIds: p.channelIds,
         ...(phoneE164 ? { phoneE164 } : {}),
       });
+      clearStoredState();
       setState({ kind: "done", channels: res.items });
     } catch (err) {
       // 400 with the phone message: the Hub did not expose the number; ask for it once.
@@ -42,7 +67,8 @@ export function Dialog360Callback() {
         setState({ kind: "needs-phone" });
         return;
       }
-      setState({ kind: "error", message: channelErrorMessage(err) });
+      if (err instanceof ApiError && err.status === 403) clearStoredState();
+      setState({ kind: "error", message: dialog360ErrorMessage(err) });
     }
   }, []);
 
@@ -50,6 +76,15 @@ export function Dialog360Callback() {
     if (started.current) return;
     started.current = true;
     const parsed = parseDialog360Callback(window.location.search);
+    // Fallback when the Hub does not echo `state` back: the value saved before the redirect.
+    if (!parsed.state) {
+      try {
+        const stored = window.sessionStorage.getItem(DIALOG360_STATE_KEY);
+        if (stored) parsed.state = stored;
+      } catch {
+        // Storage blocked: without a state the server refuses, the user restarts from Canales.
+      }
+    }
     if (parsed.channelIds.length === 0) {
       setState({ kind: "invalid" });
       return;

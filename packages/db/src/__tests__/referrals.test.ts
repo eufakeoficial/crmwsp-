@@ -49,7 +49,7 @@ describe.skipIf(!hasDb)("referrals (0072): reward on first paid charge, anti-abu
       }
     });
     const signals = (id: string, ip: string, email: string) =>
-      app.db.execute(sql`select public.tenant_signup_signals_record(${id}::uuid, ${ip}::inet, ${email})`);
+      withTenant(app.db, id, (tx) => tx.execute(sql`select public.tenant_signup_signals_record(${id}::uuid, ${ip}::inet, ${email})`));
     await signals(ids.ref, "10.0.0.1", `ref-${suffix}@x.com`);
     await signals(ids.good, "10.0.0.2", `good-${suffix}@x.com`);
     await signals(ids.sameIp, "10.0.0.1", `same-${suffix}@x.com`);
@@ -68,9 +68,16 @@ describe.skipIf(!hasDb)("referrals (0072): reward on first paid charge, anti-abu
     const { code } = await summary(ids.ref);
     expect(code).toMatch(/^[A-Z0-9]{8}$/);
     const rec = async (tenant: string, c: string) => {
-      const [r] = await app.db.execute<{ ok: boolean }>(sql`select public.tenant_referral_record(${tenant}::uuid, ${c}) as ok`);
+      const [r] = await withTenant(app.db, tenant, (tx) => tx.execute<{ ok: boolean }>(sql`select public.tenant_referral_record(${tenant}::uuid, ${c}) as ok`));
       return r?.ok;
     };
+    // 0094: without (or with another tenant's) context nothing is recorded.
+    const [noCtx] = await app.db.execute<{ ok: boolean }>(sql`select public.tenant_referral_record(${ids.other}::uuid, ${code}) as ok`);
+    expect(noCtx?.ok).toBe(false);
+    const [wrongCtx] = await withTenant(app.db, ids.good, (tx) =>
+      tx.execute<{ ok: boolean }>(sql`select public.tenant_referral_record(${ids.other}::uuid, ${code}) as ok`),
+    );
+    expect(wrongCtx?.ok).toBe(false);
     expect(await rec(ids.ref, code)).toBe(false);
     expect(await rec(ids.good, code.toLowerCase())).toBe(true);
     expect(await rec(ids.sameIp, code)).toBe(true);

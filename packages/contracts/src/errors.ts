@@ -15,6 +15,7 @@ export const ErrorCode = {
   StorageNotConfigured: "STORAGE_NOT_CONFIGURED",
   PlanLimitExceeded: "PLAN_LIMIT_EXCEEDED",
   SetupRequired: "SETUP_REQUIRED",
+  EmailNotVerified: "EMAIL_NOT_VERIFIED",
   Internal: "INTERNAL_ERROR",
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -81,6 +82,13 @@ export class PlanLimitExceededError extends AppError {
 export class SetupRequiredError extends AppError {
   constructor(message = "Connect your WhatsApp channel to start your trial", options?: AppErrorOptions) {
     super(ErrorCode.SetupRequired, message, 402, options);
+  }
+}
+
+/** 403: the tenant owner must confirm their email before connecting a WhatsApp channel. */
+export class EmailNotVerifiedError extends AppError {
+  constructor(message = "Confirm the tenant owner's email to connect WhatsApp", options?: AppErrorOptions) {
+    super(ErrorCode.EmailNotVerified, message, 403, options);
   }
 }
 

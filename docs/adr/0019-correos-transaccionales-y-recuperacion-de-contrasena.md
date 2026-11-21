@@ -32,3 +32,9 @@ contraseña.
   correos de cobro.
 - Las fechas de estos correos se formatean en UTC.
 - Pendiente: correo de respuesta a ticket (rama de soporte), preferencias de avisos con baja.
+- Endurecimiento (fix-prelanzamiento F6): además del límite por IP+email, `forgot` tiene un límite
+  **por email independiente de la IP** (3 por hora). Al superarlo la petición se descarta en
+  silencio (misma respuesta 200, sin 429) para no permitir que un tercero bloquee el
+  restablecimiento del dueño ni inundarlo de correos. `/reset/*` se sirve con
+  `Referrer-Policy: no-referrer` y la página quita el token de la URL (`history.replaceState`)
+  apenas lo lee; recargar la página después exige pedir otro enlace.

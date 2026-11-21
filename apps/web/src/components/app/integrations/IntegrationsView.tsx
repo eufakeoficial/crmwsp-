@@ -1,7 +1,7 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
-import type { CommerceConnectionView, CommerceProviderId, MercadoPagoConnection } from "@crmwsp/contracts";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from "react";
+import type { CommerceConnectionView, CommerceProviderId, MercadoPagoConnection, WooConnectCodeResponse } from "@crmwsp/contracts";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { SettingsFrame } from "@/components/ai/AccessGate";
@@ -29,6 +29,99 @@ const PROVIDERS: ProviderInfo[] = [
   { id: "gumroad", name: "Gumroad", secretLabel: "Seller ID", help: "En Gumroad → Settings → Advanced → Ping, pega la URL. Gumroad no firma los avisos." },
   { id: "payhip", name: "Payhip", secretLabel: "API key", help: "En Payhip → Settings → Developer, pega la URL del webhook." },
 ];
+
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const mm = String(Math.floor(total / 60)).padStart(2, "0");
+  const ss = String(total % 60).padStart(2, "0");
+  return `${mm}:${ss}`;
+}
+
+function WooPluginBlock({ active }: { active: boolean }) {
+  const [code, setCode] = useState<WooConnectCodeResponse>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [copyNote, setCopyNote] = useState<string>();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!code) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [code]);
+
+  async function generate() {
+    setBusy(true);
+    setError(undefined);
+    setCopyNote(undefined);
+    try {
+      setCode(await integrationsApi.createWooConnectCode());
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy() {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code.code);
+      setCopyNote("Código copiado.");
+    } catch {
+      setCopyNote("No se pudo copiar automáticamente; selecciónalo y cópialo a mano.");
+    }
+  }
+
+  const remaining = code ? new Date(code.expiresAt).getTime() - now : 0;
+  const expired = !!code && remaining <= 0;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-line p-4">
+      <h3 className="m-0 text-base">Opción recomendada: plugin de WordPress</h3>
+      <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-sm">
+        <li>
+          Instala el plugin «Vende+ para WooCommerce» en tu WordPress (
+          <a href="https://wordpress.org/plugins/vendemas-woocommerce/" target="_blank" rel="noopener noreferrer" className="underline">página del plugin</a>
+          ).
+        </li>
+        <li>Genera un código aquí.</li>
+        <li>Pégalo en WooCommerce → Vende+ → Conectar.</li>
+      </ol>
+      {active && <p className="m-0 text-sm text-muted">Tienda conectada mediante plugin o manualmente.</p>}
+      {error && <Alert>{error}</Alert>}
+      {code && !expired && (
+        <div className="flex flex-col gap-2">
+          <div className="select-all rounded-md bg-paper px-4 py-3 text-center font-mono text-[22px] tracking-widest" aria-label="Código de conexión">{code.code}</div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" onClick={() => void copy()}>Copiar</Button>
+            <span className="text-sm text-muted" role="timer">Vence en {formatCountdown(remaining)}</span>
+          </div>
+          {copyNote && <p className="m-0 text-sm" role="status">{copyNote}</p>}
+        </div>
+      )}
+      {expired && <p className="m-0 text-sm" role="status">Código vencido</p>}
+      {(!code || expired) && (
+        <div>
+          <Button variant={active ? "outline" : "primary"} disabled={busy} onClick={() => void generate()}>
+            {busy ? "Generando…" : active ? "Generar código para otra tienda" : "Generar código de conexión"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ManualWrapper({ enabled, children }: { enabled: boolean; children: ReactNode }) {
+  if (!enabled) return <>{children}</>;
+  return (
+    <details className="rounded-lg border border-line p-4">
+      <summary className="cursor-pointer text-sm font-medium">Conectar manualmente (avanzado)</summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  );
+}
 
 function ProviderCard({ info, conn, canEdit, onChanged }: { info: ProviderInfo; conn: CommerceConnectionView | undefined; canEdit: boolean; onChanged: () => void }) {
   const [secret, setSecret] = useState("");
@@ -90,7 +183,9 @@ function ProviderCard({ info, conn, canEdit, onChanged }: { info: ProviderInfo; 
       )}
       {error && <Alert>{error}</Alert>}
       {notice && <p className="m-0 text-sm" role="status">{notice}</p>}
+      {canEdit && info.id === "woocommerce" && <WooPluginBlock active={active} />}
       {canEdit && (
+        <ManualWrapper enabled={info.id === "woocommerce"}>
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <Label htmlFor={`${info.id}-secret`}>{info.secretLabel}</Label>
@@ -138,13 +233,14 @@ function ProviderCard({ info, conn, canEdit, onChanged }: { info: ProviderInfo; 
             )}
           </div>
         </form>
+        </ManualWrapper>
       )}
       {conn?.lastSyncedAt && <p className="m-0 text-xs text-muted">Última sincronización: {new Date(conn.lastSyncedAt).toLocaleString("es")}</p>}
     </Card>
   );
 }
 
-function MercadoPagoCard({ canEdit }: { canEdit: boolean }) {
+function MercadoPagoCard({ canEdit, onStatus }: { canEdit: boolean; onStatus: (active: boolean) => void }) {
   const [conn, setConn] = useState<MercadoPagoConnection | null | undefined>(undefined);
   const [accessToken, setAccessToken] = useState("");
   const [secret, setSecret] = useState("");
@@ -171,7 +267,9 @@ function MercadoPagoCard({ canEdit }: { canEdit: boolean }) {
     setError(undefined);
     setNotice(undefined);
     try {
-      setConn(await integrationsApi.saveMercadoPago({ accessToken: accessToken.trim(), webhookSecret: secret.trim() }));
+      const saved = await integrationsApi.saveMercadoPago({ accessToken: accessToken.trim(), webhookSecret: secret.trim() });
+      setConn(saved);
+      onStatus(saved.status === "active");
       setAccessToken("");
       setSecret("");
       setNotice("Conexión guardada.");
@@ -196,6 +294,7 @@ function MercadoPagoCard({ canEdit }: { canEdit: boolean }) {
         <div className="flex flex-col gap-1">
           <Label htmlFor="mercadopago-url">URL del webhook</Label>
           <Input id="mercadopago-url" readOnly value={conn.webhookUrl} onFocus={(e) => e.currentTarget.select()} />
+          <span className="text-xs text-muted">Pégala en Mercado Pago → Tus integraciones → tu aplicación → Webhooks, en modo producción.</span>
         </div>
       )}
       {error && <Alert>{error}</Alert>}
@@ -205,10 +304,12 @@ function MercadoPagoCard({ canEdit }: { canEdit: boolean }) {
           <div className="flex flex-col gap-1">
             <Label htmlFor="mercadopago-token">Access token (APP_USR-…)</Label>
             <Input id="mercadopago-token" type="password" autoComplete="off" value={accessToken} onChange={(e) => setAccessToken(e.target.value)} />
+            <span className="text-xs text-muted">En Mercado Pago → Tus integraciones → tu aplicación → Credenciales de producción.</span>
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="mercadopago-secret">Clave secreta del webhook</Label>
             <Input id="mercadopago-secret" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} />
+            <span className="text-xs text-muted">En Mercado Pago → Tus integraciones → tu aplicación → Webhooks, al configurar la URL de producción.</span>
           </div>
           <div>
             <Button type="submit" disabled={busy}>{conn ? "Actualizar" : "Conectar"}</Button>
@@ -221,6 +322,7 @@ function MercadoPagoCard({ canEdit }: { canEdit: boolean }) {
 
 function Body({ canEdit }: { canEdit: boolean }) {
   const [items, setItems] = useState<CommerceConnectionView[] | undefined>(undefined);
+  const [mpActive, setMpActive] = useState(false);
   const [error, setError] = useState<string>();
   const load = useCallback(async () => {
     try {
@@ -232,21 +334,82 @@ function Body({ canEdit }: { canEdit: boolean }) {
   }, []);
   useEffect(() => {
     void load();
+    // Mercado Pago status for its tile; the card reloads its own details when opened.
+    integrationsApi.getMercadoPago().then((c) => setMpActive(c.status === "active")).catch(() => undefined);
   }, [load]);
+  // One provider expanded at a time; the rest stay as compact tiles so the page fits without scrolling.
+  const [open, setOpen] = useState<string | null>(null);
   if (error) return <Alert>{error}</Alert>;
   if (!items) return <p className="text-muted" aria-busy="true">Cargando integraciones…</p>;
+  const connOf = (id: string) => items.find((c) => c.provider === id);
+  const toggle = (id: string) => setOpen((cur) => (cur === id ? null : id));
+
+  const sections: { title: string; hint: string; providers: ProviderInfo[] }[] = [
+    { title: "Tiendas online", hint: "Pedidos y catálogo sincronizados.", providers: PROVIDERS.filter((p) => p.store) },
+    { title: "Infoproductos", hint: "Avisos de venta por webhook.", providers: PROVIDERS.filter((p) => !p.store) },
+  ];
+
   return (
-    <div className="flex max-w-[980px] flex-col gap-4">
+    <div className="flex max-w-[980px] flex-col gap-6">
       <p className="m-0 text-sm text-muted">
-        Las ventas de estas plataformas se registran como ventas externas (métricas y avisos). Nunca marcan como pagado un pedido de CRMWSP.
+        Elige la plataforma que usas y conéctala. Las ventas externas se registran para métricas y avisos; nunca marcan como pagado un pedido de CRMWSP.
       </p>
-      {PROVIDERS.map((p) => (
-        <ProviderCard key={p.id} info={p} conn={items.find((c) => c.provider === p.id)} canEdit={canEdit} onChanged={() => void load()} />
+      {sections.map((s) => (
+        <section key={s.title} aria-label={s.title} className="flex flex-col gap-3">
+          <div>
+            <h2 className="m-0 text-[17px]">{s.title}</h2>
+            <p className="m-0 text-sm text-muted">{s.hint}</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {s.providers.map((p) => (
+              <ProviderTile key={p.id} name={p.name} active={connOf(p.id)?.status === "active"} open={open === p.id} panelId={`int-${p.id}`} onClick={() => toggle(p.id)} />
+            ))}
+          </div>
+          {s.providers.filter((p) => p.id === open).map((p) => (
+            <div key={p.id} id={`int-${p.id}`}>
+              <ProviderCard info={p} conn={connOf(p.id)} canEdit={canEdit} onChanged={() => void load()} />
+            </div>
+          ))}
+        </section>
       ))}
-      <h2 className="m-0 mt-2 text-[17px]">Pagos</h2>
-      <MercadoPagoCard canEdit={canEdit} />
-      <p className="m-0 text-xs text-muted">Mercado Libre: pendiente (requiere OAuth por vendedor; ver roadmap).</p>
+      <section aria-label="Pagos" className="flex flex-col gap-3">
+        <div>
+          <h2 className="m-0 text-[17px]">Pagos</h2>
+          <p className="m-0 text-sm text-muted">Cobra pedidos con links de pago.</p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <ProviderTile name="Mercado Pago" active={mpActive} open={open === "mercadopago"} panelId="int-mercadopago" onClick={() => toggle("mercadopago")} />
+          <ProviderTile name="Mercado Libre" soon />
+        </div>
+        {open === "mercadopago" && (
+          <div id="int-mercadopago">
+            <MercadoPagoCard canEdit={canEdit} onStatus={setMpActive} />
+          </div>
+        )}
+      </section>
     </div>
+  );
+}
+
+/** Compact tile: name + connection status. Click expands the provider's form below the grid. */
+function ProviderTile({ name, active = false, open = false, soon = false, panelId, onClick }: { name: string; active?: boolean; open?: boolean; soon?: boolean; panelId?: string; onClick?: () => void }) {
+  const cls = `flex min-h-[64px] items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-left ${open ? "border-ink bg-ink text-white" : "border-line bg-white"}`;
+  const status = soon ? "Próximamente" : active ? "Conectado" : "Sin conectar";
+  const dot = soon ? "bg-line-2" : active ? "bg-success" : "bg-line-2";
+  const content = (
+    <>
+      <span className="flex min-w-0 flex-col">
+        <b className="truncate text-[15px]">{name}</b>
+        <span className={`text-xs ${open ? "text-white/70" : "text-muted"}`}>{status}</span>
+      </span>
+      <span aria-hidden className={`size-2.5 flex-none rounded-full ${dot}`} />
+    </>
+  );
+  if (soon) return <div className={`${cls} opacity-60`}>{content}</div>;
+  return (
+    <button type="button" onClick={onClick} aria-expanded={open} aria-controls={panelId} className={`${cls} cursor-pointer transition hover:border-ink`}>
+      {content}
+    </button>
   );
 }
 

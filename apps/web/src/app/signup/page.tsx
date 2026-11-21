@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { routeAfterAuth } from "@/lib/after-auth";
 import { errorMessage } from "@/lib/messages";
 import { slugify } from "@/lib/slug";
+import { newEventId, signupTracking, trackRegistration } from "@/lib/tracking";
 import { categoriesApi } from "@/lib/policies-api";
 
 export default function SignupPage() {
@@ -55,9 +56,12 @@ export default function SignupPage() {
       // Referral link `/signup?ref=CODE` (ADR 0017); ignored when malformed.
       const ref = new URLSearchParams(window.location.search).get("ref")?.trim() ?? "";
       const referralCode = /^[A-Za-z0-9]{1,32}$/.test(ref) ? ref : undefined;
+      const eventId = newEventId();
       const me = await api.signup({ email, name, password, tenantName: tenantName.trim(), tenantSlug: slug, referralCode,
+        tracking: signupTracking(eventId),
         ...(category ? { businessCategory: category, ...(categoryDetail.trim() ? { businessCategoryDetail: categoryDetail.trim() } : {}) } : {}),
       });
+      trackRegistration(eventId);
       router.replace(routeAfterAuth(me));
     } catch (err) {
       setError(errorMessage(err, "signup"));

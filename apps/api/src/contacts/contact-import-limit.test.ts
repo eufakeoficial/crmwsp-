@@ -42,6 +42,15 @@ describe("POST /contact-book/import plan limit", () => {
     expect(inserts).toHaveLength(0);
   });
 
+  it("counts a phone repeated in the file once (F5)", async () => {
+    const limits = { lock: vi.fn(async () => undefined), assert: vi.fn(async () => undefined) };
+    const controller = new ContactBulkController(limits);
+    const dup = "phone,name\n+59170000001,Ana\n+591 7000 0001,Ana bis\n+59170000002,Beto\n+59170000002,Beto\n";
+    const { db } = fakeDb([]);
+    await controller.import(db, req, { csv: dup }).catch(() => undefined);
+    expect(limits.assert).toHaveBeenCalledWith(TENANT, "contacts", 2, expect.anything());
+  });
+
   it("does not consult the limit when every phone already exists (update-only import)", async () => {
     const limits = { lock: vi.fn(async () => undefined), assert: vi.fn(async () => undefined) };
     const controller = new ContactBulkController(limits);

@@ -11,7 +11,7 @@ import {
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
-import { Alert, Button, Card, Input, Label, Modal, Spinner, Textarea } from "@/components/ui";
+import { Alert, Button, Card, Input, Label, Spinner, Textarea } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage } from "@/lib/messages";
@@ -20,7 +20,8 @@ import { SupportMessages, SupportPriorityTag, SupportStatusPill } from "./Suppor
 
 const selectClass = "block h-12 w-full rounded-[14px] border-[1.5px] border-ink bg-white px-3 text-[16px] text-ink";
 
-function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated: (t: SupportTicketThread) => void }) {
+/** Inline new-ticket card shown above the ticket list; no modal. */
+function NewTicketCard({ onClose, onCreated }: { onClose: () => void; onCreated: (t: SupportTicketThread) => void }) {
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState<SupportTicketCategory>("other");
   const [priority, setPriority] = useState<SupportTicketPriority>("normal");
@@ -39,20 +40,8 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
     }
   };
   return (
-    <Modal
-      title="Nuevo ticket de soporte"
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button onClick={submit} disabled={!valid || busy}>
-            {busy ? "Enviando…" : "Enviar"}
-          </Button>
-        </>
-      }
-    >
+    <Card className="flex flex-col gap-3 sm:p-6" data-testid="new-ticket-card">
+      <h2 className="m-0 text-[19px]">Nuevo ticket de soporte</h2>
       <div className="flex flex-col gap-3">
         <div>
           <Label htmlFor="support-subject">Asunto</Label>
@@ -85,8 +74,16 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
           <Textarea id="support-message" rows={5} maxLength={5000} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Cuéntanos qué pasa y desde cuándo." />
         </div>
         <Alert>{error}</Alert>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={submit} disabled={!valid || busy}>
+            {busy ? "Enviando…" : "Enviar"}
+          </Button>
+        </div>
       </div>
-    </Modal>
+    </Card>
   );
 }
 
@@ -248,10 +245,22 @@ export function SupportView() {
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader title="Soporte" subtitle="Escríbenos si algo no funciona. Te respondemos aquí mismo." />
-        <Button onClick={() => setCreating(true)}>
+        <Button onClick={() => setCreating((v) => !v)} aria-expanded={creating} aria-controls="new-ticket">
           <Plus aria-hidden className="size-4" /> Nuevo ticket
         </Button>
       </div>
+      {creating ? (
+        <div id="new-ticket">
+          <NewTicketCard
+            onClose={() => setCreating(false)}
+            onCreated={(t) => {
+              setCreating(false);
+              setSelected(t.ticket.id);
+              load();
+            }}
+          />
+        </div>
+      ) : null}
       <Alert>{error}</Alert>
       {tickets === null && !error ? (
         <div className="flex justify-center py-10" aria-busy="true">
@@ -281,16 +290,6 @@ export function SupportView() {
             )}
           </Card>
         </div>
-      ) : null}
-      {creating ? (
-        <NewTicketModal
-          onClose={() => setCreating(false)}
-          onCreated={(t) => {
-            setCreating(false);
-            setSelected(t.ticket.id);
-            load();
-          }}
-        />
       ) : null}
     </>
   );

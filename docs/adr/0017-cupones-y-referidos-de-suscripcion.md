@@ -86,7 +86,12 @@ ninguna vía para que un tenant fije su propio precio ni se marque un período c
 ## Consecuencias
 - Un cobro pendiente con cupón reserva un uso hasta 24 h; si se paga después de ese plazo, el
   canje se registra igual y puede superar `max_redemptions` (riesgo acotado y visible en el
-  backoffice).
+  backoffice). Desde 0093 (fix-prelanzamiento F7) el hook de pago vuelve a contar los canjes bajo el
+  bloqueo del cupón: si ya estaba en el máximo, el canje se registra igual (el dinero se cobró con
+  descuento; nunca se cobra la diferencia después) con `over_cap = true`, se audita como
+  `coupon.redemption_over_cap` en `platform_audit_events` y el listado de canjes del backoffice lo
+  marca "Revisar: sobre el máximo". La reserva sigue en 24 h: los pagos cripto pueden confirmarse
+  tarde y acortarla haría el sobrepaso más frecuente.
 - Un tenant con `per_tenant_limit = 1` y un cobro pendiente con el cupón no puede crear otro con
   ese cupón (otro plan o período) hasta pagar o pasadas 24 h.
 - Un reembolso de un cobro con cupón no devuelve el uso; tampoco devuelve créditos de referido

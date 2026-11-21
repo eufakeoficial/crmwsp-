@@ -115,6 +115,29 @@ describe.skipIf(!hasDb)("coupons (0071): isolation, discount, race-safe limits, 
     expect(seenByA.some((r) => r.tenantId === tenantB)).toBe(false);
   });
 
+  it("a charge paid after its hold expired and the cap was reached is recorded but flagged (0093)", async () => {
+    const code = await newCoupon("OVER", "fixed_usd", 5, { max: 1, perTenant: 5 });
+    const late = await createWithCoupon(tenantA, code);
+    // Its 24 h hold lapses, so another tenant can take the only slot.
+    await migrator.db.execute(sql`update public.subscription_charges set created_at = now() - interval '25 hours' where id = ${late}::uuid`);
+    const first = await createWithCoupon(tenantB, code);
+    const pay = (tenantId: string, id: string, ref: string) =>
+      withTenant(app.db, tenantId, async (tx) => {
+        await tx.execute(sql`select public.subscription_charge_attach(${id}::uuid, ${ref}, '0xabc', 44, 'usdtbsc', 'waiting')`);
+        await tx.execute(sql`select * from public.subscription_charge_apply(${id}::uuid, 'paid', 'webhook', 'finished', 44::numeric, null)`);
+      });
+    await pay(tenantB, first, `${Date.now()}1`);
+    await pay(tenantA, late, `${Date.now()}2`);
+    const rows = await dangerouslyWithoutTenant(migrator.db, (tx) => tx.select().from(couponRedemptions).where(inArray(couponRedemptions.chargeId, [first, late])));
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.chargeId === first)?.overCap).toBe(false);
+    expect(rows.find((r) => r.chargeId === late)?.overCap).toBe(true);
+    const audit = await migrator.db.execute<{ n: number }>(
+      sql`select count(*)::int as n from public.platform_audit_events where action = 'coupon.redemption_over_cap' and diff->>'chargeId' = ${late}`,
+    );
+    expect([...audit][0]?.n).toBe(1);
+  });
+
   it("a 100% coupon cannot create a provider charge but is granted with verified_by=coupon", async () => {
     const code = await newCoupon("FULL", "percent", 100);
     expect(msgOf(await errOf(createWithCoupon(tenantA, code)))).toContain("coupon: free");

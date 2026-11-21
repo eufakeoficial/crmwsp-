@@ -2,6 +2,7 @@
 
 import type { MembershipRole, TeamInvitation, TenantMember } from "@crmwsp/contracts";
 import { useCallback, useEffect, useState } from "react";
+import { SetupRequiredHint, useSetupMode } from "@/components/app/billing/SetupGate";
 import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { ROLE_LABELS } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
@@ -24,6 +25,7 @@ export default function TeamPage() {
   const actor = tenant?.role;
   const [state, setState] = useState<State>({ status: "loading" });
   const [inviting, setInviting] = useState(false);
+  const inSetup = useSetupMode();
   const [removing, setRemoving] = useState<TenantMember | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string>();
@@ -67,10 +69,11 @@ export default function TeamPage() {
     <>
       <PageHeader title="Equipo" subtitle="Invita a quienes atienden a tus clientes y define qué puede hacer cada persona." />
       {state.status === "ready" ? (
-        <div className="mb-3 flex justify-end">
-          <Button size="sm" variant="accent" onClick={() => setInviting(true)}>
+        <div className="mb-3 flex flex-col items-end gap-1">
+          <Button size="sm" variant="accent" disabled={inSetup} onClick={() => setInviting(true)}>
             Invitar miembro
           </Button>
+          {inSetup ? <SetupRequiredHint /> : null}
         </div>
       ) : null}
       <Alert>{actionError}</Alert>

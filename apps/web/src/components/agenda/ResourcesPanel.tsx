@@ -4,7 +4,7 @@ import { putAvailabilityRequestSchema, type AvailabilityWindow, type BookingReso
 import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/app/EmptyState";
 import { Alert, Button, Input, Label, Modal, StatusChip, Switch } from "@/components/ui";
-import { WEEKDAY_LABELS, WEEKDAY_ORDER, formatDateTimeIn, zonedInstant } from "@/lib/agenda";
+import { END_OF_DAY, WEEKDAY_LABELS, WEEKDAY_ORDER, endTimeFromInput, endTimeToInput, formatDateTimeIn, zonedInstant } from "@/lib/agenda";
 import { bookingsApi } from "@/lib/bookings-api";
 import { configErrorMessage } from "./ServicesPanel";
 
@@ -137,7 +137,7 @@ function ScheduleDialog({ resource, onClose }: { resource: BookingResource; onCl
                 <div key={index} className="flex items-center gap-2">
                   <input type="time" aria-label={`${WEEKDAY_LABELS[weekday]}: desde`} value={w.startTime} onChange={(e) => edit(index, { startTime: e.target.value })} className="h-10 rounded-[12px] border-[1.5px] border-ink px-2" />
                   <span aria-hidden>–</span>
-                  <input type="time" aria-label={`${WEEKDAY_LABELS[weekday]}: hasta`} value={w.endTime === "24:00" ? "23:59" : w.endTime} onChange={(e) => edit(index, { endTime: e.target.value })} className="h-10 rounded-[12px] border-[1.5px] border-ink px-2" />
+                  <input type="time" aria-label={`${WEEKDAY_LABELS[weekday]}: hasta`} value={endTimeToInput(w.endTime)} onChange={(e) => edit(index, { endTime: endTimeFromInput(e.target.value) })} title="00:00 = medianoche (fin del día)" className="h-10 rounded-[12px] border-[1.5px] border-ink px-2" />
                   <Button size="sm" variant="ghost" aria-label={`Quitar tramo del ${WEEKDAY_LABELS[weekday]}`} onClick={() => setWindows((list) => list?.filter((_, i) => i !== index) ?? list)}>
                     Quitar
                   </Button>
@@ -159,7 +159,8 @@ function TimeOffDialog({ resource, onClose }: { resource: BookingResource; onClo
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("00:00");
   const [endDate, setEndDate] = useState("");
-  const [endTime, setEndTime] = useState("23:59");
+  // Default: block the whole last day (24:00 = midnight at its end, never 23:59).
+  const [endTime, setEndTime] = useState(END_OF_DAY);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<unknown>(null);
 
@@ -229,7 +230,7 @@ function TimeOffDialog({ resource, onClose }: { resource: BookingResource; onClo
           <Label htmlFor="to-end">Hasta</Label>
           <div className="flex gap-2">
             <Input id="to-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            <Input aria-label="Hora de fin" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            <Input aria-label="Hora de fin" type="time" title="00:00 = medianoche (fin del día)" value={endTimeToInput(endTime)} onChange={(e) => setEndTime(endTimeFromInput(e.target.value))} />
           </div>
         </div>
       </div>

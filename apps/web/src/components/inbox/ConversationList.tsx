@@ -17,7 +17,7 @@ export interface ListControls {
 }
 
 const PILL =
-  "h-8 cursor-pointer rounded-full border border-line-2 bg-white px-3 text-[13px] font-semibold text-ink hover:bg-paper disabled:cursor-not-allowed disabled:opacity-50";
+  "h-9 cursor-pointer rounded-full border-[1.5px] border-line-2 bg-paper px-4 text-sm font-medium text-ink hover:border-royal hover:bg-royal-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-royal disabled:cursor-not-allowed disabled:opacity-50";
 
 export type BulkAction = { type: "close" } | { type: "assign"; assignee: string | null } | { type: "tag"; tag: string };
 
@@ -116,7 +116,7 @@ export function ListToolbar({
             type="button"
             aria-pressed={controls.unread}
             onClick={() => set({ unread: !controls.unread })}
-            className={cn(PILL, controls.unread && "border-ink bg-ink text-white hover:bg-ink-2")}
+            className={cn(PILL, controls.unread && "border-royal bg-royal font-semibold text-white hover:bg-royal hover:border-royal")}
           >
             No leídos
           </button>

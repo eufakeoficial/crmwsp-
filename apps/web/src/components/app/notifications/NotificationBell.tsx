@@ -14,13 +14,15 @@ const POLL_MS = 30_000;
 export function notificationHref(n: Pick<Notification, "kind" | "entity" | "entityId" | "conversationId">): string | null {
   if (n.kind === "payment_review") return "/app/payments/reviews";
   if (n.kind === "channel_quality") return "/app/channels";
+  if (n.kind === "ai_credentials") return "/app/settings/ai";
+  if (n.kind === "channel_credentials") return "/app/channels";
   if (n.entity === "order" && n.entityId) return `/app/orders/${n.entityId}`;
   if (n.kind === "approval_requested") return "/app/settings/approvals";
   if (n.conversationId) return `/app/inbox?conversation=${n.conversationId}`;
   return null;
 }
 
-export function NotificationBell({ triggerClassName = "size-10 border border-line bg-surface hover:bg-ink/5" }: { triggerClassName?: string } = {}) {
+export function NotificationBell({ triggerClassName = "size-10 border border-line bg-white hover:bg-ink/5" }: { triggerClassName?: string } = {}) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[] | null>(null);
   const [unread, setUnread] = useState(0);
@@ -98,7 +100,7 @@ export function NotificationBell({ triggerClassName = "size-10 border border-lin
         <div
           role="dialog"
           aria-label="Notificaciones"
-          className="absolute right-0 z-50 mt-2 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-line bg-surface shadow-lg"
+          className="absolute right-0 z-50 mt-2 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-line bg-white shadow-[0_16px_40px_rgba(18,18,18,.18)]"
         >
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <span className="font-bold">Notificaciones</span>

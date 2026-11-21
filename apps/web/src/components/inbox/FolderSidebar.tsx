@@ -169,8 +169,8 @@ export function FolderSidebar({
                     ))}
                   </div>
                   <div className="flex gap-1.5">
-                    <button type="submit" disabled={busy || !name.trim()} className="h-8 flex-1 cursor-pointer rounded-full bg-ink text-[12px] font-bold text-white disabled:opacity-50">Crear</button>
-                    <button type="button" onClick={() => setCreating(false)} className="h-8 cursor-pointer rounded-full bg-white px-3 text-[12px] font-bold">Cancelar</button>
+                    <button type="submit" disabled={busy || !name.trim()} className="h-9 flex-1 cursor-pointer rounded-full bg-ink text-sm font-semibold text-white disabled:opacity-50">Crear</button>
+                    <button type="button" onClick={() => setCreating(false)} className="h-9 cursor-pointer rounded-full bg-white px-4 text-sm font-semibold">Cancelar</button>
                   </div>
                 </form>
               ) : (

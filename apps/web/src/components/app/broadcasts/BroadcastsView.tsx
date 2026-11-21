@@ -9,7 +9,8 @@ import type {
   BroadcastVariableSource,
 } from "@crmwsp/contracts";
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader } from "@/components/app/EmptyState";
+import { SetupRequiredHint, useSetupMode } from "@/components/app/billing/SetupGate";
+import { EmptyState, PageHeader } from "@/components/app/EmptyState";
 import { Alert, Button, Card, Input } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { broadcastsApi } from "@/lib/broadcasts-api";
@@ -243,6 +244,7 @@ export function BroadcastsView() {
   const [items, setItems] = useState<Broadcast[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const inSetup = useSetupMode();
   const [open, setOpen] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -272,11 +274,19 @@ export function BroadcastsView() {
           }}
         />
       ) : (
-        <Button className="mb-6" onClick={() => setCreating(true)}>
-          Nueva campaña
-        </Button>
+        <>
+          {inSetup ? <SetupRequiredHint className="mb-2" /> : null}
+          <Button className="mb-6" disabled={inSetup} onClick={() => setCreating(true)}>
+            Nueva campaña
+          </Button>
+        </>
       )}
-      {items.length === 0 ? <p className="text-muted">Aún no hay campañas.</p> : null}
+      {items.length === 0 && !creating ? (
+        <EmptyState title="Aún no hay campañas">
+          Una campaña envía una plantilla aprobada de WhatsApp a un grupo de contactos por etiquetas.
+          <span className="mt-4 block"><Button size="sm" disabled={inSetup} onClick={() => setCreating(true)}>Crear campaña</Button></span>
+        </EmptyState>
+      ) : null}
       <ul className="m-0 flex list-none flex-col gap-3 p-0">
         {items.map((b) => (
           <li key={b.id}>

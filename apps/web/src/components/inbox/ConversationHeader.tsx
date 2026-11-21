@@ -1,12 +1,13 @@
 "use client";
 
-import type { InboxConversation, TagDto, TenantMember } from "@crmwsp/contracts";
+import type { AiMode, InboxConversation, TagDto, TenantMember } from "@crmwsp/contracts";
 import { AlarmClock, ArrowLeft, Bot, CircleCheck, MailOpen, PanelRight, RotateCcw, Tag } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
-import { REMINDER_PRESETS, TAG_COLORS, localInputToIso } from "./inbox-meta";
+import { AI_MODE_OPTIONS, REMINDER_PRESETS, TAG_COLORS, localInputToIso } from "./inbox-meta";
+import { AiStatusPill } from "./AiStatusPill";
 import { MenuItem, Popover } from "./Popover";
 
 /** Inline text dropdown under the contact name: looks like a link, behaves like a select. */
@@ -43,6 +44,7 @@ export function ConversationHeader({
   onToggleStatus,
   onMarkUnread,
   onPause,
+  onSetAiMode,
 }: {
   conversation: InboxConversation;
   /** null when GET /tenant/members is forbidden (agent role): only "Yo" / "Sin asignar". */
@@ -64,6 +66,8 @@ export function ConversationHeader({
   onMarkUnread: () => void;
   /** minutes = null resumes now. */
   onPause: (minutes: number | null) => void;
+  /** Changes this conversation's AI mode (separate from the pause control). */
+  onSetAiMode: (mode: AiMode) => void;
 }) {
   const { contact, assignee } = conversation;
   const title = contact.name ?? "Contacto desconocido";
@@ -71,6 +75,7 @@ export function ConversationHeader({
   const paused = conversation.automationsPausedUntil !== null && new Date(conversation.automationsPausedUntil) > new Date();
   const assignedId = assignee?.id === meId ? "me" : (assignee?.id ?? "");
   const hasTags = new Set(conversation.contactTags);
+  const aiSelect = useRef<HTMLSelectElement>(null);
   return (
     <header className="flex flex-col border-b border-line bg-white">
       <div className="flex items-center gap-3 px-4 py-2.5">
@@ -135,15 +140,40 @@ export function ConversationHeader({
       </div>
       <div className="flex items-center gap-3 px-4">
         <div role="tablist" aria-label="Canal">
-          <button type="button" role="tab" aria-selected="true" className="h-9 cursor-pointer border-0 border-b-2 border-ink bg-transparent px-1 text-[13px] font-extrabold text-ink">
+          <button type="button" role="tab" aria-selected="true" className="h-11 cursor-pointer border-0 border-b-2 border-royal bg-transparent px-2 text-sm font-semibold text-ink">
             WhatsApp
           </button>
         </div>
-        <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[12px] font-semibold text-muted">
+        <select
+          ref={aiSelect}
+          aria-label="Modo de IA de esta conversación"
+          title="Modo de IA de esta conversación"
+          className="ml-auto h-8 max-w-60 cursor-pointer rounded-lg border border-line-2 bg-white px-2 text-[12px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={busy}
+          value={conversation.aiMode}
+          onChange={(e) => onSetAiMode(e.target.value as AiMode)}
+        >
+          {AI_MODE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <label className="flex cursor-pointer items-center gap-1.5 text-[12px] font-semibold text-muted">
           <input type="checkbox" checked={hideSystem} onChange={(e) => onHideSystem(e.target.checked)} className="size-4 cursor-pointer accent-ink" />
           Ocultar mensajes del sistema
         </label>
       </div>
+      <AiStatusPill
+        input={{
+          aiMode: conversation.aiMode,
+          status: conversation.status,
+          inboxStatus: conversation.inboxStatus,
+          assigneeName: assignee ? (assignee.name ?? assignee.email) : null,
+          pausedUntil: conversation.automationsPausedUntil,
+        }}
+        busy={busy}
+        onResume={() => onPause(null)}
+        onFocusMode={() => aiSelect.current?.focus()}
+      />
     </header>
   );
 }
@@ -192,7 +222,7 @@ function TagMenu({
           onChange={(e) => setName(e.target.value)}
           className="h-8 min-w-0 flex-1 rounded-lg border border-line-2 bg-white px-2 text-[13px]"
         />
-        <button type="submit" disabled={busy || !name.trim()} className="h-8 cursor-pointer rounded-full bg-ink px-3 text-[12px] font-bold text-white disabled:opacity-50">Crear</button>
+        <button type="submit" disabled={busy || !name.trim()} className="h-9 cursor-pointer rounded-full bg-ink px-3 text-sm font-semibold text-white disabled:opacity-50">Crear</button>
       </form>
     </div>
   );
@@ -221,7 +251,7 @@ function ReminderMenu({ next, onPick }: { next: string | null; onPick: (r: Remin
           type="button"
           disabled={!future}
           onClick={() => iso && onPick({ preset: "custom", remindAt: iso })}
-          className="h-8 cursor-pointer rounded-full bg-ink text-[12px] font-bold text-white disabled:opacity-50"
+          className="h-9 cursor-pointer rounded-full bg-ink text-sm font-semibold text-white disabled:opacity-50"
         >
           Recordármelo
         </button>

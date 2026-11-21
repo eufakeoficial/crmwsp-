@@ -4,7 +4,8 @@ import type { AiTestResult } from "@crmwsp/contracts";
 const ROWS = [
   { key: "structuredOutput", label: "Salida estructurada", off: "Sin ella la IA no puede proponer acciones (presupuestos, etiquetas): solo redactará respuestas." },
   { key: "embeddings", label: "Embeddings", off: "Sin embeddings la búsqueda en tu conocimiento usa coincidencia de texto, menos precisa." },
-  { key: "transcription", label: "Transcripción de audio", off: "Sin transcripción, los audios de clientes no se convierten en texto para la IA." },
+  { key: "transcription", label: "Transcripción de audio", off: "Este proveedor no transcribe audios. Agrega una key de OpenAI en «Transcripción de audios (opcional)» para que la IA entienda las notas de voz." },
+  { key: "vision", label: "Lectura de imágenes", off: "Sin visión, la IA no puede ver las fotos de tus clientes." },
 ] as const;
 
 /** Latency and capabilities (check / cross) with what gets disabled when one is missing. */
@@ -17,7 +18,7 @@ export function TestResult({ result }: { result: AiTestResult }) {
       {result.ok ? (
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
           {ROWS.map((r) => {
-            const on = result.capabilities[r.key];
+            const on = result.capabilities[r.key] === true;
             const Icon = on ? Check : X;
             return (
               <li key={r.key} className="flex items-start gap-2 text-sm">
