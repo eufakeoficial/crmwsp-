@@ -78,12 +78,12 @@ export function ConversationHeader({
   const aiSelect = useRef<HTMLSelectElement>(null);
   return (
     <header className="flex flex-col border-b border-line bg-white">
-      <div className="flex items-center gap-3 px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
         <button type="button" onClick={onBack} aria-label="Volver a la lista" className={cn(ICON_BTN, "desk:hidden")}>
           <ArrowLeft aria-hidden className="size-5" />
         </button>
         <Avatar name={contact.name ?? "?"} round />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-40">
           <h2 className="m-0 truncate text-[16px] leading-tight font-extrabold">
             {title}
             {closed ? <span className="ml-2 rounded-full bg-paper px-2 py-0.5 align-middle text-[11px] font-bold text-muted">Cerrado</span> : null}
@@ -107,6 +107,7 @@ export function ConversationHeader({
           </select>
         </div>
 
+        <div className="ml-auto flex flex-none items-center gap-1">
         <Popover label="Etiquetas" align="right" triggerClassName={POP_ICON} trigger={<><Tag aria-hidden className="size-[18px]" />{conversation.contactTags.length ? <span className="text-[11px]">{conversation.contactTags.length}</span> : null}</>}>
           {() => <TagMenu tags={tags} has={hasTags} onToggle={onToggleTag} onCreate={onCreateTag} />}
         </Popover>
@@ -137,8 +138,9 @@ export function ConversationHeader({
         <button type="button" onClick={onTogglePanel} aria-pressed={panelOpen} aria-label={panelOpen ? "Ocultar contacto" : "Mostrar contacto"} title={panelOpen ? "Ocultar contacto" : "Mostrar contacto"} className={cn(ICON_BTN, panelOpen && "bg-lime-soft hover:bg-lime-soft")}>
           <PanelRight aria-hidden className="size-[18px]" />
         </button>
+        </div>
       </div>
-      <div className="flex items-center gap-3 px-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4">
         <div role="tablist" aria-label="Canal">
           <button type="button" role="tab" aria-selected="true" className="h-11 cursor-pointer border-0 border-b-2 border-royal bg-transparent px-2 text-sm font-semibold text-ink">
             WhatsApp
@@ -157,9 +159,10 @@ export function ConversationHeader({
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-        <label className="flex cursor-pointer items-center gap-1.5 text-[12px] font-semibold text-muted">
+        <label className="flex min-h-11 cursor-pointer items-center gap-1.5 text-[12px] font-semibold whitespace-nowrap text-muted">
           <input type="checkbox" checked={hideSystem} onChange={(e) => onHideSystem(e.target.checked)} className="size-4 cursor-pointer accent-ink" />
-          Ocultar mensajes del sistema
+          <span className="desk:hidden">Ocultar sistema</span>
+          <span className="hidden desk:inline">Ocultar mensajes del sistema</span>
         </label>
       </div>
       <AiStatusPill
