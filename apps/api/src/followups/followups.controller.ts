@@ -25,7 +25,7 @@ import {
   tenants,
   type Transaction,
 } from "@crmwsp/db";
-import { mergeFollowUpSettings, resolveFollowUpSettings } from "@crmwsp/domain";
+import { mergeFollowUpSettings, resolveFollowUpSettings, templateSendIssue } from "@crmwsp/domain";
 import { CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import type { HttpRequest } from "../common/http.js";
@@ -87,7 +87,7 @@ async function assertTemplate(tx: Transaction, templateId: string, channelConnec
     .from(messageTemplates)
     .where(eq(messageTemplates.id, templateId));
   if (!t) throw new NotFoundError();
-  if (t.status !== "approved" || t.channel !== channelConnectionId) {
+  if (templateSendIssue(t) || t.channel !== channelConnectionId) {
     throw new ValidationError("template must be approved and belong to the conversation channel");
   }
 }
@@ -138,7 +138,7 @@ export class FollowUpsController {
         if (!tpl) continue;
         const [m] = await tx.select({ status: messageTemplates.status }).from(messageTemplates).where(eq(messageTemplates.id, tpl));
         if (!m) throw new NotFoundError();
-        if (m.status !== "approved") throw new ValidationError("template must be approved");
+        if (templateSendIssue(m)) throw new ValidationError("template must be approved");
       }
       await tx
         .update(tenants)

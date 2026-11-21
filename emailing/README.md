@@ -3,7 +3,7 @@
 Plantillas transaccionales (HTML basado en tablas + alternativa en texto plano) para Vende+ WSP.
 
 ## Origen
-Portadas del kit de correos del proyecto de directorio del mismo autor (`D:\DIRECTORIO BOLIVIA`, `packages/integrations/src/email`: `blocks.ts`, `templates.ts`, `render.ts`). Se conservó la estructura (bloques reutilizables -> registro de plantillas -> `renderEmail`/`sampleEmail`) y se rehizo la marca:
+Portadas del kit de correos del proyecto de directorio del mismo autor (`D:\PROGRAMACION SAAS\DIRECTORIO BOLIVIA`, `packages/integrations/src/email`: `blocks.ts`, `templates.ts`, `render.ts`). Se conservó la estructura (bloques reutilizables -> registro de plantillas -> `renderEmail`/`sampleEmail`) y se rehizo la marca:
 
 - Colores reales de `apps/web/src/app/globals.css`: navy `#050a3a`, royal `#0a1696`, azure `#1233d8`, lime `#d2f34c` (solo acentos: franja bajo la cabecera, pills, botón sobre fondo oscuro; texto navy sobre lime, contraste AA).
 - Logo: `assets/logo-on-dark.png` (copiado de `apps/web/public/brand/`). En producción se carga desde `https://www.vendemas.chat/brand/` (`assetsUrl`).

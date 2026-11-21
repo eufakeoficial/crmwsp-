@@ -80,6 +80,8 @@ export const messageTemplates = pgTable(
     body: text("body").notNull(),
     variables: jsonb("variables").$type<unknown[]>().notNull().default(sql`'[]'::jsonb`),
     externalId: text("external_id"),
+    /** BSP/Meta rejection reason; only set while status is "rejected". */
+    rejectionReason: text("rejection_reason"),
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

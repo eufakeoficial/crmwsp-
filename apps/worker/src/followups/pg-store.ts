@@ -61,12 +61,11 @@ export function createPgFollowUpStore(tx: Transaction, tenantId: string): Follow
         let approvedTemplate: DueFollowUp["approvedTemplate"] = null;
         if (r.templateId) {
           const [t] = await tx
-            .select({ id: messageTemplates.id, body: messageTemplates.body })
+            .select({ id: messageTemplates.id, body: messageTemplates.body, status: messageTemplates.status })
             .from(messageTemplates)
             .where(
               and(
                 eq(messageTemplates.id, r.templateId),
-                eq(messageTemplates.status, "approved"),
                 eq(messageTemplates.channelConnectionId, c.channelConnectionId),
               ),
             );

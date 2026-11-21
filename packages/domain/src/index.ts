@@ -11,6 +11,7 @@ export * from "./webhooks/index.js";
 export * from "./voice/index.js";
 export * from "./broadcasts/index.js";
 export * from "./templates/index.js";
+export * from "./templates/sync.js";
 export * from "./profitability/index.js";
 export * from "./contacts/index.js";
 export * from "./team/index.js";

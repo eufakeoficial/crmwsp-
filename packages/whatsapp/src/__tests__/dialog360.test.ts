@@ -188,6 +188,13 @@ describe("templates", () => {
     ]);
   });
 
+  it("listTemplates maps PAUSED/FLAGGED to paused, DISABLED/DELETED to disabled and unknown to pending", async () => {
+    const mk = (name: string, status: string) => ({ name, language: "es", status, category: "UTILITY", components: [] });
+    const f = mockFetch(json({ waba_templates: [mk("p", "PAUSED"), mk("fl", "FLAGGED"), mk("d", "DISABLED"), mk("x", "DELETED"), mk("n", "IN_APPEAL")] }));
+    const out = await new Dialog360Provider({ fetch: asFetch(f) }).listTemplates(conn);
+    expect(out.map((t) => t.status)).toEqual(["paused", "paused", "disabled", "disabled", "pending"]);
+  });
+
   it("submitTemplate posts components with samples and returns name|language", async () => {
     const f = mockFetch(json({ status: "PENDING", name: "a" }));
     const res = await new Dialog360Provider({ fetch: asFetch(f) }).submitTemplate(conn, {

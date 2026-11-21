@@ -12,7 +12,7 @@ const D = new Date("2026-10-20T00:00:00Z");
 
 const tplRow = (o: Record<string, unknown> = {}) => ({
   id: "00000000-0000-4000-8000-0000000000d1", tenantId: TENANT, channelConnectionId: CHANNEL, name: "promo", language: "es",
-  category: "marketing", status: "pending", body: "Hola", variables: [], externalId: "e1", syncedAt: null, createdAt: D, updatedAt: D, ...o,
+  category: "marketing", status: "pending", body: "Hola", variables: [], externalId: "e1", rejectionReason: null, syncedAt: null, createdAt: D, updatedAt: D, ...o,
 });
 const channelRow = (o: Record<string, unknown> = {}) => ({
   id: CHANNEL, provider: "gupshup", status: "active", phoneE164: "+5491140000000", appName: "App",
@@ -48,7 +48,7 @@ describe("GET /channels/:id/templates", () => {
     const { controller } = make();
     const out = await controller.listTemplates(fakeDb([[{ id: CHANNEL }], [tplRow({ status: "rejected" })]]).db, CHANNEL);
     expect(out.items).toHaveLength(1);
-    expect(out.items[0]).toMatchObject({ name: "promo", status: "rejected", syncedAt: null, createdAt: D.toISOString() });
+    expect(out.items[0]).toMatchObject({ name: "promo", status: "rejected", rejectionReason: null, syncedAt: null, createdAt: D.toISOString() });
   });
 
   it("404 for a malformed id or unknown channel", async () => {
@@ -68,8 +68,8 @@ describe("POST /channels/:id/templates/sync", () => {
     const { db, updates, inserts } = fakeDb([[channelRow()], [tplRow()], [tplRow({ status: "rejected" })]]);
     const out = await controller.syncTemplates(db, CHANNEL);
     expect(listTemplates).toHaveBeenCalledWith(expect.objectContaining({ provider: "gupshup", partnerAppId: "app-1", partnerToken: "secret" }));
-    expect(updates).toHaveLength(1);
-    expect(inserts).toHaveLength(1);
+    expect(updates).toEqual([expect.objectContaining({ status: "rejected", rejectionReason: "INVALID_FORMAT" })]);
+    expect(inserts).toEqual([[expect.objectContaining({ name: "nueva", rejectionReason: null })]]);
     expect(out).toMatchObject({ updated: 1, imported: 1, rejections: [{ name: "promo", reason: "INVALID_FORMAT" }] });
     expect(out.items).toHaveLength(1);
   });

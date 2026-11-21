@@ -1,11 +1,14 @@
-import { decideSettlement, tenantAccess, type LocalCharge } from "@crmwsp/billing";
+import { decideSettlement, tenantAccess, type LocalCharge, type StripePriceMap } from "@crmwsp/billing";
 import { trialIdentityHash } from "@crmwsp/billing/trial-identity";
-import { SETTLE_SUBSCRIPTION_EVENT_JOB, SUBSCRIPTION_BILLING_QUEUE_NAME } from "@crmwsp/contracts";
+import { SETTLE_STRIPE_BILLING_EVENT_JOB, SETTLE_SUBSCRIPTION_EVENT_JOB, SUBSCRIPTION_BILLING_QUEUE_NAME } from "@crmwsp/contracts";
 import { eq, isUuid, sql, subscriptionCharges, withTenant, type Database, type Transaction } from "@crmwsp/db";
 import { PaymentProviderError, parseNowPaymentsPayment, type NowPaymentsPayment, type NowPaymentsProvider } from "@crmwsp/payments";
 import { UnrecoverableError, Worker, type ConnectionOptions, type Job, type Queue } from "bullmq";
 import { runLifecycleEmails, type LifecycleEmailDeps } from "../lifecycle-emails/index.js";
 import type { Logger } from "../processors.js";
+import { settleStripeBillingEvent } from "./stripe.js";
+
+export * from "./stripe.js";
 
 /**
  * SaaS subscription settlement (NOWPayments, ADR 0013). Two jobs on one queue:
@@ -24,6 +27,8 @@ export const SUBSCRIPTION_RECONCILE_MIN_AGE_S = 5 * 60;
 
 export interface SubscriptionBillingDeps {
   db: Database;
+  /** Configured Stripe price ids (card billing, ADR 0022); empty/omitted = every card invoice is ignored. */
+  stripePrices?: StripePriceMap;
   /** Null when NOWPAYMENTS_API_KEY is unset: IPN settlement still works, reconciliation is off. */
   provider: Pick<NowPaymentsProvider, "getPayment"> | null;
   logger?: Logger;
@@ -264,6 +269,9 @@ export function createSubscriptionBillingWorker(opts: SubscriptionBillingWorkerO
     queueName,
     async (job: Job) => {
       if (job.name === SETTLE_SUBSCRIPTION_EVENT_JOB) return settleSubscriptionEvent(deps, job.data);
+      if (job.name === SETTLE_STRIPE_BILLING_EVENT_JOB) {
+        return settleStripeBillingEvent({ db: deps.db, stripePrices: deps.stripePrices ?? {}, ...(deps.logger ? { logger: deps.logger } : {}) }, job.data);
+      }
       if (job.name === SUBSCRIPTION_RECONCILE_TICK_JOB) {
         const res = await runSubscriptionReconcileTick(deps);
         await runSubscriptionPlanSync(deps);

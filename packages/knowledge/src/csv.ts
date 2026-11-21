@@ -51,8 +51,12 @@ export function parseCsv(input: string, delimiter?: string): CsvRecord[] {
           cell += '"';
           i++;
         } else inQuotes = false;
+      } else if (ch === "\r" || ch === "\n") {
+        // A newline inside a quoted cell is normalized to "\n" so CRLF files parse like LF ones.
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        line++;
+        cell += "\n";
       } else {
-        if (ch === "\n") line++;
         cell += ch;
       }
       continue;
