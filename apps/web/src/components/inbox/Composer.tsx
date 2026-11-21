@@ -195,7 +195,7 @@ export function Composer({
 
   const showWindow = !note && (blocked || windowWarning);
   return (
-    <div className="flex flex-col gap-2 border-t border-line bg-white px-4 pt-1 pb-3">
+    <div className="flex max-h-[70dvh] flex-none flex-col gap-2 overflow-y-auto border-t border-line bg-white px-4 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       {slot}
       <div role="tablist" aria-label="Tipo de mensaje" className="flex gap-4 border-b border-line">
         {(["reply", "note"] as const).map((m) => (
@@ -220,7 +220,7 @@ export function Composer({
       ) : null}
       {image && !note && previewUrl ? (
         <div className="flex items-center gap-3 rounded-lg border border-line p-2">
-          <img src={previewUrl} alt="Vista previa de la imagen" className="size-16 rounded object-cover" />
+          <img src={previewUrl} alt="Vista previa de la imagen" className="size-12 rounded object-cover desk:size-16" />
           <span className="min-w-0 flex-1 truncate text-sm text-ink">{image.name}</span>
           <button type="button" disabled={sending} onClick={() => { setImage(null); setPreviewUrl(null); setImageError(null); }} className="min-h-11 cursor-pointer rounded-lg px-3 text-sm font-semibold text-ink hover:bg-paper">Quitar</button>
         </div>
@@ -258,7 +258,7 @@ export function Composer({
           placeholder={replyBlocked ? "Envío de texto libre bloqueado (ventana de 24 h)" : note ? "Nota visible solo para tu equipo…" : image ? "Escribe una leyenda (opcional)" : "Escribe un mensaje… (/ para respuestas predefinidas)"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          className={cn("block max-h-48 min-h-[88px] min-w-0 flex-1 resize-none rounded-lg border border-line-2 bg-white px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50", note && "border-gold bg-gold-soft")}
+          className={cn("block max-h-48 min-w-0 flex-1 resize-none rounded-lg border border-line-2 bg-white px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50", image ? "min-h-14 desk:min-h-[88px]" : "min-h-[88px]", note && "border-gold bg-gold-soft")}
         />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
