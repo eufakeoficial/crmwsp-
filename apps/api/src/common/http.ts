@@ -28,6 +28,8 @@ export interface HttpRequest {
   user?: RequestUser;
   tenant?: RequestTenant;
   tenantDb?: TenantDb;
+  /** Set by TenantGuard on a read-only "view as" request: who is looking, and as whom. */
+  viewAs?: { actorUserId: string; targetUserId: string };
   sessionTokenHash?: Buffer;
   sessionExpiresAt?: Date;
 }

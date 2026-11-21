@@ -7,6 +7,7 @@ import { Alert, Button } from "@/components/ui";
 import { ApiError, api, setActiveTenantId } from "@/lib/api";
 import { errorMessage } from "@/lib/messages";
 import { readStoredTenantId, resolveActiveTenant, storeTenantId } from "@/lib/tenant";
+import { type ViewAsTarget, readViewAs, storeViewAs } from "@/lib/view-as";
 
 interface SessionValue {
   me: MeResponse;
@@ -15,6 +16,10 @@ interface SessionValue {
   /** Applies a new company name locally (switcher + header) without refetching /auth/me. */
   renameTenant: (id: string, name: string) => void;
   logout: () => Promise<void>;
+  /** Read-only "view as" in progress in this tab (the role in `tenant` is then the viewed member's). */
+  viewAs: ViewAsTarget | null;
+  /** Leaves "view as" and reloads so every screen is back to the real session. */
+  stopViewAs: () => void;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
@@ -71,6 +76,7 @@ export function SessionProvider({ children, requireTenant = true }: { children: 
     (id: string) => {
       const next = me?.tenants.find((t) => t.id === id);
       if (!next) return;
+      storeViewAs(null);
       setActiveTenantId(next.id);
       storeTenantId(next.id);
       setTenant(next);
@@ -87,13 +93,26 @@ export function SessionProvider({ children, requireTenant = true }: { children: 
     try {
       await api.logout();
     } finally {
+      storeViewAs(null);
       setActiveTenantId(null);
       storeTenantId(null);
       router.replace("/login");
     }
   }, [router]);
 
-  const value = useMemo(() => (me ? { me, tenant, selectTenant, renameTenant, logout } : null), [me, tenant, selectTenant, renameTenant, logout]);
+  const stopViewAs = useCallback(() => {
+    storeViewAs(null);
+    window.location.assign("/app/team");
+  }, []);
+
+  // Read-only "view as": the panel renders with the viewed member's role; the API enforces the same.
+  const viewAs = useMemo(() => readViewAs(tenant?.id ?? null), [tenant?.id]);
+  const effectiveTenant = useMemo(() => (tenant && viewAs ? { ...tenant, role: viewAs.role } : tenant), [tenant, viewAs]);
+
+  const value = useMemo(
+    () => (me ? { me, tenant: effectiveTenant, selectTenant, renameTenant, logout, viewAs, stopViewAs } : null),
+    [me, effectiveTenant, selectTenant, renameTenant, logout, viewAs, stopViewAs],
+  );
 
   if (error) {
     return (

@@ -5,6 +5,7 @@ import {
   createInvitationRequestSchema,
   type InvitationPreview,
   invitationTokenSchema,
+  type MembershipRole,
   type TeamInvitation,
   type TeamInvitationList,
   UnauthorizedError,
@@ -83,6 +84,19 @@ export class TeamController {
   ): Promise<void> {
     const { role } = parseOrThrow(updateMemberRoleRequestSchema, body);
     return this.team.changeRole(db, actorOf(user, tenant, req), parseOrThrow(uuidSchema, userId), role);
+  }
+
+  /** Records the start of a read-only "view as" (the UI then sends the view-as header on GETs). */
+  @Post("members/:userId/view-as")
+  @HttpCode(200)
+  viewAs(
+    @CurrentTenantDb() db: TenantDb,
+    @CurrentUser() user: RequestUser,
+    @CurrentTenant() tenant: RequestTenant,
+    @Req() req: HttpRequest,
+    @Param("userId") userId: string,
+  ): Promise<{ userId: string; role: MembershipRole }> {
+    return this.team.startViewAs(db, actorOf(user, tenant, req), parseOrThrow(uuidSchema, userId));
   }
 
   @Delete("members/:userId")

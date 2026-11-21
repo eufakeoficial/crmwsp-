@@ -13,7 +13,9 @@ export type TeamRuleViolation =
   | "only_owner_grants_admin"
   | "only_owner_grants_owner"
   | "cannot_modify_owner"
-  | "last_owner";
+  | "last_owner"
+  | "cannot_view_as_self"
+  | "view_as_requires_lower_role";
 
 export type TeamDecision = { allowed: true } | { allowed: false; reason: TeamRuleViolation };
 
@@ -54,6 +56,18 @@ export function canRemoveMember(input: { actor: MembershipRole; target: Membersh
   if (!isManager(actor)) return deny("not_a_manager");
   if (target === "owner" && actor !== "owner") return deny("cannot_modify_owner");
   if (target === "owner" && ownerCount <= 1) return deny("last_owner");
+  return ok;
+}
+
+/**
+ * Read-only "view as": an owner may view as an admin, agent or viewer; an admin only as an agent or
+ * viewer. Never as oneself, as an owner, or as a peer of the same rank.
+ */
+export function canViewAs(input: { actor: MembershipRole; target: MembershipRole; sameUser: boolean }): TeamDecision {
+  const { actor, target, sameUser } = input;
+  if (!isManager(actor)) return deny("not_a_manager");
+  if (sameUser) return deny("cannot_view_as_self");
+  if (target === "owner" || (target === "admin" && actor !== "owner")) return deny("view_as_requires_lower_role");
   return ok;
 }
 

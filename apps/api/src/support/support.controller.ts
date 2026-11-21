@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from "@nestjs/common";
 import {
   ConflictError,
   NotFoundError,
@@ -20,7 +20,7 @@ import { UseGuards } from "@nestjs/common";
 import { InMemoryRateLimiter, type RateLimitOptions } from "../auth/rate-limiter.js";
 import { CurrentTenant, CurrentTenantDb, CurrentUser } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
-import type { RequestTenant, RequestUser } from "../common/http.js";
+import type { HttpRequest, RequestTenant, RequestUser } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
 import { RealtimeHub } from "../events/realtime.hub.js";
@@ -203,11 +203,13 @@ export class SupportController {
     @CurrentUser() user: RequestUser,
     @CurrentTenant() tenant: RequestTenant,
     @Param("id") id: string,
+    @Req() req: HttpRequest,
   ): Promise<SupportTicketThread> {
     const ticketId = parseOrThrow(uuidSchema, id);
     return db.run(async (tx) => {
       const row = await loadVisible(tx, ticketId, user, tenant);
-      if (row.tenantUnread) {
+      // A read-only "view as" must not clear the unread flag of the person being viewed.
+      if (row.tenantUnread && !req.viewAs) {
         await tx.update(supportTickets).set({ tenantUnread: false }).where(eq(supportTickets.id, ticketId));
         row.tenantUnread = false;
       }
