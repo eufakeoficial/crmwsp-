@@ -20,6 +20,7 @@ import {
 import type { SendResult, WhatsAppConnection, WhatsAppProvider } from "@crmwsp/whatsapp";
 import { UnrecoverableError, Worker, type ConnectionOptions, type Job } from "bullmq";
 import { and, desc, eq, sql } from "drizzle-orm";
+import type { MediaStore } from "./media/store.js";
 import { TTS_API_KEY_PURPOSE, sendVoiceOrText, type VoiceDeps } from "./voice.js";
 import { alertInvalidCredentials, isProviderAuthError } from "./notifications/channel-credentials.js";
 import { tenantChannel, type EventPublisher, type InboxEvent, type Logger } from "./processors.js";
@@ -43,6 +44,8 @@ export interface SendDeps {
   logger?: Logger;
   /** Voice replies (TTS + object storage). Absent => AI replies always go as text. */
   voice?: VoiceDeps;
+  /** Object storage used to sign outbound image URLs. */
+  storage?: MediaStore;
 }
 
 export interface SendAttempt {
@@ -100,6 +103,7 @@ export interface OutboundPayload {
   template: OutboundTemplate | null;
   /** Pre-resolved template params (broadcast recipients); otherwise derived from `template.variables`. */
   params?: string[] | null;
+  imageKey?: string | null;
 }
 
 /** Fills template params from the variable names stored on message_templates.variables. */
@@ -131,6 +135,7 @@ export async function dispatchOutbound(
   conn: WhatsAppConnection,
   to: string,
   msg: OutboundPayload,
+  storage?: MediaStore,
 ): Promise<SendResult> {
   if (msg.type === "template") {
     const t = msg.template;
@@ -139,6 +144,12 @@ export async function dispatchOutbound(
     if (!t.externalId) throw new UnrecoverableError("template has no external id");
     const params = msg.params ?? resolveTemplateParams(Array.isArray(t.variables) ? t.variables : [], { contactName: msg.contactName });
     return provider.sendTemplate(conn, to, t.externalId, params);
+  }
+  if (msg.type === "image") {
+    if (!msg.imageKey) throw new UnrecoverableError("image message has no attachment key");
+    if (!storage?.signedGetUrl) throw new UnrecoverableError("object storage is not configured for image sends");
+    const url = await storage.signedGetUrl(msg.imageKey, 300);
+    return provider.sendMedia(conn, to, { type: "image", url, ...(msg.body ? { caption: msg.body } : {}) });
   }
   if (!msg.body) throw new UnrecoverableError("message has no text");
   return provider.sendText(conn, to, msg.body);
@@ -325,6 +336,9 @@ export async function processSendMessage(
           .where(and(eq(messages.id, messageId), eq(messages.status, "queued")));
         return { res: { outcome: "sent", externalId: voiced } as SendMessageResult, conversationId: loaded.conversationId };
       }
+      const [imageAttachment] = loaded.type === "image"
+        ? await tx.select({ storageKey: attachments.storageKey }).from(attachments).where(eq(attachments.messageId, messageId)).limit(1)
+        : [];
       const { externalId } = await dispatchOutbound(
         deps.provider,
         conn,
@@ -332,6 +346,7 @@ export async function processSendMessage(
         {
           type: loaded.type,
           body: loaded.body,
+          imageKey: imageAttachment?.storageKey ?? null,
           contactName: loaded.contactName,
           params: loaded.recipientId
             ? (loaded.recipientParams ?? [])
@@ -347,6 +362,7 @@ export async function processSendMessage(
                 }
               : null,
         },
+        deps.storage,
       );
       await tx
         .update(messages)

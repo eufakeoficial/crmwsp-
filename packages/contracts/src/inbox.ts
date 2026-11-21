@@ -153,6 +153,14 @@ export const sendMessageRequestSchema = z.object({
 });
 export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
 
+export const sendMediaMessageRequestSchema = z.object({
+  uploadId: uuidSchema,
+  mime: z.enum(["image/jpeg", "image/png"]),
+  caption: z.string().trim().max(1024).optional(),
+  clientMessageId: uuidSchema,
+});
+export type SendMediaMessageRequest = z.infer<typeof sendMediaMessageRequestSchema>;
+
 /** Manual template send (required outside the 24 h window). Params fill `{{1}}..{{n}}` in order. */
 export const sendTemplateMessageRequestSchema = z.object({
   templateId: uuidSchema,
