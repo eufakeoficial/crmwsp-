@@ -51,6 +51,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: securityHeaders },
       // Password reset links carry the token in the path: never send it as Referer (overrides the above).
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, max-age=0" }] },
       { source: "/reset/:path*", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] },
     ];
   },
