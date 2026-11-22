@@ -258,7 +258,7 @@ export function Composer({
           placeholder={replyBlocked ? "Envío de texto libre bloqueado (ventana de 24 h)" : note ? "Nota visible solo para tu equipo…" : image ? "Escribe una leyenda (opcional)" : "Escribe un mensaje… (/ para respuestas predefinidas)"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          className={cn("block max-h-48 min-w-0 flex-1 resize-none rounded-lg border border-line-2 bg-white px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50", image ? "min-h-14 desk:min-h-[88px]" : "min-h-[88px] max-desk:min-h-16", note && "border-gold bg-gold-soft")}
+          className={cn("block max-h-48 min-w-0 flex-1 resize-none rounded-lg border border-line-2 bg-white px-3.5 py-2.5 text-[15px] max-desk:text-[16px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50", image ? "min-h-14 desk:min-h-[88px]" : "min-h-[88px] max-desk:min-h-16", note && "border-gold bg-gold-soft")}
         />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
