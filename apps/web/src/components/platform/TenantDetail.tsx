@@ -167,7 +167,7 @@ export function TenantDetail({ id }: { id: string }) {
                 </div>
               </Section>
               <Section title={`Uso del mes (${t.usagePeriod})`}>
-                <ul className="m-0 grid list-none grid-cols-3 gap-2 p-0 text-[13px]">
+                <ul className="m-0 grid list-none grid-cols-3 gap-2 p-0 max-[480px]:grid-cols-1 text-[13px]">
                   <li className="rounded-xl bg-paper p-2"><span className="block text-muted">Mensajes IA</span><b>{formatNumber(t.aiMessages)}</b></li>
                   <li className="rounded-xl bg-paper p-2"><span className="block text-muted">Difusiones</span><b>{formatNumber(t.broadcastSends)}</b></li>
                   <li className="rounded-xl bg-paper p-2"><span className="block text-muted">Puestos</span><b>{formatNumber(t.seats)}</b></li>
