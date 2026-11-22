@@ -195,7 +195,7 @@ export function Composer({
 
   const showWindow = !note && (blocked || windowWarning);
   return (
-    <div className="flex max-h-[70dvh] flex-none flex-col gap-2 overflow-y-auto border-t border-line bg-white px-4 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div className="flex max-h-[70dvh] flex-none flex-col gap-2 max-desk:gap-1 overflow-y-auto border-t border-line bg-white px-4 pt-1 max-desk:px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] max-desk:pb-[max(0.375rem,env(safe-area-inset-bottom))]">
       {slot}
       <div role="tablist" aria-label="Tipo de mensaje" className="flex gap-4 border-b border-line">
         {(["reply", "note"] as const).map((m) => (
@@ -206,7 +206,7 @@ export function Composer({
             aria-selected={mode === m}
             onClick={() => setMode(m)}
             className={cn(
-              "-mb-px h-11 cursor-pointer border-0 border-b-2 bg-transparent px-2 text-sm focus-visible:outline-2 focus-visible:outline-royal",
+              "-mb-px h-11 max-desk:h-9 cursor-pointer border-0 border-b-2 bg-transparent px-2 text-sm focus-visible:outline-2 focus-visible:outline-royal",
               mode === m ? (m === "note" ? "border-gold font-extrabold text-ink" : "border-ink font-extrabold text-ink") : "border-transparent font-semibold text-muted hover:text-ink",
             )}
           >
@@ -258,7 +258,7 @@ export function Composer({
           placeholder={replyBlocked ? "Envío de texto libre bloqueado (ventana de 24 h)" : note ? "Nota visible solo para tu equipo…" : image ? "Escribe una leyenda (opcional)" : "Escribe un mensaje… (/ para respuestas predefinidas)"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          className={cn("block max-h-48 min-w-0 flex-1 resize-none rounded-lg border border-line-2 bg-white px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50", image ? "min-h-14 desk:min-h-[88px]" : "min-h-[88px]", note && "border-gold bg-gold-soft")}
+          className={cn("block max-h-48 min-w-0 flex-1 resize-none rounded-lg border border-line-2 bg-white px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50", image ? "min-h-14 desk:min-h-[88px]" : "min-h-[88px] max-desk:min-h-16", note && "border-gold bg-gold-soft")}
         />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">

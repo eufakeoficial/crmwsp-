@@ -72,6 +72,7 @@ export function Popover({
             "absolute z-30 max-h-[70vh] min-w-56 overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-[0_12px_32px_rgba(18,18,18,.18)]",
             placement === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5",
             align === "right" ? "right-0" : "left-0",
+            "max-desk:fixed max-desk:inset-x-2 max-desk:top-auto max-desk:bottom-2 max-desk:z-50 max-desk:mt-0 max-desk:mb-0 max-desk:max-h-[60dvh] max-desk:min-w-0",
             panelClassName,
           )}
         >
