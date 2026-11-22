@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { SiteAssistant } from "@/components/landing/Assistant";
 import { BackToTop } from "@/components/landing/BackToTop";
 import { DemoVideo } from "@/components/landing/DemoVideo";
@@ -17,16 +16,14 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
-// Keep in sync with SESSION_COOKIE in apps/api/src/auth/session-token.ts (presence check only).
-const SESSION_COOKIE = "__Host-crmwsp_session";
-
-export default async function HomePage() {
-  const hasSession = (await cookies()).has(SESSION_COOKIE);
+// Static on purpose: reading the session cookie here made the page dynamic (Cache-Control: no-store).
+// The header resolves the session in the browser (useSiteUser), so logged-in visitors see "Ir a mi panel" after hydration.
+export default function HomePage() {
   return (
     <>
       <LandingJsonLd />
       <LandingStyles />
-      <SiteHeader hasSession={hasSession} />
+      <SiteHeader hasSession={false} />
       <LandingMotion>
       <main className="overflow-x-clip">
         <Hero />
