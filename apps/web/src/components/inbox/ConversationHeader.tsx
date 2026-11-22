@@ -11,7 +11,7 @@ import { AiStatusPill } from "./AiStatusPill";
 import { MenuItem, Popover } from "./Popover";
 
 /** Inline text dropdown under the contact name: looks like a link, behaves like a select. */
-const SELECT = "-ml-1 h-6 min-w-0 max-w-52 cursor-pointer rounded-md border-0 bg-transparent px-1 text-[13px] font-semibold text-muted hover:bg-paper hover:text-ink disabled:cursor-not-allowed disabled:opacity-50";
+const SELECT = "-ml-1 h-6 min-w-0 max-w-52 cursor-pointer rounded-md border-0 bg-transparent px-1 text-[13px] max-desk:text-[16px] font-semibold text-muted hover:bg-paper hover:text-ink disabled:cursor-not-allowed disabled:opacity-50";
 const ICON_BTN = "grid size-9 flex-none cursor-pointer place-items-center rounded-full bg-transparent text-ink hover:bg-paper disabled:cursor-not-allowed disabled:opacity-50";
 const POP_ICON = "size-9 min-w-9 bg-transparent p-0 hover:bg-paper";
 
@@ -151,7 +151,7 @@ export function ConversationHeader({
           ref={aiSelect}
           aria-label="Modo de IA de esta conversación"
           title="Modo de IA de esta conversación"
-          className="ml-auto h-8 max-w-full cursor-pointer max-desk:w-full rounded-lg border border-line-2 bg-white px-2 text-[12px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          className="ml-auto h-8 max-w-full cursor-pointer max-desk:w-full rounded-lg border border-line-2 bg-white px-2 text-[12px] max-desk:text-[16px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
           disabled={busy}
           value={conversation.aiMode}
           onChange={(e) => onSetAiMode(e.target.value as AiMode)}

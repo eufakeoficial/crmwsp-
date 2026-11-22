@@ -407,7 +407,7 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
     ? "desk:grid-cols-[304px_minmax(0,1fr)_340px]"
     : "desk:grid-cols-[304px_minmax(0,1fr)]";
   return (
-    <div className={`flex ${selectedId ? "h-dvh" : "h-[calc(100dvh-68px)]"} min-h-[420px] flex-col bg-white desk:h-dvh`}>
+    <div className={`flex ${selectedId ? "h-dvh" : "h-[calc(100dvh-68px)]"} min-h-[420px] flex-col overflow-x-hidden bg-white desk:h-dvh`}>
       <div className={selectedId ? "hidden desk:block" : undefined}>
       {eventsStatus === "limited" ? (
         <Alert tone="info">Hay demasiadas pestañas abiertas con tiempo real: cierra alguna y recarga para recibir mensajes al instante.</Alert>
