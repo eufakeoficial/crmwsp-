@@ -108,7 +108,7 @@ export function ConversationHeader({
         </div>
 
         <div className="ml-auto flex flex-none items-center gap-1">
-        <Popover label="Etiquetas" align="right" triggerClassName={POP_ICON} trigger={<><Tag aria-hidden className="size-[18px]" />{conversation.contactTags.length ? <span className="text-[11px]">{conversation.contactTags.length}</span> : null}</>}>
+        <Popover label="Etiquetas" align="right" triggerClassName={POP_ICON} openClassName="bg-lime hover:bg-lime" panelClassName="max-desk:border-2 max-desk:border-lime" trigger={<><Tag aria-hidden className="size-[18px]" />{conversation.contactTags.length ? <span className="text-[11px]">{conversation.contactTags.length}</span> : null}</>}>
           {() => <TagMenu tags={tags} has={hasTags} onToggle={onToggleTag} onCreate={onCreateTag} />}
         </Popover>
 
@@ -210,6 +210,7 @@ function TagMenu({
   }
   return (
     <div className="flex flex-col gap-1">
+      <p className="m-0 rounded-xl bg-lime-soft px-3 py-1.5 text-[13px] font-extrabold text-ink desk:hidden">Etiquetas del contacto</p>
       {tags.map((t) => (
         <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-1.5 text-[13px] font-semibold hover:bg-paper">
           <input type="checkbox" checked={has.has(t.name)} onChange={(e) => onToggle(t.name, e.target.checked)} className="size-4 cursor-pointer accent-ink" />
@@ -225,9 +226,9 @@ function TagMenu({
           maxLength={64}
           placeholder="Nueva etiqueta"
           onChange={(e) => setName(e.target.value)}
-          className="h-8 min-w-0 flex-1 rounded-lg border border-line-2 bg-white px-2 text-[13px]"
+          className="h-8 min-w-0 flex-1 rounded-lg border border-line-2 bg-white px-2 text-[13px] max-desk:h-10 max-desk:text-[16px]"
         />
-        <button type="submit" disabled={busy || !name.trim()} className="h-9 cursor-pointer rounded-full bg-ink px-3 text-sm font-semibold text-white disabled:opacity-50">Crear</button>
+        <button type="submit" disabled={busy || !name.trim()} className="h-9 cursor-pointer rounded-full bg-lime px-4 text-sm font-extrabold text-ink disabled:opacity-50 max-desk:h-10">Crear</button>
       </form>
     </div>
   );
