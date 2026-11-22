@@ -22,15 +22,17 @@ export function getSiteUrl(): string {
 /** Public, indexable marketing routes (kept in sync with robots.ts disallow list). */
 export const PUBLIC_ROUTES = [
   { path: "/", changeFrequency: "weekly", priority: 1 },
+  { path: "/precios", changeFrequency: "monthly", priority: 0.9 },
   { path: "/signup", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/login", changeFrequency: "yearly", priority: 0.3 },
+  { path: "/terminos", changeFrequency: "yearly", priority: 0.2 },
+  { path: "/privacidad", changeFrequency: "yearly", priority: 0.2 },
 ] as const;
 
 /** Paths crawlers must not fetch: authenticated app, API proxy and one-off flows. */
 export const PRIVATE_PATHS = ["/app", "/admin", "/api", "/invite", "/select-tenant"] as const;
 
 /** ISO date of the last substantive public-content update (JSON-LD dateModified, llms.txt). Bump on content changes. */
-export const CONTENT_LAST_MODIFIED = "2026-10-23";
+export const CONTENT_LAST_MODIFIED = "2026-11-22";
 
 /** BCP 47 tag for structured data (Spanish, Latin America). */
 export const SITE_LANG = "es-419";
