@@ -6,6 +6,7 @@ import { BRAND_COLOR, getSiteUrl, SITE_DESCRIPTION, SITE_LOCALE, SITE_NAME, SITE
 import { ConsentBanner } from "@/components/tracking/ConsentBanner";
 import { Tracking } from "@/components/tracking/Tracking";
 import { RegisterServiceWorker } from "@/components/app/RegisterServiceWorker";
+import { BusyOverlay } from "@/components/ui/BusyOverlay";
 import "./globals.css";
 
 // Self-hosted (SIL OFL 1.1, see src/fonts/OFL.txt) so builds never depend on Google Fonts at build time.
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ConsentBanner />
         <Tracking />
         <RegisterServiceWorker />
+        <BusyOverlay />
       </body>
     </html>
   );
