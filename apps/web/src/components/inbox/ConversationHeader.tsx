@@ -141,7 +141,7 @@ export function ConversationHeader({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4">
-        <div role="tablist" aria-label="Canal">
+        <div role="tablist" aria-label="Canal" className="max-desk:hidden">
           <button type="button" role="tab" aria-selected="true" className="h-11 cursor-pointer border-0 border-b-2 border-royal bg-transparent px-2 text-sm font-semibold text-ink">
             WhatsApp
           </button>
@@ -159,7 +159,7 @@ export function ConversationHeader({
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-        <label className="flex min-h-11 cursor-pointer items-center gap-1.5 text-[12px] font-semibold whitespace-nowrap text-muted">
+        <label className="flex min-h-11 max-desk:hidden cursor-pointer items-center gap-1.5 text-[12px] font-semibold whitespace-nowrap text-muted">
           <input type="checkbox" checked={hideSystem} onChange={(e) => onHideSystem(e.target.checked)} className="size-4 cursor-pointer accent-ink" />
           <span className="desk:hidden">Ocultar sistema</span>
           <span className="hidden desk:inline">Ocultar mensajes del sistema</span>
