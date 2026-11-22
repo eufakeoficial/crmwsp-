@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { LandingStyles } from "@/components/landing/LandingStyles";
 import { LandingMotion } from "@/components/landing/motion";
 import { Faq, FinalCta, Pricing } from "@/components/landing/Sections";
@@ -13,15 +12,12 @@ export const metadata: Metadata = {
   alternates: { canonical: "/precios" },
 };
 
-// Keep in sync with SESSION_COOKIE in apps/api/src/auth/session-token.ts (presence check only).
-const SESSION_COOKIE = "__Host-crmwsp_session";
-
-export default async function PricingPage() {
-  const hasSession = (await cookies()).has(SESSION_COOKIE);
+// Static: the header resolves the session in the browser.
+export default function PricingPage() {
   return (
     <>
       <LandingStyles />
-      <SiteHeader hasSession={hasSession} />
+      <SiteHeader hasSession={false} />
       <LandingMotion>
         <main className="overflow-x-clip pt-24">
           <Pricing />

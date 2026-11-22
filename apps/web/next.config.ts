@@ -55,6 +55,17 @@ const nextConfig: NextConfig = {
       { source: "/reset/:path*", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] },
     ];
   },
+  async redirects() {
+    // SEO: one canonical host. The bare domain answered 200 (duplicate of www); send it to www permanently.
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "vendemas.chat" }],
+        destination: "https://www.vendemas.chat/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${apiUrl}/:path*` }];
   },

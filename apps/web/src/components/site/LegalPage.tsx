@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHeader } from "./SiteHeader";
 
@@ -7,11 +6,8 @@ export interface LegalSection {
   paragraphs: readonly string[];
 }
 
-// Keep in sync with SESSION_COOKIE in apps/api/src/auth/session-token.ts (presence check only).
-const SESSION_COOKIE = "__Host-crmwsp_session";
-
 /** Plain readable page for legal texts (terms, privacy). */
-export async function LegalPage({
+export function LegalPage({
   title,
   updated,
   intro,
@@ -22,10 +18,9 @@ export async function LegalPage({
   intro: string;
   sections: readonly LegalSection[];
 }) {
-  const hasSession = (await cookies()).has(SESSION_COOKIE);
   return (
     <>
-      <SiteHeader hasSession={hasSession} />
+      <SiteHeader hasSession={false} />
       <main className="container-page max-w-3xl pt-28 pb-20">
         <h1 className="m-0 mb-2 text-[clamp(28px,4vw,40px)] font-extrabold">{title}</h1>
         <p className="m-0 mb-6 text-sm text-ink-3">Última actualización: {updated}</p>
