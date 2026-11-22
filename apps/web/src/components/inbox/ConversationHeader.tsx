@@ -78,11 +78,11 @@ export function ConversationHeader({
   const aiSelect = useRef<HTMLSelectElement>(null);
   return (
     <header className="flex flex-col border-b border-line bg-white">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-2.5 desk:gap-x-3 desk:px-4 max-desk:py-1">
         <button type="button" onClick={onBack} aria-label="Volver a la lista" className={cn(ICON_BTN, "desk:hidden")}>
           <ArrowLeft aria-hidden className="size-5" />
         </button>
-        <Avatar name={contact.name ?? "?"} round />
+        <Avatar name={contact.name ?? "?"} round className="max-desk:size-8" />
         <div className="min-w-0 flex-1 basis-40">
           <h2 className="m-0 truncate text-[16px] leading-tight font-extrabold">
             {title}
@@ -140,7 +140,7 @@ export function ConversationHeader({
         </button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 max-desk:justify-end max-desk:px-3 max-desk:pb-1">
         <div role="tablist" aria-label="Canal">
           <button type="button" role="tab" aria-selected="true" className="h-11 cursor-pointer border-0 border-b-2 border-royal bg-transparent px-2 text-sm font-semibold text-ink">
             WhatsApp
@@ -150,7 +150,7 @@ export function ConversationHeader({
           ref={aiSelect}
           aria-label="Modo de IA de esta conversación"
           title="Modo de IA de esta conversación"
-          className="ml-auto h-8 max-w-60 cursor-pointer rounded-lg border border-line-2 bg-white px-2 text-[12px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          className="ml-auto h-8 max-w-full cursor-pointer rounded-lg border border-line-2 bg-white px-2 text-[12px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
           disabled={busy}
           value={conversation.aiMode}
           onChange={(e) => onSetAiMode(e.target.value as AiMode)}
