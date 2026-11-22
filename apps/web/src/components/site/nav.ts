@@ -18,7 +18,7 @@ export interface FooterColumn {
 }
 
 export const FOOTER_COLUMNS: readonly FooterColumn[] = [
-  { title: "Producto", links: [{ href: "/#beneficios", label: "Beneficios" }, { href: "/#preguntas", label: "Preguntas frecuentes" }, { href: "/signup", label: "Crear cuenta" }] },
+  { title: "Producto", links: [{ href: "/#beneficios", label: "Beneficios" }, { href: "/precios", label: "Precios" }, { href: "/#preguntas", label: "Preguntas frecuentes" }, { href: "/signup", label: "Crear cuenta" }] },
   { title: "Cuenta", links: [{ href: "/login", label: "Ingresar" }, { href: "/signup", label: "Registrar mi empresa" }] },
-  { title: "Vende+ WSP", links: [{ href: "#", label: "Nosotros" }, { href: "#", label: "Contacto" }, { href: "#", label: "Términos y privacidad" }] },
+  { title: "Vende+ WSP", links: [{ href: "#", label: "Nosotros" }, { href: "#", label: "Contacto" }, { href: "/terminos", label: "Términos de uso" }, { href: "/privacidad", label: "Privacidad" }] },
 ];
