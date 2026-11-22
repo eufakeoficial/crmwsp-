@@ -140,7 +140,8 @@ export function ConversationHeader({
         </button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 max-desk:justify-end max-desk:px-3 max-desk:pb-1">
+      <div className="max-desk:flex max-desk:items-center max-desk:gap-2 max-desk:border-b max-desk:border-line max-desk:px-3 max-desk:pb-1 desk:contents">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 max-desk:w-1/2 max-desk:flex-none max-desk:px-0 max-desk:pb-0">
         <div role="tablist" aria-label="Canal" className="max-desk:hidden">
           <button type="button" role="tab" aria-selected="true" className="h-11 cursor-pointer border-0 border-b-2 border-royal bg-transparent px-2 text-sm font-semibold text-ink">
             WhatsApp
@@ -150,7 +151,7 @@ export function ConversationHeader({
           ref={aiSelect}
           aria-label="Modo de IA de esta conversación"
           title="Modo de IA de esta conversación"
-          className="ml-auto h-8 max-w-full cursor-pointer rounded-lg border border-line-2 bg-white px-2 text-[12px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          className="ml-auto h-8 max-w-full cursor-pointer max-desk:w-full rounded-lg border border-line-2 bg-white px-2 text-[12px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
           disabled={busy}
           value={conversation.aiMode}
           onChange={(e) => onSetAiMode(e.target.value as AiMode)}
@@ -177,6 +178,7 @@ export function ConversationHeader({
         onResume={() => onPause(null)}
         onFocusMode={() => aiSelect.current?.focus()}
       />
+      </div>
     </header>
   );
 }

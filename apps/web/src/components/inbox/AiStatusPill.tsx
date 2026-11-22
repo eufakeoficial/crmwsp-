@@ -52,7 +52,7 @@ export function AiStatusPill({
   const status = useAiStatus(input);
   const Icon = ICON[status.kind];
   return (
-    <div role="status" data-testid="ai-status" data-tone={status.tone} className="flex flex-wrap items-center gap-2 border-b border-line bg-white px-4 py-1.5 max-desk:px-3 max-desk:py-1">
+    <div role="status" data-testid="ai-status" data-tone={status.tone} className="flex flex-wrap items-center gap-2 border-b border-line bg-white px-4 py-1.5 max-desk:min-w-0 max-desk:flex-1 max-desk:border-b-0 max-desk:p-0">
       <button
         type="button"
         onClick={onFocusMode}
