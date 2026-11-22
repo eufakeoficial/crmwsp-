@@ -11,6 +11,7 @@ export function Popover({
   align = "left",
   placement = "down",
   triggerClassName,
+  openClassName,
   panelClassName,
   disabled = false,
 }: {
@@ -21,6 +22,8 @@ export function Popover({
   /** "up" opens above the trigger: needed for controls docked at the bottom of the viewport (composer). */
   placement?: "down" | "up";
   triggerClassName?: string | undefined;
+  /** Extra classes on the trigger while the panel is open (wins over `triggerClassName`). */
+  openClassName?: string | undefined;
   panelClassName?: string | undefined;
   disabled?: boolean;
 }) {
@@ -59,6 +62,7 @@ export function Popover({
           "inline-flex h-9 min-w-9 cursor-pointer items-center justify-center gap-1 rounded-full bg-paper px-2.5 text-[13px] font-bold text-ink hover:bg-line disabled:cursor-not-allowed disabled:opacity-50",
           open && "bg-line",
           triggerClassName,
+          open && openClassName,
         )}
       >
         {trigger}
