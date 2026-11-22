@@ -67,7 +67,7 @@ export function TenantsList({ mode = "all" }: { mode?: "all" | "approvals" }) {
         subtitle={mode === "approvals" ? "Altas nuevas que esperan revisión." : "Todas las empresas del SaaS. Sin acceso a conversaciones ni contactos."}
       />
       {mode === "all" ? (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="mb-3 flex flex-wrap gap-2 max-desk:[&>*]:w-full max-desk:[&>*]:max-w-none">
           <input aria-label="Buscar" placeholder="Buscar por nombre, slug o email" value={q} onChange={(e) => setQ(e.target.value)} className={`${fieldClass} min-w-0 flex-1 sm:max-w-xs`} />
           <select aria-label="Estado" value={status} onChange={(e) => setStatus(e.target.value as TenantStatus | "")} className={fieldClass}>
             <option value="">Todos los estados</option>
@@ -99,7 +99,7 @@ export function TenantsList({ mode = "all" }: { mode?: "all" | "approvals" }) {
                 <td className={td}>{t.ownerEmail ?? "—"}</td>
                 <td className={td}>{formatDate(t.createdAt)}</td>
                 <td className={td}>
-                  <div className="flex gap-1.5">
+                  <div className="flex flex-wrap gap-1.5">
                     <Button size="sm" variant="accent" disabled={actions.busy} onClick={() => actions.start(t, "approve")}>Aprobar</Button>
                     <Button size="sm" variant="outline" disabled={actions.busy} onClick={() => actions.start(t, "reject")}>Rechazar</Button>
                   </div>
