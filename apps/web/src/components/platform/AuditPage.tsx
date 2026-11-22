@@ -55,7 +55,7 @@ export function AuditPage() {
   return (
     <>
       <PageHeader title="Registro de actividad" subtitle="Acciones de los administradores de la plataforma." />
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 flex flex-wrap gap-2 max-desk:[&>*]:w-full max-desk:[&>*]:max-w-none">
         <input aria-label="Administrador" placeholder="Email del administrador" value={draft.actor} onChange={set("actor")} className={`${fieldClass} min-w-0 flex-1 sm:max-w-[220px]`} />
         <select aria-label="Acción" value={draft.action} onChange={set("action")} className={fieldClass}>
           <option value="">Todas las acciones</option>
@@ -91,7 +91,7 @@ export function AuditPage() {
                 </tr>
               ))}
             </Table>
-            <nav aria-label="Paginación" className="mt-3 flex items-center justify-between gap-3 text-[13px] text-muted">
+            <nav aria-label="Paginación" className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[13px] text-muted">
               <span>
                 {formatNumber(data.total)} eventos · página {data.page} de {pageCount}
               </span>

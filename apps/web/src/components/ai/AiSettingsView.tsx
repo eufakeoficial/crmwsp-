@@ -11,6 +11,7 @@ import { errorMessage } from "@/lib/messages";
 import { SettingsFrame } from "./AccessGate";
 import { AgentBehavior } from "./AgentBehavior";
 import { ConnectionSection } from "./ConnectionSection";
+import { TranscriptionSection } from "./TranscriptionSection";
 import { VoiceSection } from "./VoiceSection";
 
 const month = () => new Date().toISOString().slice(0, 7);
@@ -46,6 +47,7 @@ function Body({ canEdit }: { canEdit: boolean }) {
         </div>
       ) : null}
       <ConnectionSection connection={connection} usage={usage} canEdit={canEdit} onChanged={() => void load()} />
+      <TranscriptionSection key={`${connection?.provider ?? "none"}-${connection?.lastTestedAt ?? ""}`} canEdit={canEdit} />
       <AgentBehavior config={agent} currency={connection?.budgetCurrency ?? "EUR"} canEdit={canEdit} onSaved={setAgent} />
       {canEdit ? <VoiceSection canEdit={canEdit} /> : null}
     </div>

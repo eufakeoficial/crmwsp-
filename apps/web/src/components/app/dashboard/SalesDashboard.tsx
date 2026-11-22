@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Bot, CircleDollarSign, MessageCircle, Percent, ShoppingBag, Trophy, UserPlus, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/app/EmptyState";
+import { AiUsageBanner } from "@/components/app/billing/AiUsageBanner";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
 import { Alert, buttonClasses, Card, CHIP_ROW, Chip, KpiCard, Spinner } from "@/components/ui";
@@ -69,6 +70,7 @@ export function SalesDashboard() {
           ))}
         </div>
       </div>
+      <AiUsageBanner />
       {canManageAi(tenant?.role) ? (
         <Card className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm font-semibold">Probar la IA antes de activarla</span>
@@ -80,8 +82,12 @@ export function SalesDashboard() {
       {data && t ? (
         <div className="grid gap-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Conversaciones nuevas" value={formatNumber(t.newConversations)} icon={MessageCircle} />
-            <KpiCard label="Leads nuevos" value={formatNumber(t.newLeads)} icon={UserPlus} />
+            <Link href="/app/inbox" className="block no-underline text-inherit">
+              <KpiCard label="Conversaciones nuevas" value={formatNumber(t.newConversations)} icon={MessageCircle} />
+            </Link>
+            <Link href="/app/contacts" className="block no-underline text-inherit">
+              <KpiCard label="Leads nuevos" value={formatNumber(t.newLeads)} icon={UserPlus} />
+            </Link>
             <KpiCard label="Compradores" value={formatNumber(t.buyers)} icon={Users} />
             <KpiCard label="Conversión" value={formatBp(t.conversionBp)} icon={Percent} note="compradores / leads" />
             <KpiCard label="Ingresos" value={revenueText} icon={CircleDollarSign} className="sm:col-span-2" />

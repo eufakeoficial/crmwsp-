@@ -13,6 +13,7 @@ import {
   canInvite,
   canManageInvitation,
   canRemoveMember,
+  canViewAs,
   INVITATION_TTL_MS,
   type TeamDecision,
 } from "@crmwsp/domain";
@@ -201,6 +202,29 @@ export class TeamService {
         diff: { userId, role: target.role },
         ip: actor.ip,
       });
+    });
+  }
+
+  /**
+   * Starts a read-only "view as" of another member: checks the rule and records who looked as whom.
+   * The guard enforces the same rule on every request that carries the view-as header.
+   */
+  async startViewAs(db: TenantDb, actor: Actor, userId: string): Promise<{ userId: string; role: MembershipRole }> {
+    return db.run(async (tx) => {
+      const rows = await tx.select({ id: memberships.id, userId: memberships.userId, role: memberships.role }).from(memberships);
+      const target = rows.find((r) => r.userId === userId);
+      if (!target) throw new NotFoundError("Member not found");
+      assertAllowed(canViewAs({ actor: actor.role, target: target.role, sameUser: userId === actor.userId }));
+      await writeAudit(tx, {
+        tenantId: db.tenantId,
+        userId: actor.userId,
+        entity: "membership",
+        entityId: target.id,
+        action: "membership.view_as_started",
+        diff: { userId, role: target.role },
+        ip: actor.ip,
+      });
+      return { userId, role: target.role };
     });
   }
 

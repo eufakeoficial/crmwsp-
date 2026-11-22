@@ -23,6 +23,7 @@ export function useThread(conversationId: string | null, userId: string, onChang
   const changedRef = useRef(onChanged);
   // Ref guard: two scroll events in the same tick must not fetch the same page twice.
   const olderInFlight = useRef(false);
+  const pendingImage = useRef<{ id: string; file: File; caption: string; uploadId: string; mime: "image/jpeg" | "image/png"; clientMessageId: string } | null>(null);
   useEffect(() => {
     idRef.current = conversationId;
     changedRef.current = onChanged;
@@ -59,6 +60,7 @@ export function useThread(conversationId: string | null, userId: string, onChang
     setError(null);
     setLoadingOlder(false);
     olderInFlight.current = false;
+    pendingImage.current = null;
     if (conversationId === null) return;
     setLoading(true);
     void refresh(true);
@@ -104,6 +106,41 @@ export function useThread(conversationId: string | null, userId: string, onChang
     },
     [userId],
   );
+
+  const sendImage = useCallback(async (file: File, caption: string): Promise<boolean> => {
+    const id = idRef.current;
+    if (!id) return false;
+    let pending = pendingImage.current;
+    if (pending?.id !== id || pending.file !== file || pending.caption !== caption) {
+      pending = null;
+      pendingImage.current = null;
+    }
+    try {
+      if (!pending) {
+        const upload = await conversationsApi.uploadMedia(id, file);
+        pending = { id, file, caption, uploadId: upload.uploadId, mime: upload.mime, clientMessageId: newClientMessageId() };
+        pendingImage.current = pending;
+      }
+      const saved = await conversationsApi.sendMedia(id, {
+        uploadId: pending.uploadId,
+        mime: pending.mime,
+        ...(caption ? { caption } : {}),
+        clientMessageId: pending.clientMessageId,
+      });
+      if (idRef.current === id) {
+        setMessages((prev) => mergeMessages(prev, [saved]));
+        changedRef.current();
+      }
+      pendingImage.current = null;
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "OUTSIDE_SERVICE_WINDOW") {
+        if (idRef.current === id) setBlockedAt({ id, inbound: convRef.current?.lastInboundAt ?? null });
+        pendingImage.current = null;
+      }
+      return false;
+    }
+  }, []);
 
   /** Agent reaction (optimistic, rolled back by a refresh on error). */
   const react = useCallback(
@@ -162,5 +199,5 @@ export function useThread(conversationId: string | null, userId: string, onChang
   const blocked =
     blockedAt !== null && blockedAt.id === conversationId && blockedAt.inbound === (conversation?.lastInboundAt ?? null);
 
-  return { conversation, messages, hasOlder: olderCursor !== null, loading, loadingOlder, error, blocked, refresh, loadOlder, send, sendTemplate, react, update };
+  return { conversation, messages, hasOlder: olderCursor !== null, loading, loadingOlder, error, blocked, refresh, loadOlder, send, sendImage, sendTemplate, react, update };
 }

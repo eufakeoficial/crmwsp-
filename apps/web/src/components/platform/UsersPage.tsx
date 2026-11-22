@@ -23,7 +23,7 @@ export function UsersPage() {
   return (
     <>
       <PageHeader title="Usuarios" subtitle="Todas las personas con cuenta, en todas las empresas. Solo lectura." />
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 flex flex-wrap gap-2 max-desk:[&>*]:w-full max-desk:[&>*]:max-w-none">
         <input aria-label="Buscar" placeholder="Buscar por nombre o email" value={q} onChange={(e) => setQ(e.target.value)} className={`${fieldClass} min-w-0 flex-1 sm:max-w-xs`} />
       </div>
       <Loading state={state}>

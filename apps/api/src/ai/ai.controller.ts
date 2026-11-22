@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, Inject, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
-import { assertSafeBaseUrl } from "@crmwsp/ai";
+import { assertSafeBaseUrl, resolveVisionModel } from "@crmwsp/ai";
 import { redact, type CipherBox } from "@crmwsp/crypto";
 import {
   AI_PROVIDER_BASE_URLS,
@@ -25,6 +25,7 @@ import {
   sql,
   tenants,
   type LlmConnection,
+  isActiveChatConnection,
 } from "@crmwsp/db";
 import { CurrentTenant, CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
@@ -86,6 +87,7 @@ export class AiController {
   private toDto(row: LlmConnection, privileged: boolean): AiConnection {
     const caps = row.capabilities;
     return {
+      purpose: "chat",
       provider: row.provider,
       baseUrl: row.baseUrl,
       apiKeyHint: privileged ? row.apiKeyHint : null,
@@ -95,6 +97,7 @@ export class AiController {
         structuredOutput: caps.structuredOutput === true,
         embeddings: caps.embeddings === true,
         transcription: caps.transcription === true,
+        vision: caps.vision === true,
       },
       lastTestedAt: row.lastTestedAt ? row.lastTestedAt.toISOString() : null,
       lastTestOk: row.lastTestOk,
@@ -106,7 +109,7 @@ export class AiController {
   @Get("connection")
   @Roles("owner", "admin", "agent")
   async getConnection(@CurrentTenantDb() db: TenantDb, @CurrentTenant() tenant: RequestTenant): Promise<AiConnection | null> {
-    const [row] = await db.run((tx) => tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)));
+    const [row] = await db.run((tx) => tx.select().from(llmConnections).where(isActiveChatConnection));
     return row ? this.toDto(row, ADMIN_ROLES.has(tenant.role)) : null;
   }
 
@@ -125,7 +128,7 @@ export class AiController {
         const [existing] = await tx
           .select()
           .from(llmConnections)
-          .where(eq(llmConnections.isActive, true))
+          .where(isActiveChatConnection)
           .for("update");
         if (!existing && encrypted === undefined) {
           throw new ValidationError("Validation failed", {
@@ -196,10 +199,10 @@ export class AiController {
   @Roles("owner", "admin")
   @HttpCode(200)
   async testConnection(@CurrentTenantDb() db: TenantDb, @Req() req: HttpRequest): Promise<AiTestResult> {
-    const [row] = await db.run((tx) => tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)));
+    const [row] = await db.run((tx) => tx.select().from(llmConnections).where(isActiveChatConnection));
     if (!row) throw new ValidationError("No AI connection is configured");
     const started = Date.now();
-    const noCaps: AiCapabilities = { structuredOutput: false, embeddings: false, transcription: false };
+    const noCaps: AiCapabilities = { structuredOutput: false, embeddings: false, transcription: false, vision: row.capabilities.vision === true };
     let apiKey = "";
     let result: AiTestResult;
     try {
@@ -207,8 +210,9 @@ export class AiController {
       if (!row.apiKeyEncrypted) throw new Error("no key");
       apiKey = this.cipher.decrypt(row.apiKeyEncrypted, { tenantId: db.tenantId, purpose: LLM_API_KEY_PURPOSE });
       const provider = this.providers.create({ baseUrl: row.baseUrl, apiKey });
-      const r = await provider.testConnection({ modelCheap: row.modelCheap, modelStrong: row.modelStrong ?? row.modelCheap });
-      result = { ok: r.ok, capabilities: r.capabilities, latencyMs: r.latencyMs };
+      const r = await provider.testConnection({ modelCheap: row.modelCheap, modelStrong: row.modelStrong ?? row.modelCheap, modelVision: resolveVisionModel(row) });
+      // Inconclusive vision probe (network/auth): keep what was stored.
+      result = { ok: r.ok, capabilities: { ...r.capabilities, vision: r.capabilities.vision ?? row.capabilities.vision === true }, latencyMs: r.latencyMs };
       if (r.error) result.error = r.error;
     } catch (err) {
       // Never a 500 for provider/setup failures; the message is sanitized below.
@@ -224,7 +228,8 @@ export class AiController {
       await tx
         .update(llmConnections)
         .set({
-          capabilities: result.capabilities,
+          // Merge: `visionModel` (and any other stored key) survives a re-test.
+          capabilities: { ...row.capabilities, ...result.capabilities, vision: result.capabilities.vision === true },
           lastTestedAt: new Date(),
           lastTestOk: result.ok,
           updatedAt: new Date(),
@@ -248,7 +253,7 @@ export class AiController {
   @HttpCode(204)
   async deleteConnection(@CurrentTenantDb() db: TenantDb, @Req() req: HttpRequest): Promise<void> {
     await db.run(async (tx) => {
-      const deleted = await tx.delete(llmConnections).where(eq(llmConnections.isActive, true)).returning({ id: llmConnections.id });
+      const deleted = await tx.delete(llmConnections).where(isActiveChatConnection).returning({ id: llmConnections.id });
       for (const d of deleted) {
         await writeAudit(tx, {
           tenantId: db.tenantId,
@@ -269,7 +274,7 @@ export class AiController {
     // Mid-month instant: tenant_monthly_spend truncates it in the tenant's timezone.
     const instant = new Date(`${month}-15T12:00:00.000Z`).toISOString();
     return db.run(async (tx) => {
-      const [conn] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true));
+      const [conn] = await tx.select().from(llmConnections).where(isActiveChatConnection);
       const [tenant] = await tx.select({ currency: tenants.currency }).from(tenants).where(eq(tenants.id, db.tenantId));
       const currency = conn?.budgetCurrency ?? tenant?.currency ?? "EUR";
       const rows = (await tx.execute(

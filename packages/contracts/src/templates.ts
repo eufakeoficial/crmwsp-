@@ -37,6 +37,8 @@ export const messageTemplateSchema = z.object({
   status: templateStatusSchema,
   body: z.string(),
   externalId: z.string().nullable(),
+  /** Why Meta rejected the template; null unless status is "rejected". */
+  rejectionReason: z.string().nullable(),
   syncedAt: isoDateTimeSchema.nullable(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
@@ -51,7 +53,7 @@ export type MessageTemplateListResponse = z.infer<typeof messageTemplateListSche
 export const syncTemplatesResponseSchema = z.object({
   updated: z.number().int().nonnegative(),
   imported: z.number().int().nonnegative(),
-  /** Rejection reasons reported by the BSP in this sync; not persisted. */
+  /** Rejection reasons reported by the BSP in this sync (also persisted on each template). */
   rejections: z.array(z.object({ name: z.string(), language: z.string(), reason: z.string() })),
   items: z.array(messageTemplateSchema),
 });

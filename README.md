@@ -11,4 +11,12 @@ CRM WhatsApp-first con IA para negocios de servicios con presupuestos (España y
 
 ## Estado
 
-Fases 0, 1 y 2 completadas. Siguiente: Fase 3 (pipeline y presupuestos). Ver `docs/ROADMAP.md`.
+Producto en producción en **https://www.vendemas.chat** (vendemas.chat). Fases 0, 1 y 2 completadas; las fases 3 a 6 están en curso en paralelo (marcadas 🟡 en `docs/ROADMAP.md`).
+
+Ya operativo:
+
+- Inbox WhatsApp multi-tenant (Gupshup y 360dialog detrás de `WhatsAppProvider`), plantillas de Meta con sincronización de estado y motivo de rechazo, seguimientos y difusiones.
+- IA con fuentes y BYOK, pipeline de oportunidades, presupuestos y pedidos, agenda y catálogo.
+- Cobros verificados por webhook, suscripciones del SaaS con NOWPayments (cripto), cupones y referidos, tickets de soporte, panel de plataforma y correos transaccionales.
+
+El detalle por feature vive en `odd/tasks/` y las decisiones en `docs/adr/`. Siguiente: ver `docs/ROADMAP.md` (cobro con tarjeta y renovación automática en `feat/cobro-tarjeta`).

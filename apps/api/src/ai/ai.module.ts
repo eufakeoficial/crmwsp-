@@ -10,6 +10,7 @@ import { PlaybookController } from "./playbook.controller.js";
 import { AiActionsController } from "./ai-actions.controller.js";
 import { AiRunsController } from "./ai-runs.controller.js";
 import { AiController } from "./ai.controller.js";
+import { TranscriptionConnectionController } from "./transcription-connection.controller.js";
 import { BotTemplatesController } from "./bot-templates.controller.js";
 import { LlmProviderFactory } from "./llm-provider.factory.js";
 import { ImproveTextController } from "./improve-text.controller.js";
@@ -20,7 +21,7 @@ import { BillingModule } from "../billing/billing.module.js";
 
 @Module({
   imports: [AuthModule, ChannelsModule, BillingModule],
-  controllers: [AiController, AiActionsController, AiRunsController, BotTemplatesController, VoiceController, PlaybookController, SimulatorController, ImproveTextController],
+  controllers: [AiController, TranscriptionConnectionController, AiActionsController, AiRunsController, BotTemplatesController, VoiceController, PlaybookController, SimulatorController, ImproveTextController],
   providers: [
     LlmProviderFactory,
     SimulatorService,

@@ -3,6 +3,7 @@ import {
   type FollowUpSettings,
   type PatchFollowUpSettingsRequest,
 } from "@crmwsp/contracts";
+import { isTemplateSendable } from "../templates/sync.js";
 
 /** WhatsApp customer-service window: free text only within 24 h of the contact's last message. */
 export const WHATSAPP_WINDOW_MS = 24 * 3600 * 1000;
@@ -111,8 +112,11 @@ export interface DispatchInput {
   /** `follow_up` consent of the contact. */
   consent: ConsentState;
   messageBody: string | null;
-  /** Template already validated as approved and on the conversation's channel; null otherwise. */
-  approvedTemplate: { id: string; body: string } | null;
+  /**
+   * Template on the conversation's channel (null when missing / other channel). When `status` is given the
+   * domain only uses it if it is "approved"; omitted means the caller already validated it.
+   */
+  approvedTemplate: { id: string; body: string; status?: string } | null;
   /** Order status when the follow-up targets an order. */
   orderStatus: string | null;
   /** Quote status when the follow-up targets a quote (omitted otherwise). */
@@ -136,7 +140,10 @@ export type DispatchDecision =
  * longer awaiting payment → cancel; quote no longer `sent` (accepted/rejected/expired/cancelled) or past `valid_until` → cancel; opt-out → skip; quiet hours → defer; window open → free text;
  * window closed → approved template with explicit consent, else skip.
  */
-export function decideDispatch(i: DispatchInput): DispatchDecision {
+export function decideDispatch(input: DispatchInput): DispatchDecision {
+  const tpl = input.approvedTemplate;
+  const templateBlocked = tpl !== null && tpl.status !== undefined && !isTemplateSendable(tpl.status);
+  const i: DispatchInput = templateBlocked ? { ...input, approvedTemplate: null } : input;
   if (i.status !== "scheduled" || i.scheduledAt.getTime() > i.now.getTime()) return { action: "noop" };
   if (i.lastInboundAt && i.lastInboundAt.getTime() > i.createdAt.getTime()) {
     return { action: "cancel", reason: "contact_replied" };
@@ -159,6 +166,7 @@ export function decideDispatch(i: DispatchInput): DispatchDecision {
     if (i.approvedTemplate) return { action: "send_template", templateId: i.approvedTemplate.id, body: i.approvedTemplate.body };
     return { action: "skip", reason: "no_message" };
   }
+  if (templateBlocked) return { action: "skip", reason: "window_closed_template_not_approved" };
   if (!i.approvedTemplate) return { action: "skip", reason: "window_closed_no_template" };
   if (i.consent !== "granted") return { action: "skip", reason: "window_closed_no_consent" };
   return { action: "send_template", templateId: i.approvedTemplate.id, body: i.approvedTemplate.body };

@@ -40,6 +40,14 @@ export function ContactsView() {
   const inSetup = useSetupMode();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ContactFilter>(EMPTY_CONTACT_FILTER);
+  // `?q=` comes from the global search: prefill and apply it once.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q")?.trim().slice(0, 100);
+    if (q) {
+      setDraft(q);
+      setQuery(q);
+    }
+  }, []);
   const [items, setItems] = useState<ContactBookItem[] | null>(null);
   const [total, setTotal] = useState(0);
   const [cursor, setCursor] = useState<string | null>(null);

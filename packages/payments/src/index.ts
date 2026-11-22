@@ -44,3 +44,12 @@ export {
   verifyNowPaymentsSignature,
 } from "./nowpayments/provider.js";
 export type { CreateNowPaymentInput, CreatedNowPayment, NowPaymentsPayment, NowPaymentsProviderOptions } from "./nowpayments/provider.js";
+export {
+  STRIPE_BILLING_DEFAULT_BASE_URL,
+  STRIPE_SIGNATURE_HEADER,
+  StripeBillingClient,
+  stripeBillingOptionsFromEnv,
+} from "./stripe-billing/client.js";
+export type { CreateCheckoutSessionInput, CreateStripeCustomerInput, StripeBillingOptions, StripeRedirect } from "./stripe-billing/client.js";
+export { parseStripeBillingEvent } from "./stripe-billing/events.js";
+export type { StripeBillingEvent } from "./stripe-billing/events.js";

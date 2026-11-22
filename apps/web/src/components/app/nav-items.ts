@@ -1,4 +1,4 @@
-import { AlertCircle, BookOpen, Bot, CalendarDays, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, MessageSquareText, Rocket, Package, Plug, Settings, Users2, Workflow, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { Building2, AlertCircle, BookOpen, Bot, CalendarDays, Target, Coins, Megaphone, ClipboardCheck, Code2, CreditCard, Receipt, Contact, Gauge, Inbox, Kanban, FileText, LifeBuoy, MessageSquareText, Rocket, Package, Plug, Settings, Users2, Workflow, LayoutTemplate, ShoppingBag, Smartphone, Sparkles, TrendingUp, Users, Wallet, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   key: string;
@@ -19,6 +19,7 @@ export interface NavGroup {
 
 /** Subsections of Configuración, shown as sidebar sub-links and as tabs. */
 export const SETTINGS_SECTIONS: readonly NavItem[] = [
+  { key: "settings-company", label: "Empresa", href: "/app/settings/company", icon: Building2 },
   { key: "settings-ai", label: "IA", href: "/app/settings/ai", icon: Sparkles },
   { key: "settings-integrations", label: "Integraciones", href: "/app/settings/integrations", icon: Plug },
   { key: "settings-knowledge", label: "Conocimiento", href: "/app/settings/knowledge", icon: BookOpen },
@@ -26,6 +27,7 @@ export const SETTINGS_SECTIONS: readonly NavItem[] = [
   { key: "settings-templates", label: "Plantillas de negocio", href: "/app/settings/templates", icon: LayoutTemplate },
   { key: "settings-currency", label: "Moneda", href: "/app/settings/currency", icon: Coins },
   { key: "settings-plan", label: "Plan y uso", href: "/app/settings/plan", icon: CreditCard },
+  { key: "settings-billing", label: "Suscripción", href: "/app/settings/billing", icon: Wallet },
   { key: "settings-ads", label: "Anuncios", href: "/app/settings/ads", icon: Megaphone },
   { key: "settings-developers", label: "Claves de API", href: "/app/settings/developers", icon: Code2 },
   { key: "settings-owner-mode", label: "Control por WhatsApp", href: "/app/settings/owner-mode", icon: Smartphone },
@@ -94,6 +96,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     icon: Settings,
     children: [
       { key: "channels", label: "WhatsApp", href: "/app/channels", icon: Plug },
+      { key: "settings-whatsapp-profile", label: "Perfil de WhatsApp", href: "/app/settings/whatsapp-profile", icon: Smartphone },
       { key: "products", label: "Catálogo", href: "/app/products", icon: Package },
       { key: "team", label: "Equipo", href: "/app/team", icon: Users },
       { key: "settings-integrations", label: "Integraciones", href: "/app/settings/integrations", icon: Plug },
@@ -109,6 +112,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 
 /** Footer entries below the groups. */
 export const NAV_SECONDARY: readonly NavItem[] = [
+  { key: "billing", label: "Suscripción", href: "/app/settings/billing", icon: Wallet },
   { key: "support", label: "Soporte", href: "/app/support", icon: LifeBuoy },
   { key: "onboarding", label: "Puesta en marcha", href: "/app/onboarding", icon: Rocket },
 ];

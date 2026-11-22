@@ -47,8 +47,19 @@ export function isEmailNotVerified(err: unknown): err is ApiError {
 export function channelErrorMessage(err: unknown): string {
   if (isEncryptionNotConfigured(err)) return `${ENCRYPTION_KEYS_MISSING}. Avisa a quien administre el servidor.`;
   if (err instanceof ApiError && err.status === 409) return "Ya existe un canal con ese teléfono.";
+  const gupshup = gupshupCredentialMessage(err);
+  if (gupshup) return gupshup;
   if (err instanceof ApiError && err.status === 400) return "Revisa los datos introducidos.";
   return errorMessage(err);
+}
+
+/** 400 from POST /channels/gupshup when Gupshup rejected the API key or the app name (`details.reason`). */
+export function gupshupCredentialMessage(err: unknown): string | null {
+  if (!(err instanceof ApiError) || typeof err.details !== "object" || err.details === null) return null;
+  const reason = (err.details as { reason?: unknown }).reason;
+  if (reason === "gupshup_invalid_credentials") return "La API key no es válida para esa cuenta de Gupshup.";
+  if (reason === "gupshup_invalid_app") return "No existe una app de Gupshup con ese nombre para esta API key.";
+  return null;
 }
 
 /** 503 ENCRYPTION_NOT_CONFIGURED; the bare 503 status is kept as a fallback (non-JSON proxy answer). */

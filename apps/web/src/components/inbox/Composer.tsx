@@ -1,13 +1,14 @@
 "use client";
 
 import type { CannedResponseDto } from "@crmwsp/contracts";
-import { Clock, MessageSquareText, Send, Smile, Sparkles, Undo2 } from "lucide-react";
+import { Clock, MessageSquareText, Paperclip, Send, Smile, Sparkles, Undo2 } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Banner, Button } from "@/components/ui";
 import { improveTextApi } from "@/lib/ai-api";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { inboxV2Api } from "@/lib/inbox-v2-api";
+import { validateOutboundImage } from "@/lib/inbox-media";
 import { COMMON_EMOJIS, IMPROVE_STYLES } from "./inbox-meta";
 import { MenuItem, Popover } from "./Popover";
 import { TemplatePicker } from "./TemplatePicker";
@@ -29,45 +30,55 @@ export function improveErrorText(err: unknown): string {
 
 /**
  * Reply / internal-note composer. Enter sends, Shift+Enter inserts a line break; typing "/" opens the
- * canned responses. `slot` renders above it (e.g. the order extraction card). Media upload is not
- * offered: the send API only accepts text and templates.
+ * canned responses. `slot` renders above it (e.g. the order extraction card).
  */
 export function Composer({
   blocked,
   windowWarning,
   onSend,
+  onSendImage,
   onSendNote,
   slot,
   channelConnectionId,
   onSendTemplate,
+  pauseHint,
 }: {
   blocked: boolean;
   windowWarning: boolean;
   onSend: (text: string) => Promise<void>;
+  onSendImage?: ((file: File, caption: string) => Promise<boolean>) | undefined;
   /** Resolves false when the note could not be saved (the draft is kept). */
   onSendNote: (text: string) => Promise<boolean>;
   slot?: ReactNode;
   /** With both set, a closed window offers the approved-template picker. */
   channelConnectionId?: string;
   onSendTemplate?: (templateId: string, params: string[], clientMessageId: string) => Promise<boolean>;
+  /** One-line hint shown after the first reply sent from this composer. Omit when the AI would not pause. */
+  pauseHint?: string | null;
 }) {
+  const [hintShown, setHintShown] = useState(false);
   const [mode, setMode] = useState<Mode>("reply");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [image, setImage] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [improving, setImproving] = useState(false);
   const [improveError, setImproveError] = useState<string | null>(null);
   const [undo, setUndo] = useState<string | null>(null);
   const [canned, setCanned] = useState<CannedResponseDto[] | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
   // Synchronous guard: repeated Enter fires before React re-renders with `sending`.
   const inFlight = useRef(false);
   const note = mode === "note";
-  const limit = note ? MAX_NOTE_LENGTH : MAX_MESSAGE_LENGTH;
+  const limit = note ? MAX_NOTE_LENGTH : image ? 1024 : MAX_MESSAGE_LENGTH;
   const trimmed = text.trim();
   const tooLong = text.length > limit;
   const replyBlocked = !note && blocked;
-  const canSend = !replyBlocked && !sending && trimmed.length > 0 && !tooLong;
-  const slashQuery = text.startsWith("/") && !text.includes("\n") ? text.slice(1).toLowerCase() : null;
+  const canSend = !replyBlocked && !sending && (image && !note ? true : trimmed.length > 0) && !tooLong;
+  const slashQuery = !image && text.startsWith("/") && !text.includes("\n") ? text.slice(1).toLowerCase() : null;
 
   useEffect(() => {
     if (slashQuery === null || canned !== null) return;
@@ -91,6 +102,26 @@ export function Composer({
     inFlight.current = true;
     setSending(true);
     setUndo(null);
+    if (image && !note && onSendImage) {
+      void onSendImage(image, trimmed)
+        .then((ok) => {
+          if (ok) {
+            setImage(null);
+            setPreviewUrl(null);
+            setText("");
+            setImageError(null);
+            if (pauseHint) setHintShown(true);
+          } else {
+            setImageError("No se pudo enviar la imagen. Inténtalo de nuevo.");
+          }
+        })
+        .catch(() => setImageError("No se pudo enviar la imagen. Inténtalo de nuevo."))
+        .finally(() => {
+          inFlight.current = false;
+          setSending(false);
+        });
+      return;
+    }
     if (note) {
       void onSendNote(trimmed)
         .then((ok) => {
@@ -106,7 +137,16 @@ export function Composer({
     void onSend(trimmed).finally(() => {
       inFlight.current = false;
       setSending(false);
+      if (pauseHint) setHintShown(true);
     });
+  }
+  function selectImage(file: File | undefined) {
+    if (!file) return;
+    const error = validateOutboundImage(file);
+    setImageError(error);
+    if (error) return;
+    setImage(file);
+    setPreviewUrl(URL.createObjectURL(file));
   }
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -140,6 +180,10 @@ export function Composer({
     const before = text;
     try {
       const res = await improveTextApi.improve(trimmed, style);
+      if (res.unchanged) {
+        setImproveError("No pude mejorar este texto sin cambiar su sentido.");
+        return;
+      }
       setUndo(before);
       setText(res.text);
     } catch (err) {
@@ -151,7 +195,7 @@ export function Composer({
 
   const showWindow = !note && (blocked || windowWarning);
   return (
-    <div className="flex flex-col gap-2 border-t border-line bg-white px-4 pt-1 pb-3">
+    <div className="flex max-h-[70dvh] flex-none flex-col gap-2 max-desk:gap-1 overflow-y-auto border-t border-line bg-white px-4 pt-1 max-desk:px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] max-desk:pb-[max(0.375rem,env(safe-area-inset-bottom))]">
       {slot}
       <div role="tablist" aria-label="Tipo de mensaje" className="flex gap-4 border-b border-line">
         {(["reply", "note"] as const).map((m) => (
@@ -162,7 +206,7 @@ export function Composer({
             aria-selected={mode === m}
             onClick={() => setMode(m)}
             className={cn(
-              "-mb-px h-11 cursor-pointer border-0 border-b-2 bg-transparent px-2 text-sm focus-visible:outline-2 focus-visible:outline-royal",
+              "-mb-px h-11 max-desk:h-9 cursor-pointer border-0 border-b-2 bg-transparent px-2 text-sm focus-visible:outline-2 focus-visible:outline-royal",
               mode === m ? (m === "note" ? "border-gold font-extrabold text-ink" : "border-ink font-extrabold text-ink") : "border-transparent font-semibold text-muted hover:text-ink",
             )}
           >
@@ -174,7 +218,22 @@ export function Composer({
       {showWindow && channelConnectionId && onSendTemplate ? (
         <TemplatePicker channelConnectionId={channelConnectionId} onSend={onSendTemplate} />
       ) : null}
-      <div className="relative">
+      {image && !note && previewUrl ? (
+        <div className="flex items-center gap-3 rounded-lg border border-line p-2">
+          <img src={previewUrl} alt="Vista previa de la imagen" className="size-12 rounded object-cover desk:size-16" />
+          <span className="min-w-0 flex-1 truncate text-sm text-ink">{image.name}</span>
+          <button type="button" disabled={sending} onClick={() => { setImage(null); setPreviewUrl(null); setImageError(null); }} className="min-h-11 cursor-pointer rounded-lg px-3 text-sm font-semibold text-ink hover:bg-paper">Quitar</button>
+        </div>
+      ) : null}
+      <div className="relative flex items-start gap-2">
+        {onSendImage && !note && !blocked ? (
+          <>
+            <input ref={fileInput} type="file" accept="image/jpeg,image/png" className="hidden" aria-label="Seleccionar imagen" onChange={(e) => { selectImage(e.target.files?.[0]); e.target.value = ""; }} />
+            <button type="button" aria-label="Adjuntar imagen" disabled={sending} onClick={() => fileInput.current?.click()} className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-lg border border-line-2 text-ink hover:bg-paper disabled:opacity-50">
+              <Paperclip aria-hidden className="size-5" />
+            </button>
+          </>
+        ) : null}
         {slashMatches.length > 0 ? (
           <ul role="listbox" aria-label="Respuestas predefinidas" className="absolute right-0 bottom-full left-0 z-20 m-0 mb-1 flex list-none flex-col gap-0.5 rounded-2xl border border-line bg-white p-1.5 shadow-[0_12px_32px_rgba(18,18,18,.18)]">
             {slashMatches.map((c) => (
@@ -196,14 +255,14 @@ export function Composer({
           // readOnly (not disabled) keeps the focus for the next message.
           readOnly={sending}
           aria-busy={sending || improving}
-          placeholder={replyBlocked ? "Envío de texto libre bloqueado (ventana de 24 h)" : note ? "Nota visible solo para tu equipo…" : "Escribe un mensaje… (/ para respuestas predefinidas)"}
+          placeholder={replyBlocked ? "Envío de texto libre bloqueado (ventana de 24 h)" : note ? "Nota visible solo para tu equipo…" : image ? "Escribe una leyenda (opcional)" : "Escribe un mensaje… (/ para respuestas predefinidas)"}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
-          className={cn("block max-h-48 min-h-[88px] w-full resize-none rounded-lg border border-line-2 bg-white px-3.5 py-2.5 text-[15px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50", note && "border-gold bg-gold-soft")}
+          className={cn("block max-h-48 min-w-0 flex-1 resize-none rounded-lg border border-line-2 bg-white px-3.5 py-2.5 text-[15px] max-desk:text-[16px] text-ink placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-50", image ? "min-h-14 desk:min-h-[88px]" : "min-h-[88px] max-desk:min-h-16", note && "border-gold bg-gold-soft")}
         />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <Popover label="Emoji" disabled={replyBlocked} triggerClassName="bg-transparent hover:bg-paper" trigger={<Smile aria-hidden className="size-[18px]" />} panelClassName="w-64">
+        <Popover label="Emoji" placement="up" disabled={replyBlocked} triggerClassName="bg-transparent hover:bg-paper" trigger={<Smile aria-hidden className="size-[18px]" />} panelClassName="w-64">
           {(close) => (
             <div className="grid grid-cols-8 gap-0.5">
               {COMMON_EMOJIS.map((e) => (
@@ -216,7 +275,7 @@ export function Composer({
         </Popover>
         <CannedPicker onPick={pick} disabled={replyBlocked} />
         {note ? null : (
-          <Popover label="Mejorar texto" disabled={replyBlocked || improving || trimmed.length === 0} triggerClassName="bg-transparent hover:bg-paper" trigger={<><Sparkles aria-hidden className="size-4" /> {improving ? "Mejorando…" : "Mejorar texto"}</>}>
+          <Popover label="Mejorar texto" placement="up" disabled={replyBlocked || improving || trimmed.length === 0} triggerClassName="bg-transparent hover:bg-paper" trigger={<><Sparkles aria-hidden className="size-4" /> {improving ? "Mejorando…" : "Mejorar texto"}</>}>
             {(close) => (
               <div className="flex flex-col">
                 {IMPROVE_STYLES.map((s) => (
@@ -235,11 +294,14 @@ export function Composer({
         <span aria-live="polite" className={cn("ml-auto text-xs text-muted", tooLong && "font-bold text-danger")}>
           {text.length}/{limit}
         </span>
-        <Button variant="accent" aria-label={note ? "Guardar nota" : "Enviar mensaje"} disabled={!canSend} onClick={submit} className="size-10 px-0">
+        <Button variant="accent" aria-label={note ? "Guardar nota" : "Enviar mensaje"} disabled={!canSend} onClick={submit} className="size-11 px-0">
           <Send aria-hidden className="size-5" />
         </Button>
       </div>
+      {sending && image && !note ? <p role="status" className="m-0 text-xs text-muted">Enviando imagen...</p> : null}
+      {imageError ? <p role="alert" className="m-0 text-xs font-semibold text-danger">{imageError}</p> : null}
       {improveError ? <p role="alert" className="m-0 text-xs font-semibold text-danger">{improveError}</p> : null}
+      {hintShown && pauseHint ? <p data-testid="pause-hint" className="m-0 text-xs text-muted">{pauseHint}</p> : null}
     </div>
   );
 }
@@ -255,7 +317,7 @@ function CannedPicker({ onPick, disabled }: { onPick: (c: CannedResponseDto) => 
     );
   };
   return (
-    <Popover label="Respuestas predefinidas" disabled={disabled} triggerClassName="bg-transparent hover:bg-paper" trigger={<MessageSquareText aria-hidden className="size-[18px]" />} panelClassName="w-72">
+    <Popover label="Respuestas predefinidas" placement="up" disabled={disabled} triggerClassName="bg-transparent hover:bg-paper" trigger={<MessageSquareText aria-hidden className="size-[18px]" />} panelClassName="w-72">
       {(close) => (
         <CannedList items={items} failed={failed} load={load} onPick={(c) => { onPick(c); close(); }} />
       )}

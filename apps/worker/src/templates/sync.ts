@@ -1,7 +1,8 @@
 import { GUPSHUP_PARTNER_TOKEN_PURPOSE } from "@crmwsp/contracts";
 import type { CipherBox } from "@crmwsp/crypto";
 import { channelConnections, messageTemplates, withTenant, type Database, type Transaction } from "@crmwsp/db";
-import type { ProviderTemplate, WhatsAppProvider } from "@crmwsp/whatsapp";
+import type { WhatsAppProvider } from "@crmwsp/whatsapp";
+import { normalizeRejectionReason, planTemplateSync, type LocalTemplateRow as LocalTemplate, type TemplateSyncPlan } from "@crmwsp/domain";
 import { eq, sql } from "drizzle-orm";
 import type { Logger } from "../processors.js";
 
@@ -19,45 +20,8 @@ export interface SyncChannel {
   partnerToken: Buffer | null;
 }
 
-export interface LocalTemplate {
-  id: string;
-  name: string;
-  language: string;
-  status: string;
-  externalId: string | null;
-}
-
-export interface TemplateUpdate {
-  id: string;
-  status: ProviderTemplate["status"];
-  externalId: string;
-}
-
-export interface TemplateSyncPlan {
-  updates: TemplateUpdate[];
-  /** Present at the BSP (e.g. created in its console) but unknown locally. */
-  inserts: ProviderTemplate[];
-}
-
-const keyOf = (name: string, language: string): string => `${name}\u0000${language}`;
-
-/**
- * Pure reconciliation of the BSP listing against local rows, keyed by (name, language).
- * Local rows missing from the listing are left alone (a just-submitted template may lag).
- */
-export function planTemplateSync(local: LocalTemplate[], remote: ProviderTemplate[]): TemplateSyncPlan {
-  const byKey = new Map(local.map((l) => [keyOf(l.name, l.language), l]));
-  const plan: TemplateSyncPlan = { updates: [], inserts: [] };
-  for (const r of remote) {
-    const l = byKey.get(keyOf(r.name, r.language));
-    if (!l) {
-      plan.inserts.push(r);
-    } else if (l.status !== r.status || l.externalId !== r.externalId) {
-      plan.updates.push({ id: l.id, status: r.status, externalId: r.externalId });
-    }
-  }
-  return plan;
-}
+export { planTemplateSync };
+export type { LocalTemplateRow as LocalTemplate, TemplateSyncPlan, TemplateSyncUpdate as TemplateUpdate } from "@crmwsp/domain";
 
 /** Persistence port of one tenant (Postgres adapter below; in-memory fake in tests). */
 export interface TemplateSyncStore {
@@ -196,6 +160,7 @@ export function createPgTemplateSyncStore(tx: Transaction, tenantId: string): Te
           language: messageTemplates.language,
           status: messageTemplates.status,
           externalId: messageTemplates.externalId,
+          rejectionReason: messageTemplates.rejectionReason,
         })
         .from(messageTemplates)
         .where(eq(messageTemplates.channelConnectionId, channelId));
@@ -204,7 +169,7 @@ export function createPgTemplateSyncStore(tx: Transaction, tenantId: string): Te
       for (const u of plan.updates) {
         await tx
           .update(messageTemplates)
-          .set({ status: u.status, externalId: u.externalId, syncedAt: now, updatedAt: now })
+          .set({ status: u.status, externalId: u.externalId, rejectionReason: u.rejectionReason, syncedAt: now, updatedAt: now })
           .where(eq(messageTemplates.id, u.id));
       }
       if (plan.inserts.length > 0) {
@@ -220,6 +185,7 @@ export function createPgTemplateSyncStore(tx: Transaction, tenantId: string): Te
               status: r.status,
               body: r.body,
               externalId: r.externalId,
+              rejectionReason: normalizeRejectionReason(r.status, r.reason),
               syncedAt: now,
             })),
           )

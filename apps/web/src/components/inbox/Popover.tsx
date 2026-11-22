@@ -9,7 +9,9 @@ export function Popover({
   trigger,
   children,
   align = "left",
+  placement = "down",
   triggerClassName,
+  openClassName,
   panelClassName,
   disabled = false,
 }: {
@@ -17,7 +19,11 @@ export function Popover({
   trigger: ReactNode;
   children: (close: () => void) => ReactNode;
   align?: "left" | "right";
+  /** "up" opens above the trigger: needed for controls docked at the bottom of the viewport (composer). */
+  placement?: "down" | "up";
   triggerClassName?: string | undefined;
+  /** Extra classes on the trigger while the panel is open (wins over `triggerClassName`). */
+  openClassName?: string | undefined;
   panelClassName?: string | undefined;
   disabled?: boolean;
 }) {
@@ -56,6 +62,7 @@ export function Popover({
           "inline-flex h-9 min-w-9 cursor-pointer items-center justify-center gap-1 rounded-full bg-paper px-2.5 text-[13px] font-bold text-ink hover:bg-line disabled:cursor-not-allowed disabled:opacity-50",
           open && "bg-line",
           triggerClassName,
+          open && openClassName,
         )}
       >
         {trigger}
@@ -66,8 +73,10 @@ export function Popover({
           role="dialog"
           aria-label={label}
           className={cn(
-            "absolute top-full z-30 mt-1.5 max-h-[70vh] min-w-56 overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-[0_12px_32px_rgba(18,18,18,.18)]",
+            "absolute z-30 max-h-[70vh] min-w-56 overflow-y-auto rounded-2xl border border-line bg-white p-2 shadow-[0_12px_32px_rgba(18,18,18,.18)]",
+            placement === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5",
             align === "right" ? "right-0" : "left-0",
+            "max-desk:fixed max-desk:inset-x-2 max-desk:top-auto max-desk:bottom-2 max-desk:z-50 max-desk:mt-0 max-desk:mb-0 max-desk:max-h-[60dvh] max-desk:min-w-0",
             panelClassName,
           )}
         >

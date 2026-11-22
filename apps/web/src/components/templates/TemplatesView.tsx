@@ -146,7 +146,7 @@ export function TemplatesView() {
           <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2">
             {items.map((t) => {
               const st = STATUS_META[t.status];
-              const reason = reasons[`${t.name}\u0000${t.language}`];
+              const reason = t.rejectionReason ?? reasons[`${t.name}\u0000${t.language}`];
               return (
                 <li key={t.id}>
                   <Card className="flex h-full flex-col gap-2 p-4 sm:p-4" data-testid="template-card">
@@ -158,6 +158,9 @@ export function TemplatesView() {
                     <p className="m-0 text-sm whitespace-pre-wrap">{t.body}</p>
                     {t.status === "rejected" ? (
                       <p className="m-0 text-xs font-bold text-danger">Motivo: {reason ?? "Meta no la aprobó. Sincroniza para ver el motivo."}</p>
+                    ) : null}
+                    {t.status === "paused" || t.status === "disabled" ? (
+                      <p className="m-0 text-xs text-muted">Meta {t.status === "paused" ? "pausó" : "desactivó"} esta plantilla; no se usará en envíos fuera de la ventana de 24 h.</p>
                     ) : null}
                   </Card>
                 </li>

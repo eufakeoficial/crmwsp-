@@ -125,6 +125,28 @@ describe("conversationsApi", () => {
     expect(cid).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  it("uploads an image as multipart FormData", async () => {
+    const upload = { uploadId: ID(7), mime: "image/png", size: 3, previewUrl: "https://example.com/preview", expiresAt: NOW };
+    fetchMock.mockImplementation(() => Promise.resolve(json(200, upload)));
+    const file = new File(["png"], "photo.png", { type: "image/png" });
+    await expect(conversationsApi.uploadMedia(ID(2), file)).resolves.toEqual(upload);
+    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit & { headers: Record<string, string> }];
+    expect(url).toBe("/api/conversations/" + ID(2) + "/media");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get("file")).toBe(file);
+    expect(init.headers["content-type"]).toBeUndefined();
+  });
+
+  it("sends an uploaded image with its idempotency key", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json(202, message)));
+    const input = { uploadId: ID(7), mime: "image/png" as const, caption: "Foto", clientMessageId: ID(8) };
+    await expect(conversationsApi.sendMedia(ID(2), input)).resolves.toMatchObject({ id: ID(4) });
+    expect(last().url).toBe("/api/conversations/" + ID(2) + "/media-messages");
+    expect(last().init.method).toBe("POST");
+    expect(last().body).toEqual(input);
+  });
+
   it("keeps the OUTSIDE_SERVICE_WINDOW code on 422", async () => {
     fetchMock.mockImplementation(() => Promise.resolve(json(422, { code: "OUTSIDE_SERVICE_WINDOW", message: "Outside the 24 h service window" })));
     const err = await conversationsApi.send(ID(2), "hola").catch((e: unknown) => e);

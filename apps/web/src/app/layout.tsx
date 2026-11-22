@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import { BRAND_COLOR, getSiteUrl, SITE_DESCRIPTION, SITE_LOCALE, SITE_NAME, SITE_TITLE } from "@/lib/site";
 import { ConsentBanner } from "@/components/tracking/ConsentBanner";
 import { Tracking } from "@/components/tracking/Tracking";
+import { RegisterServiceWorker } from "@/components/app/RegisterServiceWorker";
+import { BusyOverlay } from "@/components/ui/BusyOverlay";
 import "./globals.css";
 
 // Self-hosted (SIL OFL 1.1, see src/fonts/OFL.txt) so builds never depend on Google Fonts at build time.
@@ -36,6 +38,7 @@ export const metadata: Metadata = {
   },
   twitter: { card: "summary_large_image", title: DEFAULT_TITLE, description: SITE_DESCRIPTION },
   icons: { icon: "/icon.png", apple: "/icon.png" },
+  appleWebApp: { capable: true, title: "Vende+", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: BRAND_COLOR };
@@ -47,6 +50,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {children}
         <ConsentBanner />
         <Tracking />
+        <RegisterServiceWorker />
+        <BusyOverlay />
       </body>
     </html>
   );

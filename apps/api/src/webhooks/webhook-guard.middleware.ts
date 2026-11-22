@@ -20,6 +20,11 @@ export function perTokenCapFor(path: string): number | undefined {
   return provider && WEAK_AUTH_PROVIDERS.has(provider) ? WEAK_AUTH_MAX_PER_TOKEN : undefined;
 }
 
+/** Full request path without the query string, independent of the middleware mount point. */
+export function requestPath(req: { url?: string | undefined; originalUrl?: string | undefined }): string {
+  return (req.originalUrl ?? req.url ?? "").split("?")[0] ?? "";
+}
+
 /**
  * Runs before body parsing (Fastify onRequest via middie): rejects declared bodies over
  * 1 MiB with 413 and applies the per-token / per-IP rate limit (429). Chunked bodies
@@ -37,7 +42,8 @@ export class WebhookGuardMiddleware implements NestMiddleware<IncomingMessage, S
       res.end();
       return;
     }
-    const path = (req.url ?? "").split("?")[0] ?? "";
+    // middie strips the mount prefix from `req.url`; `originalUrl` keeps the full path.
+    const path = requestPath(req);
     const token = path.split("/").filter(Boolean).pop() ?? "";
     // Real client IP: trusted proxy hops or the HMAC-signed forward from the web app.
     const ip = clientIp(req);

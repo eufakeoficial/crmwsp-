@@ -1,5 +1,7 @@
+import { beginBusy, isBlockingRequest } from "./busy-overlay";
 import {
   TENANT_HEADER,
+  VIEW_AS_HEADER,
   type ErrorCode,
   type ForgotPasswordRequest,
   type LoginRequest,
@@ -11,6 +13,7 @@ import {
   tenantMembersResponseSchema,
 } from "@crmwsp/contracts";
 import type { z } from "zod";
+import { readViewAs } from "./view-as";
 
 export type ApiErrorCode = ErrorCode | "NETWORK_ERROR" | "INVALID_RESPONSE";
 
@@ -66,7 +69,11 @@ export async function request<S extends z.ZodType | undefined = undefined>(
   // Multipart bodies set their own boundary header; JSON otherwise.
   if (body !== undefined && !isForm) headers["content-type"] = "application/json";
   if (activeTenantId !== null) headers[TENANT_HEADER] = activeTenantId;
+  // Read-only "view as": the API answers as that member and refuses every write.
+  const viewAs = readViewAs(activeTenantId);
+  if (viewAs) headers[VIEW_AS_HEADER] = viewAs.userId;
 
+  const endBusy = isBlockingRequest(method, path) ? beginBusy() : null;
   let res: Response;
   try {
     res = await fetch(`${BASE}${withQuery(path, query)}`, {
@@ -76,8 +83,10 @@ export async function request<S extends z.ZodType | undefined = undefined>(
       ...(body !== undefined ? { body: isForm ? (body as FormData) : JSON.stringify(body) } : {}),
     });
   } catch {
+    endBusy?.();
     throw new ApiError("NETWORK_ERROR", "Network request failed", 0);
   }
+  endBusy?.();
 
   if (!res.ok) throw await toApiError(res);
   if (schema === undefined) return undefined as never;

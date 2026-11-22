@@ -3,7 +3,9 @@ import {
   PROMPT_VERSION,
   aiTurnResponseFormat,
   buildAiTurnMessages,
+  sanitizeTurnReply,
   estimateCost,
+  resolveVisionModel,
   type ChatResult,
   type LLMProvider,
   type PromptChunk,
@@ -13,6 +15,7 @@ import { AI_ACTION_TYPES, aiActionSchema, normalizeReactionEmoji } from "@crmwsp
 import type { PlaybookConfig, SalesStage } from "@crmwsp/contracts";
 import type { AiActionType, AiDecision, AiTurnOutput } from "@crmwsp/contracts";
 import { aiMessagesAllowed } from "./plan-gate.js";
+import { startTypingIndicator } from "./typing.js";
 import {
   agentConfigs,
   consumeUsage,
@@ -36,26 +39,37 @@ import {
   type ChunkHit,
   type LlmConnection,
   type Transaction,
+  isActiveChatConnection,
+  isActiveTranscriptionConnection,
 } from "@crmwsp/db";
-import { buildPlaybookContext, evaluateTurn, isSalesStage, resolvePlaybook, sanitizeDetectedPlaybook, type TenantAiPolicies } from "@crmwsp/domain";
+import {
+  buildPlaybookContext,
+  evaluateTurn,
+  isSalesStage,
+  resolvePlaybook,
+  sanitizeDetectedPlaybook,
+  type TenantAiPolicies,
+} from "@crmwsp/domain";
 import { UnrecoverableError } from "bullmq";
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { InboxEvent } from "../processors.js";
 import { AI_TURN_MAX_ATTEMPTS, SEND_MESSAGE_JOB, SEND_MESSAGE_JOB_OPTIONS, SEND_REACTION_JOB, sendReactionJobId } from "../queue.js";
 import { insertNotification } from "../notifications/notify.js";
+import { isInsufficientQuota, quotaNotification } from "./quota-notice.js";
 import { contactAutomationsPaused, routeHandoff } from "../inbox/routing.js";
 import { applyConversationHandoff, runAction } from "./actions.js";
 import { extractReceipt, findPendingPaymentOrder, handleReceipt, pgReceiptPorts, type ReceiptImage } from "./receipt.js";
+import { IMAGE_NOT_SEEN_MARKER, loadTurnImage, pickTurnImageMessageId, withImageNotSeenNote, type TurnImage, type TurnImageCandidate } from "./turn-image.js";
 import { maybeWarnBudget, readBudget } from "./budget.js";
 import { withRedisLock } from "./lock.js";
 import {
   AUDIO_NOT_TRANSCRIBED,
-  DEFAULT_TRANSCRIPTION_MODEL,
   transcribeAttachment,
   voiceNoteText,
   type AudioAttachment,
   type TranscribeOutcome,
 } from "./transcribe.js";
+import { transcriptionRoute, type TranscriptionRoute } from "./transcription-route.js";
 import {
   InvalidModelOutputError,
   assertIds,
@@ -91,6 +105,8 @@ export type AiTurnResult =
 
 interface ModelCall {
   model: string;
+  /** The call carried a customer photo (ledger meta only). */
+  vision?: boolean;
   result: ChatResult<AiTurnOutput>;
 }
 
@@ -151,21 +167,25 @@ async function callModel(
   provider: LLMProvider,
   conn: LlmConnection,
   chatMessages: ReturnType<typeof buildAiTurnMessages>,
+  /** Set when the prompt carries a photo: the vision model is used for every attempt. */
+  visionModel?: string,
 ): Promise<ModelCall[]> {
   const ask = (model: string) => provider.chat({ model, messages: chatMessages, responseFormat: aiTurnResponseFormat });
+  const vision = visionModel !== undefined ? { vision: true } : {};
   const calls: ModelCall[] = [];
+  const cheap = visionModel ?? conn.modelCheap;
   try {
-    const result = await ask(conn.modelCheap);
-    if (result.parsed) return [{ model: conn.modelCheap, result }];
-    calls.push({ model: conn.modelCheap, result });
+    const result = await ask(cheap);
+    if (result.parsed) return [{ model: cheap, result, ...vision }];
+    calls.push({ model: cheap, result, ...vision });
   } catch (err) {
     if (!isInvalidOutput(err)) throw err;
   }
   // Invalid structured output: one retry with the strong model (falls back to the cheap one if unset).
-  const strong = conn.modelStrong ?? conn.modelCheap;
+  const strong = visionModel ?? conn.modelStrong ?? conn.modelCheap;
   try {
     const result = await ask(strong);
-    if (result.parsed) return [...calls, { model: strong, result }];
+    if (result.parsed) return [...calls, { model: strong, result, ...vision }];
   } catch (err) {
     if (!isInvalidOutput(err)) throw err;
   }
@@ -252,7 +272,11 @@ interface HistoryRow {
 
 interface Prepared {
   conn: LlmConnection;
+  /** Optional dedicated audio transcription connection (ADR 0024); loaded only for a voice note. */
+  transcriptionConn: LlmConnection | undefined;
   tenantName: string;
+  /** Tenant IANA timezone (tenants.timezone) for "hoy"/"mañana" in the prompt. */
+  timeZone: string;
   config: typeof agentConfigs.$inferSelect | undefined;
   contact: typeof contacts.$inferSelect | undefined;
   history: HistoryRow[];
@@ -261,6 +285,8 @@ interface Prepared {
   transcripts: Map<string, string>;
   /** Trigger image while the contact has a `pending_payment` order: a receipt to review (T8). */
   receipt?: ReceiptImage;
+  /** Latest ordinary customer photo to look at in this turn (ADR 0025); never set together with `receipt`. */
+  image?: TurnImageCandidate;
   /** Tenant sales playbook (defaults, disabled, when never saved) and the stage detected on the previous AI reply. */
   playbook: PlaybookConfig;
   previousStage: SalesStage | null;
@@ -357,7 +383,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
   const replay = await replayGuard(tx, c);
   if (replay) return { done: replay };
 
-  const [conn] = await tx.select().from(llmConnections).where(eq(llmConnections.isActive, true)).limit(1);
+  const [conn] = await tx.select().from(llmConnections).where(isActiveChatConnection).limit(1);
   if (!conn || !conn.lastTestOk) return { done: { result: { outcome: "skipped", reason: "no-llm-connection" }, events } };
 
   // Budget (ADR 0008: at 100 % the automatic AI stops; the inbox never does). Checked before any
@@ -378,7 +404,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
     return { done: { result: { outcome: "handoff", reason: "plan_limit_reached" }, events, connection: conn } };
   }
 
-  const [tenant] = await tx.select({ name: tenants.name }).from(tenants).limit(1);
+  const [tenant] = await tx.select({ name: tenants.name, timezone: tenants.timezone }).from(tenants).limit(1);
   const [config] = await tx.select().from(agentConfigs).where(eq(agentConfigs.isActive, true)).limit(1);
   const [contact] = await tx.select().from(contacts).where(eq(contacts.id, conv.contactId)).limit(1);
   const historyDesc = await tx
@@ -408,6 +434,10 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
       if (r.messageId === triggerMessageId && !triggerAudio) triggerAudio = r;
     }
   }
+  let transcriptionConn: LlmConnection | undefined;
+  if (triggerAudio && !triggerAudio.transcript?.trim()) {
+    [transcriptionConn] = await tx.select().from(llmConnections).where(isActiveTranscriptionConnection).limit(1);
+  }
   let receipt: ReceiptImage | undefined;
   if (trigger.type === "image") {
     const order = await findPendingPaymentOrder(tx, conv.contactId);
@@ -419,6 +449,16 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
         .limit(1);
       receipt = { attachmentId: img?.id ?? null, externalMediaId: img?.externalMediaId ?? null, mimeType: img?.mimeType ?? null, order };
     }
+  }
+  let image: TurnImageCandidate | undefined;
+  const imageMessageId = receipt ? undefined : pickTurnImageMessageId(history);
+  if (imageMessageId && !(await findPendingPaymentOrder(tx, conv.contactId))) {
+    const [img] = await tx
+      .select({ externalMediaId: attachments.externalMediaId, mimeType: attachments.mimeType, sizeBytes: attachments.sizeBytes })
+      .from(attachments)
+      .where(eq(attachments.messageId, imageMessageId))
+      .limit(1);
+    image = { messageId: imageMessageId, externalMediaId: img?.externalMediaId ?? null, mimeType: img?.mimeType ?? null, sizeBytes: img?.sizeBytes ?? null };
   }
   const [playbookRow] = await tx.select({ enabled: salesPlaybooks.enabled, config: salesPlaybooks.config }).from(salesPlaybooks).limit(1);
   const playbook = resolvePlaybook(playbookRow);
@@ -441,7 +481,9 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
   return {
     prep: {
       conn,
+      transcriptionConn,
       tenantName: tenant?.name ?? "",
+      timeZone: tenant?.timezone ?? "UTC",
       config,
       contact,
       history,
@@ -450,6 +492,7 @@ async function prepare(deps: AiDeps, tx: Transaction, c: TurnCtx): Promise<{ don
       playbook,
       previousStage,
       ...(receipt ? { receipt } : {}),
+      ...(image ? { image } : {}),
     },
   };
 }
@@ -483,7 +526,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
   // 1. Short read transaction.
   const phase1 = await withTenant(deps.db, tenantId, (tx) => prepare(deps, tx, c));
   if ("done" in phase1) return phase1.done;
-  const { conn, tenantName, config, contact, triggerAudio, transcripts, playbook, previousStage } = phase1.prep;
+  const { conn, transcriptionConn, tenantName, timeZone, config, contact, triggerAudio, transcripts, playbook, previousStage } = phase1.prep;
 
   // Receipt image for a pending order: extract for a human reviewer; never marks the order paid.
   if (phase1.prep.receipt) {
@@ -534,7 +577,9 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
 
   // 2. Provider calls, outside any transaction (no pooled connection held while the LLM thinks).
   let calls: ModelCall[];
+  let imageUnseen = false;
   let hits: ChunkHit[] = [];
+  let customerText = "";
   /** Objection ids offered in this turn's prompt: the only ones the model may report back. */
   let offeredObjectionIds: string[] = [];
   let queryEmbeddingTokens: { model: string; tokens: number } | undefined;
@@ -543,20 +588,22 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
 
     // Voice note: transcribe once (BYOK provider), persist, and let the turn see the text.
     // Any failure degrades to a marker; the transcript is stored before the chat call so a retry
-    // of this job never pays for the same audio twice.
+    // of this job never pays for the same audio twice. ADR 0024: the dedicated transcription
+    // connection wins; the chat connection is the fallback when it can transcribe.
     if (triggerAudio) {
+      const route = transcriptionRoute(conn, transcriptionConn, provider, (dc) => buildProvider(deps, tenantId, dc), logger);
       const outcome = await transcribeAttachment(triggerAudio, {
         tenantId,
         conversationId: c.conversationId,
-        provider,
-        supported: conn.capabilities.transcription === true,
-        model: transcriptionModelFor(conn),
+        provider: route.provider,
+        supported: route.source !== "none",
+        model: route.model,
         loadMedia: deps.loadMedia,
         logger,
       });
       if (outcome.status === "transcribed") {
         try {
-          await withTenant(deps.db, tenantId, (tx) => persistTranscript(tx, c, triggerAudio.id, outcome));
+          await withTenant(deps.db, tenantId, (tx) => persistTranscript(tx, c, triggerAudio.id, outcome, route));
         } catch (err) {
           logger.warn(`ai-turn ${triggerMessageId} could not persist transcript (${err instanceof Error ? err.name : "unknown"})`);
         }
@@ -574,6 +621,7 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       m.type === "audio" && !m.body?.trim() && transcripts.has(m.id) ? { ...m, body: `[voice note] ${transcripts.get(m.id)}` } : m,
     );
     const query = buildQuery(history);
+    customerText = query;
     let sourceTitles = new Map<string, string>();
     if (query !== "") {
       let vector: { embedding: number[]; model: string; dims: number } | undefined;
@@ -594,12 +642,30 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       sourceTitles = r.sourceTitles;
     }
 
+    // Ordinary customer photo (ADR 0025): one image, bound to the tenant's vision-capable chat connection.
+    let turnImage: TurnImage | undefined;
+    if (phase1.prep.image) {
+      const loaded = await loadTurnImage(phase1.prep.image, {
+        tenantId,
+        conversationId: c.conversationId,
+        supported: conn.capabilities.vision === true,
+        loadMedia: deps.loadMedia,
+        logger,
+      });
+      if (loaded.status === "ready") turnImage = loaded.image;
+      else {
+        imageUnseen = true;
+        logger.warn(`ai-turn ${triggerMessageId} photo not viewed (${loaded.reason})`);
+      }
+    }
+    const unseenId = imageUnseen ? phase1.prep.image?.messageId : undefined;
     const promptMessages: PromptConversationMessage[] = history
       .filter((m) => m.author !== "system")
       .map((m) => ({
         messageId: m.id,
         author: m.author === "contact" ? "contact" : m.author === "ai" ? "ai" : "agent",
-        text: placeholder(m),
+        text: m.id === unseenId ? `${m.body?.trim() ?? ""}
+${IMAGE_NOT_SEEN_MARKER}`.trim() : placeholder(m),
         at: m.createdAt.toISOString(),
       }));
     const retrievedChunks: PromptChunk[] = hits.map((h) => {
@@ -615,9 +681,13 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       contact: { name: contact?.name, phone: contact?.phoneE164, ...flattenExtracted(contact?.extracted ?? {}) },
       retrievedChunks,
       nowIso: now.toISOString(),
+      timeZone,
       playbook: playbookCtx,
+      ...(turnImage ? { image: turnImage } : {}),
     });
-    calls = await callModel(provider, conn, chatMessages);
+    // Best-effort "typing..." for the customer while the model thinks (never awaited, never throws).
+    startTypingIndicator(deps, { tenantId, conversationId: c.conversationId, triggerMessageId, now });
+    calls = await callModel(provider, conn, chatMessages, turnImage ? visionModelFor(conn) : undefined);
   } catch (err) {
     const reason = handoffReasonFor(err);
     if (reason === null) throw err;
@@ -631,6 +701,8 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       if (await replayGuard(tx, c)) return false;
       await recordUsage(tx, c, [], queryEmbeddingTokens);
       await handoffWriter(tx, c, events).record(reason, null);
+      // The tenant's own key is out of balance: tell the team (retrying or handing off silently hides it).
+      if (isInsufficientQuota(err)) await insertNotification(tx, tenantId, quotaNotification(conn, now));
       return true;
     });
     if (!handed) return { result: { outcome: "skipped", reason: "already-processed" }, events: [] };
@@ -647,21 +719,16 @@ async function runTurn(deps: AiDeps, c: TurnCtx, attempt: AiTurnAttempt): Promis
       hits,
       contextIds,
       confidenceThreshold,
+      customerText,
       queryEmbeddingTokens,
+      imageUnseen,
       playbook: { enabled: playbook.enabled, offeredObjectionIds },
     }),
   );
 }
 
-function visionModelFor(conn: LlmConnection): string {
-  const configured = conn.capabilities.visionModel;
-  return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : conn.modelCheap;
-}
+const visionModelFor = resolveVisionModel;
 
-function transcriptionModelFor(conn: LlmConnection): string {
-  const configured = (conn.capabilities as { transcriptionModel?: unknown }).transcriptionModel;
-  return typeof configured === "string" && configured.trim() !== "" ? configured.trim() : DEFAULT_TRANSCRIPTION_MODEL;
-}
 
 /** Stores the transcript once (first writer wins) and books the transcription cost in the ledger. */
 async function persistTranscript(
@@ -669,6 +736,7 @@ async function persistTranscript(
   c: TurnCtx,
   attachmentId: string,
   t: Extract<TranscribeOutcome, { status: "transcribed" }>,
+  route: TranscriptionRoute,
 ): Promise<void> {
   await tx
     .update(attachments)
@@ -691,6 +759,8 @@ async function persistTranscript(
       verified: t.verified,
       priceKnown: t.priceKnown,
       unit: "usd_microcents",
+      purpose: route.source === "dedicated" ? "transcription" : "chat",
+      llmConnectionId: route.connectionId,
     },
   });
 }
@@ -719,6 +789,7 @@ async function recordUsage(
         outputTokens: usage.outputTokens,
         promptVersion: PROMPT_VERSION,
         structuredMode: call.result.structuredMode ?? null,
+        ...(call.vision ? { vision: true, purpose: "customer_image" } : {}),
         verified: cost.verified,
         priceKnown: cost.known,
         unit: "usd_microcents",
@@ -748,7 +819,11 @@ interface PersistInput {
   hits: ChunkHit[];
   contextIds: Set<string>;
   confidenceThreshold: number;
+  /** Customer text of this turn: tells a courtesy handoff from a request for a person (ADR 0023). */
+  customerText: string;
   queryEmbeddingTokens: { model: string; tokens: number } | undefined;
+  /** The customer sent a photo the AI could not look at: the reply is only ever a draft with a note. */
+  imageUnseen: boolean;
   /** Sales playbook state of the turn: detection is stored only while it is enabled. */
   playbook: { enabled: boolean; offeredObjectionIds: string[] };
 }
@@ -783,7 +858,8 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
 
   const handoff = handoffWriter(tx, c, events);
   const final = p.calls[p.calls.length - 1]!;
-  const output = final.result.parsed as AiTurnOutput;
+  // Bare chunk UUIDs and "[n]" markers are stripped against the chunks the model actually saw.
+  const output = sanitizeTurnReply(final.result.parsed as AiTurnOutput, { chunkIds: p.hits.map((h) => h.id) });
   const modelUsed = final.model;
   const detected = p.playbook.enabled ? sanitizeDetectedPlaybook(output, p.playbook.offeredObjectionIds) : {};
   // Auto only when nobody (human or handoff) owns the conversation; otherwise drafts.
@@ -802,6 +878,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
     policies: toTenantPolicies(p.config?.policies ?? {}),
     now,
     mode,
+    customerText: p.customerText,
   });
 
   const actionIds: string[] = [];
@@ -874,6 +951,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
     // Hard send gates on top of the policy: WhatsApp 24 h session window and text length.
     let draftReason: string | null = null;
     if (mode === "assist" || evaluation.reply.draft) draftReason = evaluation.reply.reason;
+    else if (p.imageUnseen) draftReason = "customer photo not viewed by the AI; draft only";
     else if (!sessionWindowOpen(conv.lastInboundAt, now)) draftReason = "whatsapp 24h window closed; draft only";
     else if (reply.text.length > WHATSAPP_TEXT_MAX) draftReason = "reply exceeds 4096 characters; draft only";
 
@@ -885,7 +963,7 @@ async function persist(tx: Transaction, c: TurnCtx, p: PersistInput): Promise<Tu
           conversationId,
           messageId: triggerMessageId,
           type: "draft_reply",
-          payload: { text: reply.text, claims: reply.claims, ...detected },
+          payload: { text: p.imageUnseen ? withImageNotSeenNote(reply.text) : reply.text, claims: reply.claims, ...detected },
           citations,
           confidence: String(output.confidence),
           decision: "approve",

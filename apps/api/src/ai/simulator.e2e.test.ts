@@ -244,6 +244,32 @@ describe.skipIf(!hasEnv)("AI simulator (e2e, real Postgres + Redis, mocked LLM)"
     expect(ledger.every((l) => l.kind === "simulation" && l.refType === "simulation")).toBe(true);
   });
 
+  it("regression: no chunk ids in text, grounded reply sent with handoff flag, local date in the prompt", async () => {
+    await migrator.db.update(tenants).set({ timezone: "America/Lima" }).where(eq(tenants.id, s.tenantA));
+    modelOutput = {
+      reply: {
+        text: `El servicio básico cuesta 50 EUR la hora (chunkId: ${s.chunkId}) [1].`,
+        claims: [{ kind: "price", text: "50 EUR la hora", citations: [{ chunkId: s.chunkId }] }],
+      },
+      actions: [{ type: "handoff", reason: "seguimiento comercial" }],
+      confidence: 0.9,
+      needsHuman: true,
+      reason: "precio citado; un humano puede seguir",
+    };
+    chatBodies = [];
+    const res = await asA("POST", "/ai/simulate", { messages: [{ author: "contact", text: "servicio basico precio" }] });
+    expect(res.statusCode).toBe(200);
+    const r = simulationResultSchema.parse(res.json());
+    expect(r.reply!.text).toBe("El servicio básico cuesta 50 EUR la hora.");
+    expect(r.reply!.outcome).toBe("send");
+    expect(r.handoff).toBe(true);
+    expect(chatBodies[0]!.messages[0]!.content).toMatch(/Local date: \w+day \d{4}-\d{2}-\d{2} \d{2}:\d{2} \(America\/Lima\)/);
+
+    // Same answer, but the customer asks for a person: blocked (handed off, nothing sent).
+    const asked = await asA("POST", "/ai/simulate", { messages: [{ author: "contact", text: "quiero hablar con una persona" }] });
+    expect(simulationResultSchema.parse(asked.json()).reply!.outcome).toBe("blocked");
+  });
+
   it("uses the draft prompt when given and reports it", async () => {
     modelOutput = { actions: [], confidence: 0.3, needsHuman: true, reason: "no sé", reply: { text: "Te paso con alguien", claims: [] } };
     chatBodies = [];

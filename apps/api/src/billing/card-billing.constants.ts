@@ -1,0 +1,5 @@
+/** Nest tokens for SaaS card billing with Stripe Billing (ADR 0022). */
+export const STRIPE_BILLING_CLIENT = Symbol("STRIPE_BILLING_CLIENT");
+export const STRIPE_BILLING_PRICES = Symbol("STRIPE_BILLING_PRICES");
+export const STRIPE_BILLING_WEBHOOK_SECRET = Symbol("STRIPE_BILLING_WEBHOOK_SECRET");
+export const STRIPE_BILLING_EVENT_STORE = Symbol("STRIPE_BILLING_EVENT_STORE");

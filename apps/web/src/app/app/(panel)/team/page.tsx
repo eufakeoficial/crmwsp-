@@ -12,6 +12,7 @@ import { Alert, Avatar, Badge, Button, Card, Modal } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { errorMessage } from "@/lib/messages";
 import { teamApi, teamErrorMessage } from "@/lib/team-api";
+import { canViewAsMember, storeViewAs } from "@/lib/view-as";
 
 type State =
   | { status: "loading" }
@@ -27,6 +28,7 @@ export default function TeamPage() {
   const [inviting, setInviting] = useState(false);
   const inSetup = useSetupMode();
   const [removing, setRemoving] = useState<TenantMember | null>(null);
+  const [roleChange, setRoleChange] = useState<{ member: TenantMember; next: MembershipRole } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string>();
   const [notice, setNotice] = useState<string>();
@@ -58,6 +60,20 @@ export default function TeamPage() {
     } catch (err) {
       setActionError(teamErrorMessage(err));
     } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function startViewAs(m: TenantMember) {
+    if (!tenantId) return;
+    setBusyId(m.userId);
+    setActionError(undefined);
+    try {
+      await teamApi.viewAs(m.userId); // audited by the API; also validates the rule server-side
+      storeViewAs({ tenantId, userId: m.userId, name: m.name ?? m.email, role: m.role });
+      window.location.assign("/app/inbox");
+    } catch (err) {
+      setActionError(teamErrorMessage(err));
       setBusyId(null);
     }
   }
@@ -105,13 +121,20 @@ export default function TeamPage() {
                         <p className="m-0 truncate text-xs text-muted">{m.email}</p>
                       </div>
                     </div>
-                    {editable ? (
+                    {editable || canViewAsMember(actor, m, me.user.id) ? (
                       <div className="flex items-center gap-2">
+                        {canViewAsMember(actor, m, me.user.id) ? (
+                          <Button size="sm" variant="ghost" disabled={busyId === m.userId} onClick={() => void startViewAs(m)}>
+                            Ver como
+                          </Button>
+                        ) : null}
+                        {editable ? (
+                          <>
                         <select
                           aria-label={`Rol de ${m.name ?? m.email}`}
                           value={m.role}
                           disabled={busyId === m.userId}
-                          onChange={(e) => void act(m.userId, () => teamApi.changeRole(m.userId, e.target.value as MembershipRole), "Rol actualizado.")}
+                          onChange={(e) => setRoleChange({ member: m, next: e.target.value as MembershipRole })}
                           className={SELECT_CLASS}
                         >
                           {(options.includes(m.role) ? options : [m.role, ...options]).map((r) => (
@@ -123,6 +146,10 @@ export default function TeamPage() {
                         <Button size="sm" variant="ghost" disabled={busyId === m.userId} onClick={() => setRemoving(m)}>
                           Quitar
                         </Button>
+                          </>
+                        ) : (
+                          <Badge>{ROLE_LABELS[m.role]}</Badge>
+                        )}
                       </div>
                     ) : (
                       <Badge>{ROLE_LABELS[m.role]}</Badge>
@@ -151,6 +178,35 @@ export default function TeamPage() {
             void load();
           }}
         />
+      ) : null}
+      {roleChange ? (
+        <Modal
+          title="Cambiar rol"
+          onClose={() => setRoleChange(null)}
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setRoleChange(null)}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                variant="accent"
+                onClick={() => {
+                  const { member, next } = roleChange;
+                  setRoleChange(null);
+                  void act(member.userId, () => teamApi.changeRole(member.userId, next), "Rol actualizado.");
+                }}
+              >
+                Confirmar cambio
+              </Button>
+            </div>
+          }
+        >
+          <p className="m-0 text-sm">
+            {roleChange.member.name ?? roleChange.member.email} pasará de {ROLE_LABELS[roleChange.member.role]} a {ROLE_LABELS[roleChange.next]}.
+          </p>
+          <p className="m-0 mt-2 text-xs text-muted">El cambio se aplica de inmediato y queda registrado con tu usuario y la fecha.</p>
+        </Modal>
       ) : null}
       {removing ? (
         <Modal

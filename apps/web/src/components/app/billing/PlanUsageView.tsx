@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { BillingPlanResponse, PlanLimitKeyDto, ReferralSummary } from "@crmwsp/contracts";
+import { AI_USAGE_WARN_PERCENT, type BillingPlanResponse, type PlanLimitKeyDto, type ReferralSummary } from "@crmwsp/contracts";
 import { SettingsFrame } from "@/components/ai/AccessGate";
 import { canManageAi } from "@/components/app/roles";
 import { useSession } from "@/components/app/SessionProvider";
@@ -46,6 +46,11 @@ function UsageRow({ item }: { item: BillingPlanResponse["usage"][number] }) {
         <div role="progressbar" aria-label={LABELS[key]} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} className="h-2 overflow-hidden rounded-full bg-line">
           <div className={`h-full ${tone}`} style={{ width: `${percent}%` }} />
         </div>
+      ) : null}
+      {key === "ai_messages" && !exceeded && percent !== null && percent >= AI_USAGE_WARN_PERCENT ? (
+        <p className="m-0 text-xs font-semibold text-amber-600" data-testid="ai-usage-warning">
+          Ya usaste el {percent}% de los mensajes de IA de tu plan. Cuando se agoten, la IA deja de responder hasta el próximo período: mejora tu plan o usa tu propia clave de IA.
+        </p>
       ) : null}
       {exceeded ? (
         <p className="m-0 text-xs font-semibold text-red-600">

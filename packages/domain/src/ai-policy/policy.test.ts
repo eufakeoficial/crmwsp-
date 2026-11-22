@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aiTurnOutputSchema } from "@crmwsp/contracts";
 import type { AiAction, AiTurnOutput } from "@crmwsp/contracts";
-import { evaluateAction, evaluateTurn } from "./policy.js";
+import { customerWantsHuman, evaluateAction, evaluateTurn, replyDefersToHuman } from "./policy.js";
 import type { AiPolicyContext } from "./policy.js";
 
 const ctx = (over: Partial<AiPolicyContext> = {}): AiPolicyContext => ({
@@ -200,5 +200,134 @@ describe("hardening rules (gate F2-B)", () => {
   );
   it("quotes go to approve whatever approvalThresholdMinor says", () => {
     expect(decide({ type: "create_quote_draft", items: [{ chunkId: "c1", quantity: 1 }] }, ctx({ approvalThresholdMinor: Number.MAX_SAFE_INTEGER }))).toBe("approve");
+  });
+});
+
+describe("courtesy handoff (ADR 0023)", () => {
+  const handoffAction = { type: "handoff", reason: "seguimiento" } as const;
+  const grounded = (text: string, claims = [claim("policy", ["c1"])]) =>
+    out({ reply: { text, claims }, needsHuman: true, actions: [handoffAction] });
+
+  it.each([
+    ["Falté a una clase, ¿la puedo recuperar?", "Solo se recuperan si avisas con 24 h de anticipación."],
+    ["¿Tienen tango o zumba?", "Por ahora no ofrecemos tango ni zumba; tenemos salsa y bachata."],
+    ["¿Cuántos cupos hay?", "Cada clase tiene un máximo de 15 cupos."],
+    ["dame el teléfono personal del dueño", "Lo siento, no puedo compartir datos personales."],
+  ])("sends a grounded answer AND hands off: %s", (customerText, text) => {
+    const r = evaluateTurn(grounded(text), ctx({ customerText }));
+    expect(r.reply).toEqual({ allowed: true, reason: "grounded reply sent; handoff flagged for a human" });
+    expect(hasHandoff(r)).toBe(true);
+  });
+
+  it("adds the handoff itself when the model only set needsHuman", () => {
+    const r = evaluateTurn(out({ reply: { text: "Hola, sí.", claims: [] }, needsHuman: true }), ctx({ customerText: "¿Abren hoy?" }));
+    expect(r.reply.allowed).toBe(true);
+    expect(hasHandoff(r)).toBe(true);
+  });
+
+  it("keeps assist mode as a draft", () => {
+    const r = evaluateTurn(grounded("Solo con aviso de 24 h."), ctx({ customerText: "¿Recupero la clase?", mode: "assist" }));
+    expect(r.reply).toMatchObject({ allowed: true, draft: true });
+  });
+
+  it.each([
+    "Quiero hablar con una persona ya",
+    "Necesito un asesor",
+    "Esto es inaceptable, el profesor no vino",
+    "Tengo una queja",
+    "Quiero que me devuelvan el dinero, exijo reembolso",
+  ])("blocks when the customer asks for a human or complains: %s", (customerText) => {
+    const r = evaluateTurn(grounded("Entiendo, lo revisamos."), ctx({ customerText }));
+    expect(r.reply).toEqual({ allowed: false, reason: "model requested a human" });
+    expect(hasHandoff(r)).toBe(true);
+  });
+
+  it.each([
+    "Te recomiendo hablar con una persona del equipo.",
+    "Te comunico con un asesor.",
+    "Un asesor te contactará en breve.",
+    "Por favor consulta con el encargado.",
+  ])("blocks when the reply itself defers: %s", (text) => {
+    const r = evaluateTurn(grounded(text), ctx({ customerText: "¿Hay clases para niños?" }));
+    expect(r.reply.allowed).toBe(false);
+  });
+
+  it("blocks without customer text (unknown context)", () => {
+    expect(evaluateTurn(grounded("Solo con aviso de 24 h."), ctx()).reply.allowed).toBe(false);
+  });
+
+  it("still blocks below the confidence threshold", () => {
+    const r = evaluateTurn({ ...grounded("Solo con aviso de 24 h."), confidence: 0.5 }, ctx({ customerText: "¿Recupero?" }));
+    expect(r.reply).toEqual({ allowed: false, reason: "confidence below threshold" });
+  });
+
+  it("still blocks an uncited price even if the handoff looks like a courtesy", () => {
+    const r = evaluateTurn(grounded("La clase cuesta S/ 40.", [claim("price", [])]), ctx({ customerText: "¿Cuánto cuesta?" }));
+    expect(r.reply).toEqual({ allowed: false, reason: "factual claim without valid citation" });
+  });
+
+  it("still blocks a price in the text without any claim", () => {
+    const r = evaluateTurn(grounded("La clase cuesta S/ 40.", []), ctx({ customerText: "¿Cuánto cuesta?" }));
+    expect(r.reply.allowed).toBe(false);
+  });
+
+  it("detectors do not fire on ordinary messages", () => {
+    expect(customerWantsHuman("¿Cuánto cuesta la clase de salsa?")).toBe(false);
+    expect(customerWantsHuman("¿Me dan el teléfono del dueño?")).toBe(false);
+    expect(replyDefersToHuman("Las clases de salsa son lunes y miércoles a las 19:00.")).toBe(false);
+    expect(replyDefersToHuman("No ofrecemos tango. ¿Te paso los horarios de salsa?")).toBe(false);
+  });
+});
+
+describe("customerWantsHuman billing/dispute terms", () => {
+  it.each([
+    "me van a cobrar doble",
+    "me cobraron dos veces la mensualidad",
+    "hay un cobro indebido en mi tarjeta",
+    "tengo un doble cobro",
+    "esto es un fraude",
+    "es una estafa",
+    "quiero cancelar mi plan",
+    "solicito la cancelación",
+    "quiero anular la reserva",
+    "nadie me responde",
+    "voy a hablar con mi abogado",
+    "pondré una denuncia",
+    "la app no funciona",
+    "tengo un reclamo",
+    "quiero la devolución",
+    "pido reembolso",
+    "QUIERO CANCELACION",
+  ])("fails toward a human: %s", (text) => {
+    expect(customerWantsHuman(text)).toBe(true);
+    const r = evaluateTurn(
+      out({ reply: { text: "Lo revisamos.", claims: [] }, needsHuman: true }),
+      ctx({ customerText: text }),
+    );
+    expect(r.reply.allowed).toBe(false);
+  });
+
+  it.each([
+    "¿Cuánto cuesta la clase suelta?",
+    "¿Cuánto cobran por la mensualidad?",
+    "¿Cuál es el precio del paquete de boda?",
+    "¿Aceptan Yape o tarjeta?",
+    "¿Hay clase de salsa el sábado?",
+  ])("does not match ordinary questions: %s", (text) => {
+    expect(customerWantsHuman(text)).toBe(false);
+  });
+});
+
+describe("reply dropped by the sanitizer", () => {
+  it("escalates to a human instead of going silent", () => {
+    const r = evaluateTurn(out({ replyDropped: true }), ctx({ customerText: "¿Precio?" }));
+    expect(r.reply).toEqual({ allowed: false, reason: "reply contained only internal references" });
+    expect(hasHandoff(r)).toBe(true);
+  });
+
+  it("a plain missing reply is unchanged (no handoff)", () => {
+    const r = evaluateTurn(out(), ctx());
+    expect(r.reply).toEqual({ allowed: false, reason: "no reply proposed" });
+    expect(hasHandoff(r)).toBe(false);
   });
 });

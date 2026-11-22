@@ -11,6 +11,7 @@ import {
   llmConnections,
   users,
   messages,
+  notifications,
   usageLedger,
   withTenant,
   type DbHandle,
@@ -300,6 +301,62 @@ describe.skipIf(!hasEnv)("AI worker (Postgres + Redis, mocked LLM fetch)", () =>
       const [row] = await migrator.db.select().from(messages).where(eq(messages.id, conv.firstMessageId!));
       expect(row?.reaction).toBeNull();
     });
+  });
+
+  it("grounded reply with a courtesy handoff is sent AND hands off (ADR 0023)", async () => {
+    const t = await tenant();
+    const { sourceId, chunkIds } = await seedKnowledge(migrator, t, ["Las clases no asistidas no se recuperan salvo aviso con 24 horas."]);
+    const conv = await seedConversation(migrator, t, "auto", "Falté a una clase, ¿la puedo recuperar?");
+    const llm = mockLlm((call) => {
+      // The prompt carries the tenant's local weekday (tenants.timezone).
+      expect(call.body.messages?.[0]?.content).toMatch(/Local date: \w+day \d{4}-\d{2}-\d{2}/);
+      return turnJson({
+        reply: {
+          text: `Solo se recuperan si avisaste con 24 horas (chunkId: ${chunkIds[0]!}).`,
+          claims: [{ kind: "policy", text: "recuperación con aviso de 24 h", citations: [{ chunkId: chunkIds[0]! }] }],
+        },
+        actions: [{ type: "handoff", reason: "seguimiento" }],
+        needsHuman: true,
+      });
+    });
+    await processEmbedSource(deps(llm), { tenantId: t.tenantId, sourceId });
+    const out = await processAiTurn(deps(llm), turnData(t, conv.conversationId, conv.firstMessageId!));
+    expect(out).toMatchObject({ outcome: "processed", replied: true, handoff: true });
+    const [reply] = (await messagesOf(conv.conversationId)).filter((m) => m.author === "ai");
+    // The leaked citation marker never reaches the customer.
+    expect(reply?.body).toBe("Solo se recuperan si avisaste con 24 horas.");
+    const types = (await actionsOf(t, conv.conversationId)).map((a) => a.type);
+    expect(types).toEqual(expect.arrayContaining(["handoff", "send_reply"]));
+  });
+
+  it("a reply that is only chunk markers sends nothing and hands off with a notification", async () => {
+    const t = await tenant();
+    const { sourceId, chunkIds } = await seedKnowledge(migrator, t, ["Clase suelta S/ 40."]);
+    const conv = await seedConversation(migrator, t, "auto", "¿Precio de la clase?");
+    const llm = mockLlm(() => turnJson({ reply: { text: `(chunkId: ${chunkIds[0]!}) [1]`, claims: [] } }));
+    await processEmbedSource(deps(llm), { tenantId: t.tenantId, sourceId });
+    const out = await processAiTurn(deps(llm), turnData(t, conv.conversationId, conv.firstMessageId!));
+    expect(out).toMatchObject({ outcome: "processed", replied: false, handoff: true });
+    expect((await messagesOf(conv.conversationId)).filter((m) => m.author === "ai")).toHaveLength(0);
+    const handoffRow = (await actionsOf(t, conv.conversationId)).find((a) => a.type === "handoff");
+    expect(handoffRow).toMatchObject({ payload: { type: "handoff", reason: "reply contained only internal references" } });
+    const notes = await migrator.db.select().from(notifications).where(eq(notifications.conversationId, conv.conversationId));
+    expect(notes.map((n) => n.kind)).toContain("handoff");
+  });
+
+  it("an uncited price is not sent even with a courtesy-looking handoff", async () => {
+    const t = await tenant();
+    const conv = await seedConversation(migrator, t, "auto", "¿Cuánto cuesta la clase?");
+    const llm = mockLlm(() =>
+      turnJson({
+        reply: { text: "La clase cuesta S/ 40.", claims: [{ kind: "price", text: "S/ 40", citations: [] }] },
+        actions: [{ type: "handoff", reason: "seguimiento" }],
+        needsHuman: true,
+      }),
+    );
+    const out = await processAiTurn(deps(llm), turnData(t, conv.conversationId, conv.firstMessageId!));
+    expect(out).toMatchObject({ outcome: "processed", replied: false, handoff: true });
+    expect((await messagesOf(conv.conversationId)).filter((m) => m.author === "ai")).toHaveLength(0);
   });
 
   it("assist mode stores a draft_reply and sends nothing", async () => {

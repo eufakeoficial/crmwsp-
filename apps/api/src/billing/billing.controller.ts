@@ -1,8 +1,11 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, UseGuards } from "@nestjs/common";
 import {
   createSubscriptionChargeRequestSchema,
+  startCardCheckoutRequestSchema,
   subscriptionQuoteRequestSchema,
   uuidSchema,
+  type BillingRedirect,
+  type CardBilling,
   type ReferralSummary,
   type SubscriptionQuote,
   type BillingPlanResponse,
@@ -13,6 +16,8 @@ import { CurrentTenantDb, Roles } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
+import { publicWebUrl } from "../team/invitation-token.js";
+import { CardBillingService } from "./card-billing.service.js";
 import { PlanLimitsService } from "./plan-limits.service.js";
 import { SubscriptionService } from "./subscription.service.js";
 
@@ -23,6 +28,7 @@ export class BillingController {
   constructor(
     @Inject(PlanLimitsService) private readonly limits: PlanLimitsService,
     @Inject(SubscriptionService) private readonly subscriptions: SubscriptionService,
+    @Inject(CardBillingService) private readonly cards: CardBillingService,
   ) {}
 
   /**
@@ -80,5 +86,32 @@ export class BillingController {
   @Roles("owner", "admin")
   charge(@CurrentTenantDb() db: TenantDb, @Param("id") id: string): Promise<SubscriptionChargeDto> {
     return this.subscriptions.getCharge(db, parseOrThrow(uuidSchema, id));
+  }
+
+  /** GET /billing/card — card billing availability and the mirrored Stripe subscription (ADR 0022). */
+  @Get("card")
+  @Roles("owner", "admin")
+  card(@CurrentTenantDb() db: TenantDb): Promise<CardBilling> {
+    return this.cards.status(db);
+  }
+
+  /**
+   * POST /billing/card/checkout — Stripe Checkout session (subscription mode) for `{ plan, period }`.
+   * Returns the hosted page URL; access is granted only by the verified `invoice.paid` webhook.
+   */
+  @Post("card/checkout")
+  @HttpCode(200)
+  @Roles("owner", "admin")
+  cardCheckout(@CurrentTenantDb() db: TenantDb, @Body() body: unknown): Promise<BillingRedirect> {
+    const input = parseOrThrow(startCardCheckoutRequestSchema, body);
+    return this.cards.checkout(db, input.plan, input.period, publicWebUrl());
+  }
+
+  /** POST /billing/card/portal — Stripe customer portal (update card, cancel, invoices). */
+  @Post("card/portal")
+  @HttpCode(200)
+  @Roles("owner", "admin")
+  cardPortal(@CurrentTenantDb() db: TenantDb): Promise<BillingRedirect> {
+    return this.cards.portal(db, publicWebUrl());
   }
 }

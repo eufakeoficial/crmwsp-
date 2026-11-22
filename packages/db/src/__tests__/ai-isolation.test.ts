@@ -262,6 +262,47 @@ describe.skipIf(!hasDb)("AI, knowledge and usage tables RLS with the app role", 
     expect(pgCause(badProvider)?.code).toBe("23514");
   });
 
+  it("llm_connections: one active connection per tenant and purpose (ADR 0024)", async () => {
+    const [existing] = await withTenant(app.db, A.tenant, (tx) =>
+      tx.select({ purpose: llmConnections.purpose }).from(llmConnections).where(eq(llmConnections.id, A.llm)),
+    );
+    expect(existing?.purpose).toBe("chat");
+    const values = {
+      purpose: "transcription" as const,
+      provider: "openai" as const,
+      baseUrl: "https://api.openai.com/v1",
+      modelCheap: "whisper-1",
+    };
+    const transcription = await withTenant(app.db, A.tenant, (tx) =>
+      tx
+        .insert(llmConnections)
+        .values({ tenantId: A.tenant, ...values, isActive: true })
+        .returning({ id: llmConnections.id }),
+    );
+    expect(transcription).toHaveLength(1);
+    const second = await settle(
+      withTenant(app.db, A.tenant, (tx) => tx.insert(llmConnections).values({ tenantId: A.tenant, ...values, isActive: true })),
+    );
+    expect(pgCause(second)?.code).toBe("23505");
+    // Another tenant cannot see A's transcription row nor write one for B from A.
+    const fromB = await withTenant(app.db, B.tenant, (tx) =>
+      tx.select({ id: llmConnections.id }).from(llmConnections).where(eq(llmConnections.purpose, "transcription")),
+    );
+    expect(fromB.map((r) => r.id)).not.toContain(transcription[0]?.id);
+    const crossWrite = await settle(
+      withTenant(app.db, A.tenant, (tx) => tx.insert(llmConnections).values({ tenantId: B.tenant, ...values })),
+    );
+    expect(pgCause(crossWrite)?.code).toBe("42501");
+    const badPurpose = await settle(
+      withTenant(app.db, A.tenant, (tx) =>
+        tx.execute(sql`insert into llm_connections (tenant_id, purpose, provider, base_url, model_cheap)
+                       values (${A.tenant}, 'vision', 'openai', 'https://x', 'm')`),
+      ),
+    );
+    expect(pgCause(badPurpose)?.code).toBe("23514");
+    await withTenant(app.db, A.tenant, (tx) => tx.delete(llmConnections).where(eq(llmConnections.purpose, "transcription")));
+  });
+
   it("agent_configs: unique version and one active per tenant", async () => {
     const dupVersion = await settle(
       withTenant(app.db, A.tenant, (tx) => tx.insert(agentConfigs).values({ tenantId: A.tenant, version: 1 })),

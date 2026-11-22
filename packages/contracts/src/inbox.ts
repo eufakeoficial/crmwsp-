@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { reactionEmojiSchema } from "./ai.js";
 import { isoDateTimeSchema, uuidSchema } from "./common.js";
+import { MAX_IMAGE_BYTES } from "./commerce.js";
 import { ErrorCode } from "./errors.js";
 
 export const conversationStatusSchema = z.enum(["open", "pending", "resolved"]);
@@ -152,6 +153,14 @@ export const sendMessageRequestSchema = z.object({
 });
 export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
 
+export const sendMediaMessageRequestSchema = z.object({
+  uploadId: uuidSchema,
+  mime: z.enum(["image/jpeg", "image/png"]),
+  caption: z.string().trim().max(1024).optional(),
+  clientMessageId: uuidSchema,
+});
+export type SendMediaMessageRequest = z.infer<typeof sendMediaMessageRequestSchema>;
+
 /** Manual template send (required outside the 24 h window). Params fill `{{1}}..{{n}}` in order. */
 export const sendTemplateMessageRequestSchema = z.object({
   templateId: uuidSchema,
@@ -160,6 +169,16 @@ export const sendTemplateMessageRequestSchema = z.object({
   clientMessageId: uuidSchema,
 });
 export type SendTemplateMessageRequest = z.infer<typeof sendTemplateMessageRequestSchema>;
+
+/** Short-lived preview of an uploaded outbound image; no message is sent. */
+export const outboundMediaUploadSchema = z.object({
+  uploadId: uuidSchema,
+  mime: z.enum(["image/jpeg", "image/png"]),
+  size: z.number().int().positive().max(MAX_IMAGE_BYTES),
+  previewUrl: z.string().url(),
+  expiresAt: isoDateTimeSchema,
+});
+export type OutboundMediaUploadResponse = z.infer<typeof outboundMediaUploadSchema>;
 
 // --- Conversations ------------------------------------------------------------
 
@@ -229,6 +248,12 @@ export const updateConversationRequestSchema = z
     message: "Nothing to update",
   });
 export type UpdateConversationRequest = z.infer<typeof updateConversationRequestSchema>;
+
+/** POST /conversations/ai-mode/bulk: sets the AI mode on every open conversation of the tenant. */
+export const bulkAiModeRequestSchema = z.object({ aiMode: aiModeSchema });
+export type BulkAiModeRequest = z.infer<typeof bulkAiModeRequestSchema>;
+export const bulkAiModeResponseSchema = z.object({ updated: z.number().int().nonnegative() });
+export type BulkAiModeResponse = z.infer<typeof bulkAiModeResponseSchema>;
 
 // --- Realtime (SSE /events) ---------------------------------------------------
 

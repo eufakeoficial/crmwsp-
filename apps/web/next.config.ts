@@ -51,7 +51,19 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: securityHeaders },
       // Password reset links carry the token in the path: never send it as Referer (overrides the above).
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, max-age=0" }] },
       { source: "/reset/:path*", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] },
+    ];
+  },
+  async redirects() {
+    // SEO: one canonical host. The bare domain answered 200 (duplicate of www); send it to www permanently.
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "vendemas.chat" }],
+        destination: "https://www.vendemas.chat/:path*",
+        permanent: true,
+      },
     ];
   },
   async rewrites() {

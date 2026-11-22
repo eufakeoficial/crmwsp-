@@ -39,6 +39,8 @@ export interface DryRunInput {
   approvalThresholdMinor: number;
   policies: TenantAiPolicies;
   now: Date;
+  /** Customer text of the turn (latest contact messages); see ADR 0023. */
+  customerText?: string;
 }
 
 export type DryRunReport = Pick<
@@ -61,6 +63,7 @@ export function dryRunTurn(input: DryRunInput): DryRunReport {
     policies: input.policies,
     now: input.now,
     mode: "auto",
+    ...(input.customerText !== undefined ? { customerText: input.customerText } : {}),
   });
 
   const actions: SimulationAction[] = evaluation.actions.map((ev) => {

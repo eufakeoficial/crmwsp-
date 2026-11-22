@@ -170,9 +170,48 @@ describe("testConnection", () => {
       () => json(chatBody("p")),
       () => json({ data: [{ index: 0, embedding: [1] }] }),
       () => json({ text: "" }),
+      () => json(chatBody("ok")),
     );
     const r = await p.testConnection({ modelCheap: "a", modelStrong: "b" });
-    expect(r).toMatchObject({ ok: true, capabilities: { structuredOutput: true, embeddings: true, transcription: true } });
+    expect(r).toMatchObject({ ok: true, capabilities: { structuredOutput: true, embeddings: true, transcription: true, vision: true } });
+    expect(r.error).toBeUndefined();
+  });
+  it("probes vision with a 1x1 PNG data URI and treats a clear rejection as no vision", async () => {
+    const { p, fetch } = make(
+      () => json(chatBody('{"ok":true}')),
+      () => json(chatBody("p")),
+      () => json({ data: [{ index: 0, embedding: [1] }] }),
+      () => json({ text: "" }),
+      () => json({ error: { message: "image input not supported" } }, 400),
+    );
+    const r = await p.testConnection({ modelCheap: "a", modelStrong: "b", modelVision: "v" });
+    expect(r.capabilities.vision).toBe(false);
+    expect(r.ok).toBe(true);
+    const body = bodyOf(fetch, 4);
+    expect(body.model).toBe("v");
+    expect(body.messages[0].content[1].image_url.url).toMatch(/^data:image\/png;base64,iVBOR/);
+  });
+  it("never echoes the provider error body (a data URI may be inside) in the thrown error", async () => {
+    const leak = "data:image/png;base64,AAAA";
+    const { p } = make(() => json({ error: { message: `bad image ${leak}` } }, 400));
+    const err = await p
+      .chat({ model: "a", messages: [{ role: "user", content: "x", images: [{ mimeType: "image/png", data: new Uint8Array([1]) }] }] })
+      .then(() => undefined, (e: unknown) => e as LlmProviderError);
+    expect(err).toBeInstanceOf(LlmProviderError);
+    expect(err!.message).toBe("LLM provider responded with HTTP 400");
+    expect(JSON.stringify({ m: err!.message, d: err!.details, s: String(err!.stack) })).not.toContain("base64,AAAA");
+  });
+  it("leaves vision unknown on auth/network errors without failing the test", async () => {
+    const { p } = make(
+      () => json(chatBody('{"ok":true}')),
+      () => json(chatBody("p")),
+      () => json({ data: [{ index: 0, embedding: [1] }] }),
+      () => json({ text: "" }),
+      () => json({}, 401),
+    );
+    const r = await p.testConnection({ modelCheap: "a", modelStrong: "b" });
+    expect(r.ok).toBe(true);
+    expect(r.capabilities.vision).toBeUndefined();
     expect(r.error).toBeUndefined();
   });
   it("annotates failing capabilities without throwing", async () => {
@@ -185,7 +224,7 @@ describe("testConnection", () => {
     );
     const r = await p.testConnection({ modelCheap: "a", modelStrong: "b" });
     expect(r.ok).toBe(true);
-    expect(r.capabilities).toEqual({ structuredOutput: false, embeddings: false, transcription: false });
+    expect(r.capabilities).toEqual({ structuredOutput: false, embeddings: false, transcription: false, vision: false });
     expect(r.error).toMatch(/embeddings.*transcription/);
     expect(r.error).not.toContain(API_KEY);
   });
@@ -262,5 +301,26 @@ describe("SSRF guard runs on every request and every endpoint", () => {
     await expect(p.transcribe({ model: "m", audio: new Uint8Array([1]), mimeType: "audio/ogg" })).rejects.toBeInstanceOf(UnsafeBaseUrlError);
     await expect(p.chat({ model: "m", messages: [] })).rejects.toBeInstanceOf(UnsafeBaseUrlError);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("insufficient quota detection", () => {
+  it.each([
+    [429, '{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}'],
+    [402, '{"error":"Insufficient credits"}'],
+    [429, '{"error":{"message":"You exceeded your current quota, please check your plan and billing details."}}'],
+  ])("HTTP %i with a quota body is non-retryable with reason insufficient_quota", async (status, body) => {
+    const { p } = make(() => new Response(body, { status }));
+    const e = await expectNoKeyLeak(p.chat({ model: "m", messages: [] }));
+    expect(e.reason).toBe("insufficient_quota");
+    expect(e.retryable).toBe(false);
+    expect(e.status).toBe(status);
+  });
+
+  it("a plain rate-limit 429 stays retryable without a reason", async () => {
+    const { p } = make(() => new Response('{"error":{"message":"Rate limit reached for requests"}}', { status: 429 }));
+    const e = await expectNoKeyLeak(p.chat({ model: "m", messages: [] }));
+    expect(e.reason).toBeUndefined();
+    expect(e.retryable).toBe(true);
   });
 });

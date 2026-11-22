@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canChangeRole, canInvite, canManageInvitation, canRemoveMember, sameEmail } from "./index.js";
+import { canChangeRole, canInvite, canManageInvitation, canRemoveMember, canViewAs, sameEmail } from "./index.js";
 
 describe("team rules", () => {
   it("only owner invites admins; nobody invites owners; agents/viewers cannot invite", () => {
@@ -32,5 +32,30 @@ describe("team rules", () => {
   it("compares emails case-insensitively", () => {
     expect(sameEmail(" Ana@Example.com", "ana@example.com")).toBe(true);
     expect(sameEmail("ana@example.com", "ana@example.org")).toBe(false);
+  });
+});
+
+describe("canViewAs", () => {
+  it("lets an owner view admin, agent and viewer", () => {
+    for (const target of ["admin", "agent", "viewer"] as const) {
+      expect(canViewAs({ actor: "owner", target, sameUser: false }).allowed).toBe(true);
+    }
+  });
+
+  it("lets an admin view only agent and viewer", () => {
+    expect(canViewAs({ actor: "admin", target: "agent", sameUser: false }).allowed).toBe(true);
+    expect(canViewAs({ actor: "admin", target: "viewer", sameUser: false }).allowed).toBe(true);
+    expect(canViewAs({ actor: "admin", target: "admin", sameUser: false })).toEqual({ allowed: false, reason: "view_as_requires_lower_role" });
+    expect(canViewAs({ actor: "admin", target: "owner", sameUser: false })).toEqual({ allowed: false, reason: "view_as_requires_lower_role" });
+  });
+
+  it("never lets an owner view another owner", () => {
+    expect(canViewAs({ actor: "owner", target: "owner", sameUser: false })).toEqual({ allowed: false, reason: "view_as_requires_lower_role" });
+  });
+
+  it("refuses non-managers and viewing as oneself", () => {
+    expect(canViewAs({ actor: "agent", target: "viewer", sameUser: false })).toEqual({ allowed: false, reason: "not_a_manager" });
+    expect(canViewAs({ actor: "viewer", target: "viewer", sameUser: false })).toEqual({ allowed: false, reason: "not_a_manager" });
+    expect(canViewAs({ actor: "owner", target: "agent", sameUser: true })).toEqual({ allowed: false, reason: "cannot_view_as_self" });
   });
 });

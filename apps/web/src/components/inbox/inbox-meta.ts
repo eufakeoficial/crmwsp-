@@ -1,4 +1,4 @@
-import type { ContactPanel, InboxCounts, LeadOrigin } from "@crmwsp/contracts";
+import type { AiMode, ContactPanel, InboxCounts, LeadOrigin } from "@crmwsp/contracts";
 import type { InboxListParams } from "@/lib/inbox-v2-api";
 
 export type FolderId = "all" | "open" | "closed" | "mine" | "unassigned" | "reminders" | `tag:${string}`;
@@ -107,3 +107,17 @@ export const IMPROVE_STYLES = [
 
 export const TAG_COLORS = ["#2563eb", "#16a34a", "#dc2626", "#d97706", "#7c3aed", "#0891b2", "#db2777", "#475569"] as const;
 export const COMMON_EMOJIS = ["😀", "😊", "😉", "🙏", "👍", "👏", "🎉", "❤️", "🔥", "✅", "📌", "📞", "💬", "⏰", "💰", "🚚"] as const;
+
+/** Per-conversation AI mode choices shown in the thread header selector. */
+export const AI_MODE_OPTIONS: readonly { value: AiMode; label: string }[] = [
+  { value: "off", label: "IA apagada" },
+  { value: "assist", label: "IA asistente (redacta, tú envías)" },
+  { value: "auto", label: "IA automática (responde sola)" },
+];
+
+const AI_MODE_SHORT: Record<AiMode, string> = { off: "Apagada", assist: "Asistente", auto: "Automática" };
+
+/** Short label for the side panel: "Automática". */
+export function aiModeLabel(mode: AiMode): string {
+  return AI_MODE_SHORT[mode];
+}

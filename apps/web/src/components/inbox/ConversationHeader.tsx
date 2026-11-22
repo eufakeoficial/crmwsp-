@@ -1,16 +1,17 @@
 "use client";
 
-import type { InboxConversation, TagDto, TenantMember } from "@crmwsp/contracts";
+import type { AiMode, InboxConversation, TagDto, TenantMember } from "@crmwsp/contracts";
 import { AlarmClock, ArrowLeft, Bot, CircleCheck, MailOpen, PanelRight, RotateCcw, Tag } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format";
-import { REMINDER_PRESETS, TAG_COLORS, localInputToIso } from "./inbox-meta";
+import { AI_MODE_OPTIONS, REMINDER_PRESETS, TAG_COLORS, localInputToIso } from "./inbox-meta";
+import { AiStatusPill } from "./AiStatusPill";
 import { MenuItem, Popover } from "./Popover";
 
 /** Inline text dropdown under the contact name: looks like a link, behaves like a select. */
-const SELECT = "-ml-1 h-6 min-w-0 max-w-52 cursor-pointer rounded-md border-0 bg-transparent px-1 text-[13px] font-semibold text-muted hover:bg-paper hover:text-ink disabled:cursor-not-allowed disabled:opacity-50";
+const SELECT = "-ml-1 h-6 min-w-0 max-w-52 cursor-pointer rounded-md border-0 bg-transparent px-1 text-[13px] max-desk:text-[16px] font-semibold text-muted hover:bg-paper hover:text-ink disabled:cursor-not-allowed disabled:opacity-50";
 const ICON_BTN = "grid size-9 flex-none cursor-pointer place-items-center rounded-full bg-transparent text-ink hover:bg-paper disabled:cursor-not-allowed disabled:opacity-50";
 const POP_ICON = "size-9 min-w-9 bg-transparent p-0 hover:bg-paper";
 
@@ -43,6 +44,7 @@ export function ConversationHeader({
   onToggleStatus,
   onMarkUnread,
   onPause,
+  onSetAiMode,
 }: {
   conversation: InboxConversation;
   /** null when GET /tenant/members is forbidden (agent role): only "Yo" / "Sin asignar". */
@@ -64,6 +66,8 @@ export function ConversationHeader({
   onMarkUnread: () => void;
   /** minutes = null resumes now. */
   onPause: (minutes: number | null) => void;
+  /** Changes this conversation's AI mode (separate from the pause control). */
+  onSetAiMode: (mode: AiMode) => void;
 }) {
   const { contact, assignee } = conversation;
   const title = contact.name ?? "Contacto desconocido";
@@ -71,14 +75,15 @@ export function ConversationHeader({
   const paused = conversation.automationsPausedUntil !== null && new Date(conversation.automationsPausedUntil) > new Date();
   const assignedId = assignee?.id === meId ? "me" : (assignee?.id ?? "");
   const hasTags = new Set(conversation.contactTags);
+  const aiSelect = useRef<HTMLSelectElement>(null);
   return (
     <header className="flex flex-col border-b border-line bg-white">
-      <div className="flex items-center gap-3 px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-2.5 desk:gap-x-3 desk:px-4 max-desk:py-1">
         <button type="button" onClick={onBack} aria-label="Volver a la lista" className={cn(ICON_BTN, "desk:hidden")}>
           <ArrowLeft aria-hidden className="size-5" />
         </button>
-        <Avatar name={contact.name ?? "?"} round />
-        <div className="min-w-0 flex-1">
+        <Avatar name={contact.name ?? "?"} round className="max-desk:size-8" />
+        <div className="min-w-0 flex-1 basis-40">
           <h2 className="m-0 truncate text-[16px] leading-tight font-extrabold">
             {title}
             {closed ? <span className="ml-2 rounded-full bg-paper px-2 py-0.5 align-middle text-[11px] font-bold text-muted">Cerrado</span> : null}
@@ -102,7 +107,8 @@ export function ConversationHeader({
           </select>
         </div>
 
-        <Popover label="Etiquetas" align="right" triggerClassName={POP_ICON} trigger={<><Tag aria-hidden className="size-[18px]" />{conversation.contactTags.length ? <span className="text-[11px]">{conversation.contactTags.length}</span> : null}</>}>
+        <div className="ml-auto flex flex-none items-center gap-1">
+        <Popover label="Etiquetas" align="right" triggerClassName={POP_ICON} openClassName="bg-lime hover:bg-lime" panelClassName="max-desk:border-2 max-desk:border-lime" trigger={<><Tag aria-hidden className="size-[18px]" />{conversation.contactTags.length ? <span className="text-[11px]">{conversation.contactTags.length}</span> : null}</>}>
           {() => <TagMenu tags={tags} has={hasTags} onToggle={onToggleTag} onCreate={onCreateTag} />}
         </Popover>
 
@@ -132,17 +138,46 @@ export function ConversationHeader({
         <button type="button" onClick={onTogglePanel} aria-pressed={panelOpen} aria-label={panelOpen ? "Ocultar contacto" : "Mostrar contacto"} title={panelOpen ? "Ocultar contacto" : "Mostrar contacto"} className={cn(ICON_BTN, panelOpen && "bg-lime-soft hover:bg-lime-soft")}>
           <PanelRight aria-hidden className="size-[18px]" />
         </button>
+        </div>
       </div>
-      <div className="flex items-center gap-3 px-4">
-        <div role="tablist" aria-label="Canal">
+      <div className="max-desk:flex max-desk:items-center max-desk:gap-2 max-desk:border-b max-desk:border-line max-desk:px-3 max-desk:pb-1 desk:contents">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 max-desk:w-1/2 max-desk:flex-none max-desk:px-0 max-desk:pb-0">
+        <div role="tablist" aria-label="Canal" className="max-desk:hidden">
           <button type="button" role="tab" aria-selected="true" className="h-11 cursor-pointer border-0 border-b-2 border-royal bg-transparent px-2 text-sm font-semibold text-ink">
             WhatsApp
           </button>
         </div>
-        <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[12px] font-semibold text-muted">
+        <select
+          ref={aiSelect}
+          aria-label="Modo de IA de esta conversación"
+          title="Modo de IA de esta conversación"
+          className="ml-auto h-8 max-w-full cursor-pointer max-desk:w-full rounded-lg border border-line-2 bg-white px-2 text-[12px] max-desk:text-[16px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={busy}
+          value={conversation.aiMode}
+          onChange={(e) => onSetAiMode(e.target.value as AiMode)}
+        >
+          {AI_MODE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <label className="flex min-h-11 max-desk:hidden cursor-pointer items-center gap-1.5 text-[12px] font-semibold whitespace-nowrap text-muted">
           <input type="checkbox" checked={hideSystem} onChange={(e) => onHideSystem(e.target.checked)} className="size-4 cursor-pointer accent-ink" />
-          Ocultar mensajes del sistema
+          <span className="desk:hidden">Ocultar sistema</span>
+          <span className="hidden desk:inline">Ocultar mensajes del sistema</span>
         </label>
+      </div>
+      <AiStatusPill
+        input={{
+          aiMode: conversation.aiMode,
+          status: conversation.status,
+          inboxStatus: conversation.inboxStatus,
+          assigneeName: assignee ? (assignee.name ?? assignee.email) : null,
+          pausedUntil: conversation.automationsPausedUntil,
+        }}
+        busy={busy}
+        onResume={() => onPause(null)}
+        onFocusMode={() => aiSelect.current?.focus()}
+      />
       </div>
     </header>
   );
@@ -175,6 +210,7 @@ function TagMenu({
   }
   return (
     <div className="flex flex-col gap-1">
+      <p className="m-0 rounded-xl bg-lime-soft px-3 py-1.5 text-[13px] font-extrabold text-ink desk:hidden">Etiquetas del contacto</p>
       {tags.map((t) => (
         <label key={t.id} className="flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-1.5 text-[13px] font-semibold hover:bg-paper">
           <input type="checkbox" checked={has.has(t.name)} onChange={(e) => onToggle(t.name, e.target.checked)} className="size-4 cursor-pointer accent-ink" />
@@ -190,9 +226,9 @@ function TagMenu({
           maxLength={64}
           placeholder="Nueva etiqueta"
           onChange={(e) => setName(e.target.value)}
-          className="h-8 min-w-0 flex-1 rounded-lg border border-line-2 bg-white px-2 text-[13px]"
+          className="h-8 min-w-0 flex-1 rounded-lg border border-line-2 bg-white px-2 text-[13px] max-desk:h-10 max-desk:text-[16px]"
         />
-        <button type="submit" disabled={busy || !name.trim()} className="h-9 cursor-pointer rounded-full bg-ink px-3 text-sm font-semibold text-white disabled:opacity-50">Crear</button>
+        <button type="submit" disabled={busy || !name.trim()} className="h-9 cursor-pointer rounded-full bg-lime px-4 text-sm font-extrabold text-ink disabled:opacity-50 max-desk:h-10">Crear</button>
       </form>
     </div>
   );

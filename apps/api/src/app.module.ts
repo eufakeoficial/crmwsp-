@@ -4,6 +4,7 @@ import { AiModule } from "./ai/ai.module.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { CommerceModule } from "./commerce/commerce.module.js";
 import { ChannelsModule } from "./channels/channels.module.js";
+import { WhatsappProfileModule } from "./whatsapp-profile/whatsapp-profile.module.js";
 import { AppErrorFilter } from "./common/error.filter.js";
 import { DbModule } from "./db/db.module.js";
 import { EventsModule } from "./events/events.module.js";
@@ -36,7 +37,7 @@ import { SupportModule } from "./support/support.module.js";
 import { SupportEmailModule } from "./support-email/support-email.module.js";
 
 @Module({
-  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, AnalyticsModule, FollowUpsModule, NotificationsModule, PaymentReviewsModule, IntegrationsModule, BillingModule, AdsModule, DevelopersModule, BroadcastsModule, ContactsModule, SettingsModule, OwnerModeModule, TeamModule, PlatformModule, PublicAssistantModule, BookingsModule, SupportModule, SupportEmailModule],
+  imports: [DbModule, StorageModule, AuthModule, TenantModule, WebhooksModule, ChannelsModule, WhatsappProfileModule, InboxModule, EventsModule, AiModule, KnowledgeModule, SalesModule, CommerceModule, PaymentsModule, MetricsModule, AnalyticsModule, FollowUpsModule, NotificationsModule, PaymentReviewsModule, IntegrationsModule, BillingModule, AdsModule, DevelopersModule, BroadcastsModule, ContactsModule, SettingsModule, OwnerModeModule, TeamModule, PlatformModule, PublicAssistantModule, BookingsModule, SupportModule, SupportEmailModule],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: AppErrorFilter }],
 })

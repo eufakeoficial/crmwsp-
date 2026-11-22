@@ -1,9 +1,13 @@
 "use client";
 
-import type { Channel } from "@crmwsp/contracts";
+import type { Channel, ChannelHealth } from "@crmwsp/contracts";
 import type { ReactNode } from "react";
-import { FileText, KeyRound, Power, RefreshCw } from "lucide-react";
-import { Button, Card, StatusChip, type Tone } from "@/components/ui";
+import { FileText, Inbox, KeyRound, Pencil, Power, RefreshCw, Send } from "lucide-react";
+import { AiAssistButton, Button, Card, StatusChip, type Tone } from "@/components/ui";
+import { buildApiKeyPrompt, buildRechargePrompt, buildVerifyChannelPrompt, buildWebhookPrompt } from "@/lib/ai-assist-prompts";
+import { channelHealthText } from "@/lib/channel-health";
+import { RevealApiKeyPanel } from "./RevealApiKeyPanel";
+import { WalletBalanceLine } from "./WalletBalanceLine";
 import { WebhookUrlBox } from "./WebhookUrlBox";
 
 const QUALITY: Record<NonNullable<Channel["qualityRating"]>, { label: string; tone: Tone }> = {
@@ -32,6 +36,9 @@ export function ChannelCard({
   onRotate,
   onToggle,
   onPartner,
+  onCredentials,
+  health,
+  canRevealKey = false,
   children,
 }: {
   channel: Channel;
@@ -40,6 +47,11 @@ export function ChannelCard({
   onRotate: () => void;
   onToggle: () => void;
   onPartner: () => void;
+  onCredentials: () => void;
+  /** Last activity of the channel; undefined while loading or when it could not be read. */
+  health?: ChannelHealth | undefined;
+  /** Owner only (ADR 0022): shows "Mostrar API key" with password re-authentication. */
+  canRevealKey?: boolean;
   /** Inline area below the actions (rotate confirmation, partner credentials form). */
   children?: ReactNode;
 }) {
@@ -69,6 +81,8 @@ export function ChannelCard({
           {channel.messagingLimit ? <span className="text-muted">Límite: {channel.messagingLimit}</span> : null}
         </p>
       ) : null}
+      {health && channel.status !== "disabled" ? <ChannelHealthLines health={health} /> : null}
+      {canManage && channel.provider === "gupshup" && channel.status !== "disabled" ? <WalletBalanceLine channelId={channel.id} /> : null}
       {canManage && channel.apiKeyHint ? (
         <p className="m-0 flex items-center gap-2 text-sm">
           <KeyRound aria-hidden className="size-4 text-muted" />
@@ -86,6 +100,8 @@ export function ChannelCard({
         <div className="flex flex-col gap-1">
           <span className="text-xs font-extrabold text-muted">URL de webhook (Gupshup → Callback URL)</span>
           <WebhookUrlBox url={channel.webhookUrl} />
+          <span className="text-xs text-muted">Esta URL es privada: no la compartas. Si se filtra, usa Rotar token.</span>
+          <AiAssistButton prompt={buildWebhookPrompt({ appName: channel.appName })} label="Hacerlo con IA: configurar el webhook" />
         </div>
       ) : null}
       {canManage ? (
@@ -97,16 +113,56 @@ export function ChannelCard({
             </Button>
           ) : null}
           {channel.provider === "gupshup" ? (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onCredentials}>
+              <Pencil aria-hidden className="size-4" />Editar credenciales
+            </Button>
+          ) : null}
+          {channel.provider === "gupshup" ? (
             <Button size="sm" variant="outline" disabled={busy} onClick={onPartner}>
               <FileText aria-hidden className="size-4" />{channel.partnerConfigured ? "Cambiar credenciales de plantillas" : "Configurar plantillas"}
             </Button>
           ) : null}
+          {channel.provider === "gupshup" ? <AiAssistButton prompt={buildApiKeyPrompt({ appName: channel.appName })} label="Hacerlo con IA: API key" /> : null}
+          {channel.provider === "gupshup" ? <AiAssistButton prompt={buildRechargePrompt({ appName: channel.appName })} label="Hacerlo con IA: recargar saldo" /> : null}
+          {channel.provider === "gupshup" && channel.webhookUrl ? (
+            <AiAssistButton
+              prompt={buildVerifyChannelPrompt({ appName: channel.appName, phone: channel.phoneE164, apiKeyHint: channel.apiKeyHint })}
+              label="Verificar mi canal con IA"
+            />
+          ) : null}
           <Button size="sm" variant={disabled ? "accent" : "outline"} disabled={busy} onClick={onToggle}>
             <Power aria-hidden className="size-4" />{disabled ? "Activar" : "Desactivar"}
           </Button>
+          {canRevealKey && channel.apiKeyHint ? <RevealApiKeyPanel key={channel.id} channelId={channel.id} /> : null}
         </div>
       ) : null}
       {children}
     </Card>
+  );
+}
+
+export function ChannelHealthLines({ health }: { health: ChannelHealth }) {
+  const t = channelHealthText(health);
+  const out = t.outbound;
+  return (
+    <div className="flex flex-col gap-1 text-sm" data-testid="channel-health">
+      <p className="m-0 flex items-center gap-2">
+        <Inbox aria-hidden className="size-4 text-muted" />
+        {t.inbound}
+      </p>
+      {t.invalidCredentials ? (
+        <p className="m-0" data-testid="channel-health-credentials">
+          <StatusChip label="Credenciales inválidas" tone="danger" />
+        </p>
+      ) : null}
+      {out ? (
+        <p className="m-0 flex flex-wrap items-center gap-2" data-testid="channel-health-outbound">
+          <Send aria-hidden className="size-4 text-muted" />
+          Último envío: <StatusChip label={out.ok ? "ok" : "falló"} tone={out.ok ? "success" : "danger"} />
+          {out.error ? <span>— {out.error}</span> : null}
+          <span className="text-muted">{out.when}</span>
+        </p>
+      ) : null}
+    </div>
   );
 }

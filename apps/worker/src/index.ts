@@ -2,6 +2,7 @@ import { ElevenLabsTTSProvider } from "@crmwsp/ai";
 import { pathToFileURL } from "node:url";
 import { parsePdf } from "@crmwsp/knowledge";
 import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
+import { stripePriceMapFromEnv } from "@crmwsp/billing";
 import { createDb } from "@crmwsp/db";
 import { createDefaultWhatsAppProvider } from "@crmwsp/whatsapp";
 import { Queue } from "bullmq";
@@ -113,6 +114,8 @@ function main(): void {
     connection: createRedis(redisUrl),
     db: db.db,
     provider: nowPaymentsOptions ? new NowPaymentsProvider(nowPaymentsOptions) : null,
+    // Card billing (ADR 0022): price ids map paid invoices to plans; unset = card invoices are ignored.
+    stripePrices: stripePriceMapFromEnv(process.env),
     logger,
     ...(process.env.TRIAL_IDENTITY_SECRET ? { trialIdentitySecret: process.env.TRIAL_IDENTITY_SECRET } : {}),
     lifecycleEmails: { send: (m) => createMailerFromEnv().send(m), ctx: emailContextFromEnv() },
@@ -188,7 +191,7 @@ function main(): void {
       publisher,
       cipher,
       logger,
-      ...(mediaStore ? { voice: { tts: new ElevenLabsTTSProvider(), store: mediaStore } } : {}),
+      ...(mediaStore ? { voice: { tts: new ElevenLabsTTSProvider(), store: mediaStore }, storage: mediaStore } : {}),
     });
     outboundQueue = new Queue(OUTBOUND_QUEUE_NAME, { connection: createRedis(redisUrl) });
     // AI jobs also need the master keys (BYOK LLM keys are encrypted).

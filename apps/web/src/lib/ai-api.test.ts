@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { realAiApi, realKnowledgeApi } from "./ai-api";
+import { realAiApi, realKnowledgeApi, transcriptionApi } from "./ai-api";
 import { setActiveTenantId } from "./api";
 import { budgetLevel, budgetPercent, toMinor, validateBaseUrl } from "./ai-validation";
 import { canManageAi, canViewAi } from "../components/app/roles";
@@ -171,5 +171,24 @@ describe("usage flags", () => {
       Promise.resolve(json(200, { spentMinor: 10, currency: "EUR", budgetMinor: 100, currencyMismatch: true, estimated: true, byKind: [] })),
     );
     await expect(realAiApi.usage("2026-10")).resolves.toMatchObject({ currencyMismatch: true, estimated: true });
+  });
+});
+
+describe("transcriptionApi (ADR 0024)", () => {
+  it("reads status, saves with a write-only key, tests and removes", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json(200, { connection: null, source: "none" })));
+    expect(await transcriptionApi.get()).toEqual({ connection: null, source: "none" });
+    expect(last().url).toBe("/api/ai/transcription-connection");
+    const saved = { provider: "openai", baseUrl: "https://api.openai.com/v1", apiKeyHint: "••••wxyz", model: "whisper-1", lastTestedAt: null, lastTestOk: null };
+    fetchMock.mockImplementation(() => Promise.resolve(json(200, saved)));
+    expect((await transcriptionApi.save({ apiKey: "sk-secret-key-1234", model: "whisper-1" })).apiKeyHint).toBe("••••wxyz");
+    expect(last().init.method).toBe("PUT");
+    expect(last().body).toEqual({ apiKey: "sk-secret-key-1234", model: "whisper-1" });
+    fetchMock.mockImplementation(() => Promise.resolve(json(200, { ok: true, latencyMs: 12 })));
+    expect((await transcriptionApi.test()).ok).toBe(true);
+    expect(last().url).toBe("/api/ai/transcription-connection/test");
+    fetchMock.mockImplementation(() => Promise.resolve(new Response(null, { status: 204 })));
+    await transcriptionApi.remove();
+    expect(last().init.method).toBe("DELETE");
   });
 });

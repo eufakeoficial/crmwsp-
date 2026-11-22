@@ -1,7 +1,6 @@
 import "reflect-metadata";
 import { randomBytes, randomUUID } from "node:crypto";
 import { request as httpRequest, type IncomingMessage } from "node:http";
-import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { contactSchema, errorResponseSchema } from "@crmwsp/contracts";
 import { createCipherBox, loadMasterKeysFromEnv } from "@crmwsp/crypto";
@@ -24,7 +23,9 @@ import {
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { NestFactory } from "@nestjs/core";
 import { AppModule } from "../app.module.js";
+import { ChannelsController, type GupshupCredentialVerifier } from "../channels/channels.controller.js";
 import { RealtimeHub } from "../events/realtime.hub.js";
 import { SSE_MAX_CONNECTIONS_PER_USER } from "../events/events.controller.js";
 
@@ -147,6 +148,9 @@ describe.skipIf(!hasEnv)("channels, inbox, outbound and SSE (e2e, real Postgres 
     redis = new Redis(REDIS_URL as string);
     outboundQueue = new Queue(queueName, { connection: new Redis(REDIS_URL as string, { maxRetriesPerRequest: null }) });
     app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { logger: false });
+    // Never reach the real Gupshup API from tests: the credential check always passes.
+    // (Test.createTestingModule cannot be used: WebhooksModule needs the Fastify adapter at compile time.)
+    (app.get(ChannelsController) as unknown as { verifyGupshup: GupshupCredentialVerifier }).verifyGupshup = async () => ({ status: "valid" });
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
 
@@ -422,6 +426,23 @@ describe.skipIf(!hasEnv)("channels, inbox, outbound and SSE (e2e, real Postgres 
       expect(byId.items.map((i) => i.id)).toEqual([id]);
       const unassigned = (await asA("GET", "/conversations?assignedTo=unassigned&limit=100")).json() as { items: unknown[] };
       expect(unassigned.items).toHaveLength(4);
+    });
+
+    it("POST /conversations/ai-mode/bulk sets the mode on open conversations of the caller tenant only", async () => {
+      const before = await migrator.db.select({ aiMode: conversations.aiMode }).from(conversations).where(eq(conversations.id, s.convB));
+      const forbidden = await inject({ method: "POST", url: "/conversations/ai-mode/bulk", payload: { aiMode: "auto" }, cookie: s.cookieC, tenant: s.tenantA });
+      expect(forbidden.statusCode).toBe(403);
+      expect((await asA("POST", "/conversations/ai-mode/bulk", { aiMode: "bogus" })).statusCode).toBe(400);
+      const res = await asA("POST", "/conversations/ai-mode/bulk", { aiMode: "auto" });
+      expect(res.statusCode).toBe(200);
+      const { updated } = res.json() as { updated: number };
+      expect(updated).toBeGreaterThan(0);
+      const rowsA = await migrator.db.select({ aiMode: conversations.aiMode, status: conversations.status }).from(conversations).where(eq(conversations.tenantId, s.tenantA));
+      expect(rowsA.filter((r) => r.status !== "resolved").every((r) => r.aiMode === "auto")).toBe(true);
+      const after = await migrator.db.select({ aiMode: conversations.aiMode }).from(conversations).where(eq(conversations.id, s.convB));
+      expect(after[0]!.aiMode).toBe(before[0]!.aiMode);
+      const audit = await migrator.db.select().from(auditEvents).where(eq(auditEvents.entityId, s.tenantA));
+      expect(audit.find((e) => e.action === "conversation.ai_mode_bulk_updated")?.diff).toMatchObject({ aiMode: "auto", count: updated });
     });
   });
 

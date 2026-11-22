@@ -130,3 +130,13 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Phones: an open inbox chat uses the full screen (no app top bar, no top padding). */
+@media (max-width: 68.74rem) {
+  body[data-chat-open] header[data-app-topbar] {
+    display: none;
+  }
+  body[data-chat-open] #app-content {
+    padding-top: 0;
+  }
+}
