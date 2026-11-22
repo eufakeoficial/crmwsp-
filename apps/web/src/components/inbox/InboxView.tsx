@@ -398,18 +398,25 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
 
   const listError = list.error ? errorMessage(list.error) : undefined;
   const showPanel = panelOpen && selectedId !== null;
+  // On phones an open chat takes the whole screen: the app top bar is hidden by a global rule keyed on this attribute.
+  useEffect(() => {
+    document.body.toggleAttribute("data-chat-open", selectedId !== null);
+    return () => document.body.removeAttribute("data-chat-open");
+  }, [selectedId]);
   const cols = showPanel
     ? "desk:grid-cols-[304px_minmax(0,1fr)_340px]"
     : "desk:grid-cols-[304px_minmax(0,1fr)]";
   return (
-    <div className="flex h-[calc(100dvh-68px)] min-h-[420px] flex-col bg-white desk:h-dvh">
+    <div className={`flex ${selectedId ? "h-dvh" : "h-[calc(100dvh-68px)]"} min-h-[420px] flex-col bg-white desk:h-dvh`}>
+      <div className={selectedId ? "hidden desk:block" : undefined}>
       {eventsStatus === "limited" ? (
         <Alert tone="info">Hay demasiadas pestañas abiertas con tiempo real: cierra alguna y recarga para recibir mensajes al instante.</Alert>
       ) : eventsStatus === "reconnecting" ? (
         <Alert tone="info">Reconectando el tiempo real…</Alert>
       ) : null}
+      </div>
 
-      <div className="flex flex-none items-center gap-3 border-b border-line bg-white px-3 py-2 desk:h-14 desk:px-4">
+      <div className={`flex-none items-center gap-3 border-b border-line bg-white px-3 py-2 desk:flex desk:h-14 desk:px-4 ${selectedId ? "hidden" : "flex"}`}>
         <div className="hidden min-w-0 flex-1 desk:block">
           <h1 className="m-0 truncate text-[18px] font-extrabold">Bandeja de entrada</h1>
         </div>
