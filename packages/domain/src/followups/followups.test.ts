@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_FOLLOW_UP_SETTINGS,
   decideDispatch,
+  isConfirmedQuoteSend,
   isWindowOpen,
   mergeFollowUpSettings,
+  QUOTE_UNANSWERED_COVERAGE_HOURS,
   quietHoursEnd,
   quoteUnansweredKey,
+  quoteUnansweredWindow,
   resolveFollowUpSettings,
   type DispatchInput,
 } from "./index.js";
@@ -163,5 +166,24 @@ describe("quote_unanswered", () => {
   });
   it("builds a stable dedupe key per quote", () => {
     expect(quoteUnansweredKey("abc")).toBe("quote_unanswered:abc");
+  });
+});
+
+describe("unanswered quote window", () => {
+  const sent = new Date("2026-11-20T10:00:00Z");
+  const at = (n: number): Date => new Date(sent.getTime() + n * 3600_000);
+
+  it("starts at the send plus the delay and keeps the rule's history", () => {
+    expect(QUOTE_UNANSWERED_COVERAGE_HOURS).toBe(168);
+    expect(quoteUnansweredWindow(sent, 48)).toEqual({ eligibleAt: at(48), coverageEndsAt: at(48 + 168) });
+    expect(quoteUnansweredWindow(sent, 1).eligibleAt).toEqual(at(1));
+  });
+
+  it("counts only messages the provider confirmed", () => {
+    for (const status of ["sent", "delivered", "read"]) expect(isConfirmedQuoteSend(status, sent)).toBe(true);
+    expect(isConfirmedQuoteSend("queued", null)).toBe(false);
+    expect(isConfirmedQuoteSend("failed", null)).toBe(false);
+    expect(isConfirmedQuoteSend("failed", sent)).toBe(false);
+    expect(isConfirmedQuoteSend("sent", null)).toBe(false);
   });
 });

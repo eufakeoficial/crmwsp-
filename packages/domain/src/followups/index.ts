@@ -176,3 +176,22 @@ export function decideDispatch(input: DispatchInput): DispatchDecision {
 export const leadStalledKey = (messageId: string): string => `lead_stalled:${messageId}`;
 export const quoteUnansweredKey = (quoteId: string): string => `quote_unanswered:${quoteId}`;
 export const orderPendingKey = (orderId: string): string => `order_pending_payment:${orderId}`;
+
+/** Hours an unanswered-quote case stays listed once its delay has elapsed (same history as the automatic rule). */
+export const QUOTE_UNANSWERED_COVERAGE_HOURS = 7 * 24;
+
+/** Outbound message statuses that prove a quote reached the provider. */
+export const CONFIRMED_SEND_STATUSES = ["sent", "delivered", "read"] as const;
+
+/** Case window measured from the send: listed from `eligibleAt` until `coverageEndsAt`. */
+export function quoteUnansweredWindow(sentAt: Date, delayHours: number): { eligibleAt: Date; coverageEndsAt: Date } {
+  const delayMs = delayHours * 3600_000;
+  return {
+    eligibleAt: new Date(sentAt.getTime() + delayMs),
+    coverageEndsAt: new Date(sentAt.getTime() + delayMs + QUOTE_UNANSWERED_COVERAGE_HOURS * 3600_000),
+  };
+}
+
+export function isConfirmedQuoteSend(status: string, sentAt: Date | null): boolean {
+  return sentAt !== null && (CONFIRMED_SEND_STATUSES as readonly string[]).includes(status);
+}

@@ -8,9 +8,10 @@ const PAGE = 25;
 
 /**
  * Cursor-paginated inbox list (GET /inbox/conversations). `refresh` reloads everything already
- * loaded in one request; filters are compared by value so callers can pass a fresh object.
+ * loaded in one request; filters are compared by value so callers can pass a fresh object. Idle
+ * while `enabled` is false.
  */
-export function useInboxList(tenantId: string | null, params: InboxListParams) {
+export function useInboxList(tenantId: string | null, params: InboxListParams, enabled = true) {
   const [items, setItems] = useState<InboxConversation[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,6 +24,7 @@ export function useInboxList(tenantId: string | null, params: InboxListParams) {
 
   const fetchFirst = useCallback(
     async (limit: number, initial: boolean) => {
+      if (!enabled || tenantId === null) return;
       const mine = ++seq.current;
       if (initial) setLoading(true);
       try {
@@ -38,22 +40,22 @@ export function useInboxList(tenantId: string | null, params: InboxListParams) {
         if (mine === seq.current) setLoading(false);
       }
     },
-    [stable],
+    [stable, enabled, tenantId],
   );
 
   useEffect(() => {
-    if (tenantId === null) return;
     seq.current++;
     count.current = PAGE;
     setItems([]);
     setNextCursor(null);
-    void fetchFirst(PAGE, true);
-  }, [tenantId, fetchFirst]);
+    setLoading(enabled && tenantId !== null);
+    if (enabled) void fetchFirst(PAGE, true);
+  }, [enabled, tenantId, fetchFirst]);
 
   const refresh = useCallback(() => fetchFirst(count.current, false), [fetchFirst]);
 
   const loadMore = useCallback(async () => {
-    if (!nextCursor || loadingMore) return;
+    if (!enabled || !nextCursor || loadingMore) return;
     const mine = seq.current;
     setLoadingMore(true);
     try {
@@ -67,7 +69,7 @@ export function useInboxList(tenantId: string | null, params: InboxListParams) {
     } finally {
       setLoadingMore(false);
     }
-  }, [nextCursor, loadingMore, stable]);
+  }, [enabled, nextCursor, loadingMore, stable]);
 
   return { items, nextCursor, loading, loadingMore, error, refresh, loadMore };
 }

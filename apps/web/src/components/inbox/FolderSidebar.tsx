@@ -1,10 +1,11 @@
 "use client";
 
 import type { InboxCounts, TagDto } from "@crmwsp/contracts";
-import { AlarmClock, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, Inbox, MessageSquare, Plus, UserCheck, UserX } from "lucide-react";
+import { AlarmClock, ChevronDown, ChevronRight, ChevronsLeft, ChevronsRight, CircleCheck, FileText, Inbox, MessageSquare, Plus, UserCheck, UserX } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { cn } from "@/lib/cn";
 import { type FolderId, TAG_COLORS, folderCount } from "./inbox-meta";
+import { UNANSWERED_FOLDER_LABEL } from "./unanswered-quotes-meta";
 
 const FOLDERS: { id: FolderId; label: string; icon: typeof Inbox }[] = [
   { id: "all", label: "Todos los chats", icon: Inbox },
@@ -12,6 +13,7 @@ const FOLDERS: { id: FolderId; label: string; icon: typeof Inbox }[] = [
   { id: "closed", label: "Cerrados", icon: CircleCheck },
   { id: "mine", label: "Asignados a mí", icon: UserCheck },
   { id: "unassigned", label: "Sin asignar", icon: UserX },
+  { id: "unanswered", label: UNANSWERED_FOLDER_LABEL, icon: FileText },
   { id: "reminders", label: "Recordatorios", icon: AlarmClock },
 ];
 
@@ -81,7 +83,7 @@ export function FolderSidebar({
           >
             <Icon aria-hidden className="size-[18px] flex-none" />
             {collapsed ? <span className="sr-only">{f.label}</span> : <span className="min-w-0 flex-1 truncate">{f.label}</span>}
-            {collapsed ? null : <Count n={n} strong={f.id === "all" || f.id === "reminders"} />}
+            {collapsed ? null : <Count n={n} strong={f.id === "all" || f.id === "reminders" || f.id === "unanswered"} />}
           </button>
         );
       })}

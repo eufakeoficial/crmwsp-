@@ -9,6 +9,8 @@ import {
   quoteActivityResponseSchema,
   quoteListSchema,
   quoteSchema,
+  unansweredQuoteListResponseSchema,
+  unansweredQuoteReviewSchema,
 } from "@crmwsp/contracts";
 import { request } from "./api";
 
@@ -17,6 +19,12 @@ export const quotesApi = {
   get: (id: string) => request(`/quotes/${id}`, { schema: quoteSchema }),
   /** Read-only history derived from real timestamps (quote, orders, receipts, payments). */
   activity: (id: string) => request(`/quotes/${id}/activity`, { schema: quoteActivityResponseSchema }),
+  /** Inbox folder "Presupuestos sin respuesta": oldest case first, keyset cursor. */
+  unanswered: (params: { cursor?: string | null; limit?: number } = {}) =>
+    request("/quotes/unanswered", { query: { cursor: params.cursor ?? undefined, limit: params.limit }, schema: unansweredQuoteListResponseSchema }),
+  /** Records that a person reviewed the case; repeating the call returns the first review. */
+  reviewUnanswered: (quoteId: string) =>
+    request(`/quotes/unanswered/${quoteId}/review`, { method: "POST", schema: unansweredQuoteReviewSchema }),
   create: (input: CreateQuoteRequest) => request("/quotes", { method: "POST", body: input, schema: quoteSchema }),
   patch: (id: string, input: PatchQuoteRequest) => request(`/quotes/${id}`, { method: "PATCH", body: input, schema: quoteSchema }),
   /** draft -> approved, or pending_approval above the threshold / with discounts. */
