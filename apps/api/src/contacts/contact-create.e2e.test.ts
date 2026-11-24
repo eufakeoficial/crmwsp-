@@ -61,8 +61,10 @@ describe.skipIf(!hasEnv)("POST /contacts (e2e, real Postgres)", () => {
   it("creates a contact with a normalized phone, scoped to the tenant", async () => {
     const res = await post(s.cookieA, s.tenantA, { phone: "00 51 922-222-222", name: "Ana" });
     expect(res.statusCode).toBe(201);
-    expect(contactSchema.parse(res.json())).toMatchObject({ phoneE164: "+51922222222", name: "Ana" });
-    const [row] = await migrator.db.select({ tenantId: contacts.tenantId }).from(contacts).where(eq(contacts.phoneE164, "+51922222222"));
+    const created = contactSchema.parse(res.json());
+    expect(created).toMatchObject({ phoneE164: "+51922222222", name: "Ana" });
+    // Look up by id: other e2e files may create the same phone in their own tenants concurrently.
+    const [row] = await migrator.db.select({ tenantId: contacts.tenantId }).from(contacts).where(eq(contacts.id, created.id));
     expect(row?.tenantId).toBe(s.tenantA);
   });
 
