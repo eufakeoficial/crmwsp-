@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/app/EmptyState";
 import { Alert, Button } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import { platformApi, platformErrorMessage } from "@/lib/platform-api";
+import { isoToLocalInput, localInputToIso } from "@/lib/datetime-local";
 import { Loading, Table, fieldClass, td, useAsync } from "./shared";
 
 const TYPE_LABEL: Record<PlatformCoupon["type"], string> = { percent: "% descuento", fixed_usd: "US$ descuento", free_days: "Días gratis" };
@@ -30,8 +31,8 @@ const empty: PlatformCouponSaveRequest = {
   active: true,
 };
 
-const toLocal = (iso: string | null) => (iso ? iso.slice(0, 16) : "");
-const fromLocal = (v: string) => (v ? new Date(v).toISOString() : null);
+const toLocal = isoToLocalInput;
+const fromLocal = localInputToIso;
 
 function CouponForm({ initial, id, onDone }: { initial: PlatformCouponSaveRequest; id: string | null; onDone: () => void }) {
   const [f, setF] = useState(initial);
