@@ -38,6 +38,7 @@ import {
 import { regionForPhone, reminderTime } from "@crmwsp/domain";
 import { CurrentTenant, CurrentTenantDb } from "../auth/decorators.js";
 import { TenantGuard } from "../auth/tenant.guard.js";
+import { countUnansweredQuotes } from "../sales/unanswered-quotes.service.js";
 import type { HttpRequest, RequestTenant } from "../common/http.js";
 import { parseOrThrow } from "../common/zod.js";
 import type { TenantDb } from "../db/tenant-db.js";
@@ -158,6 +159,7 @@ export class InboxV2Controller {
         from conversations c join contacts ct on ct.id = c.contact_id, unnest(ct.tags) as t(name)
         where c.inbox_status = 'open' ${scopeSql}
         group by t.name order by t.name`);
+      const unanswered = await countUnansweredQuotes(tx, { tenantId: db.tenantId, role: tenant.role, userId: db.userId });
       return {
         open: Number(totals?.open ?? 0),
         closed: Number(totals?.closed ?? 0),
@@ -167,6 +169,7 @@ export class InboxV2Controller {
         remindersDue: Number(rem?.due ?? 0),
         reminders: Number(rem?.total ?? 0),
         tags: tagRows.map((t) => ({ name: t.name, count: Number(t.count) })),
+        unanswered,
       };
     });
   }

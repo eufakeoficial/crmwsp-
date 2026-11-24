@@ -51,6 +51,7 @@ import {
   products,
   quoteItems,
   quotes,
+  quoteSends,
   sql,
   tenants,
 } from "@crmwsp/db";
@@ -534,6 +535,7 @@ export class QuotesController {
           updatedAt: new Date(),
         })
         .where(eq(quotes.id, id));
+      await tx.insert(quoteSends).values({ tenantId: db.tenantId, quoteId: id, messageId: msg.id });
       await writeAudit(tx, { tenantId: db.tenantId, userId: db.userId, entity: "quote", entityId: id, action: "quote.sent", diff: { messageId: msg.id }, ip: req.ip });
       return { quote: await loadQuote(tx, id), messageId: msg.id, conversationId: convId };
     });

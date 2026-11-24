@@ -1,7 +1,7 @@
 import type { AiMode, ContactPanel, InboxCounts, LeadOrigin } from "@crmwsp/contracts";
 import type { InboxListParams } from "@/lib/inbox-v2-api";
 
-export type FolderId = "all" | "open" | "closed" | "mine" | "unassigned" | "reminders" | `tag:${string}`;
+export type FolderId = "all" | "open" | "closed" | "mine" | "unassigned" | "unanswered" | "reminders" | `tag:${string}`;
 export type StatusFilter = "open" | "closed" | "all";
 
 /** Left sidebar folder -> list query. Folders other than "all" fix their own status. */
@@ -16,6 +16,8 @@ export function folderParams(folder: FolderId, status: StatusFilter): InboxListP
       return { status, assignedTo: "me" };
     case "unassigned":
       return { status, assignedTo: "unassigned" };
+    case "unanswered":
+      return { status };
     case "reminders":
       return { status: "all", reminders: true };
     default:
@@ -55,6 +57,8 @@ export function folderCount(counts: InboxCounts | null, folder: FolderId): numbe
       return counts.mine;
     case "unassigned":
       return counts.unassigned;
+    case "unanswered":
+      return counts.unanswered ?? null;
     case "reminders":
       return counts.remindersDue;
     default:

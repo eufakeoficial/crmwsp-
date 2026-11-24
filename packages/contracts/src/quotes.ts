@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isoDateTimeSchema } from "./common.js";
+import { currencySchema, isoDateTimeSchema, uuidSchema } from "./common.js";
 
 /**
  * Response of `POST /quotes/:id/accept-link`. The acceptance link is not stored (only its hash), so
@@ -46,3 +46,58 @@ export type QuoteActivityEvent = z.infer<typeof quoteActivityEventSchema>;
 /** Response of `GET /quotes/:id/activity`: oldest first, derived from existing records. */
 export const quoteActivityResponseSchema = z.object({ items: z.array(quoteActivityEventSchema) });
 export type QuoteActivityResponse = z.infer<typeof quoteActivityResponseSchema>;
+
+/** Query of `GET /quotes/unanswered`: the inbox filter for sent quotes the customer has not answered. */
+export const listUnansweredQuotesQuerySchema = z.object({
+  cursor: z.string().min(1).max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type ListUnansweredQuotesQuery = z.infer<typeof listUnansweredQuotesQuerySchema>;
+
+export const unansweredQuoteCountsSchema = z.object({
+  /** Cases the caller can act on right now, with the same filters as the list. */
+  eligible: z.number().int().nonnegative(),
+  /** Sent quotes in the window without a reliable link to their send message. */
+  unknownCoverage: z.number().int().nonnegative(),
+});
+export type UnansweredQuoteCounts = z.infer<typeof unansweredQuoteCountsSchema>;
+
+export const unansweredQuoteSchema = z.object({
+  quoteId: uuidSchema,
+  number: z.string(),
+  /** Conversation the quote message was sent to. */
+  conversationId: uuidSchema,
+  contactId: uuidSchema,
+  contactName: z.string().nullable(),
+  contactPhone: z.string(),
+  totalMinor: z.number().int().nonnegative(),
+  currency: currencySchema,
+  /** Instant the provider confirmed the quote message. */
+  sentAt: isoDateTimeSchema,
+  /** When the case started counting as unanswered (`sentAt` + the configured delay). */
+  eligibleAt: isoDateTimeSchema,
+  validUntil: isoDateTimeSchema,
+  /** Conversation assignee; null when the chat is unassigned. */
+  assignee: z.object({ id: uuidSchema, name: z.string() }).nullable(),
+  /** Pending automatic follow-up of the quote, when one is scheduled. */
+  reminderAt: isoDateTimeSchema.nullable(),
+});
+export type UnansweredQuote = z.infer<typeof unansweredQuoteSchema>;
+
+/** Response of `GET /quotes/unanswered`: oldest case first, keyset cursor. */
+export const unansweredQuoteListResponseSchema = z.object({
+  items: z.array(unansweredQuoteSchema),
+  nextCursor: z.string().nullable(),
+  counts: unansweredQuoteCountsSchema,
+});
+export type UnansweredQuoteListResponse = z.infer<typeof unansweredQuoteListResponseSchema>;
+
+/** Response of `POST /quotes/unanswered/:quoteId/review`; repeating the call returns the same row. */
+export const unansweredQuoteReviewSchema = z.object({
+  quoteId: uuidSchema,
+  messageId: uuidSchema,
+  /** First reviewer; null when that user was deleted. */
+  reviewedBy: uuidSchema.nullable(),
+  reviewedAt: isoDateTimeSchema,
+});
+export type UnansweredQuoteReview = z.infer<typeof unansweredQuoteReviewSchema>;

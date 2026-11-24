@@ -23,6 +23,8 @@ import { useToast } from "@/lib/hooks/use-toast";
 import { contactsApi, conversationsApi } from "@/lib/inbox-api";
 import { inboxV2Api } from "@/lib/inbox-v2-api";
 import { errorMessage } from "@/lib/messages";
+import { quotesApi } from "@/lib/quotes-api";
+import { readViewAs } from "@/lib/view-as";
 import { NotificationBell } from "@/components/app/notifications/NotificationBell";
 import { ContactPanel } from "./ContactPanel";
 import { AUTO_ASSIGN, type ReminderInput } from "./ConversationHeader";
@@ -33,7 +35,10 @@ import { useContactFilterIds } from "./InboxFilter";
 import { InboxSettingsDrawer } from "./InboxSettingsDrawer";
 import { type FolderId, aiModeLabel, folderParams } from "./inbox-meta";
 import { parseInboxDeepLink } from "@/lib/app-search-helpers";
+import { UNANSWERED_FOLDER_LABEL, canReviewQuotes, reviewErrorMessage } from "./unanswered-quotes-meta";
+import { UnansweredQuotesList } from "./UnansweredQuotesList";
 import { useInboxCounts, useInboxList } from "./use-inbox-list";
+import { useUnansweredQuotes } from "./use-unanswered-quotes";
 
 const REFRESH_DEBOUNCE_MS = 250;
 const SEARCH_DEBOUNCE_MS = 400;
@@ -44,6 +49,7 @@ const FOLDER_OPTIONS: { id: FolderId; label: string }[] = [
   { id: "closed", label: "Cerrados" },
   { id: "mine", label: "Asignados a mí" },
   { id: "unassigned", label: "Sin asignar" },
+  { id: "unanswered", label: UNANSWERED_FOLDER_LABEL },
   { id: "reminders", label: "Recordatorios" },
 ];
 
@@ -89,9 +95,19 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
     () => ({ ...folderParams(folder, controls.status), sort: controls.sort, ...(controls.unread ? { unread: true } : {}), ...(query ? { q: query } : {}) }),
     [folder, controls, query],
   );
-  const list = useInboxList(tenantId, listParams);
+  const unansweredOpen = folder === "unanswered";
+  const list = useInboxList(tenantId, listParams, !unansweredOpen);
   const { refresh: refreshList } = list;
   const { counts, refresh: refreshCounts } = useInboxCounts(tenantId);
+  const unanswered = useUnansweredQuotes(tenantId, unansweredOpen);
+  const { refresh: refreshUnanswered } = unanswered;
+  const canReview = useMemo(() => canReviewQuotes(tenant?.role, readViewAs(tenantId) !== null), [tenant?.role, tenantId]);
+  const [reviewBusyId, setReviewBusyId] = useState<string | null>(null);
+  const unansweredScrollTop = useRef<number | null>(null);
+  const unansweredListEl = useRef<HTMLUListElement | null>(null);
+  const attachUnansweredList = useCallback((el: HTMLUListElement | null) => {
+    unansweredListEl.current = el;
+  }, []);
   const filterInfo = useContactFilterIds(filter);
   const thread = useThread(selectedId, me.user.id, () => {
     void refreshList();
@@ -125,7 +141,8 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
   const refreshAll = useCallback(() => {
     void refreshList();
     void refreshCounts();
-  }, [refreshList, refreshCounts]);
+    void refreshUnanswered();
+  }, [refreshList, refreshCounts, refreshUnanswered]);
 
   // Debounced refresh from SSE: several events in a burst cause one reload. Counts refetch on every event.
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -396,6 +413,40 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
     setSelectedId(null);
   };
 
+  const openFromUnanswered = (conversationId: string) => {
+    unansweredScrollTop.current = unansweredListEl.current?.scrollTop ?? null;
+    setSelectedId(conversationId);
+  };
+
+  // Phones hide the list while a chat is open, which resets its scroll: put it back on return.
+  useEffect(() => {
+    if (selectedId !== null || !unansweredOpen || unansweredScrollTop.current === null) return;
+    const top = unansweredScrollTop.current;
+    unansweredScrollTop.current = null;
+    const frame = requestAnimationFrame(() => {
+      if (unansweredListEl.current) unansweredListEl.current.scrollTop = top;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selectedId, unansweredOpen]);
+
+  const reviewQuote = (quoteId: string) => {
+    setReviewBusyId(quoteId);
+    void quotesApi
+      .reviewUnanswered(quoteId)
+      .then(
+        () => {
+          unanswered.remove(quoteId);
+          show("Presupuesto marcado como revisado");
+        },
+        (err: unknown) => show(reviewErrorMessage(err)),
+      )
+      .finally(() => {
+        setReviewBusyId(null);
+        void refreshUnanswered();
+        void refreshCounts();
+      });
+  };
+
   const listError = list.error ? errorMessage(list.error) : undefined;
   const showPanel = panelOpen && selectedId !== null;
   // On phones an open chat takes the whole screen: the app top bar is hidden by a global rule keyed on this attribute.
@@ -460,38 +511,63 @@ export function InboxView({ composerSlot }: { composerSlot?: (conversation: Inbo
         </div>
         <div className="flex min-h-0 min-w-0 flex-col">
           <div className={selectedId ? "hidden desk:block" : "block"}>
-            <ListToolbar
-              items={visible}
-              folder={folder}
-              controls={controls}
-              onControls={setControls}
-              filter={filter}
-              onFilter={setFilter}
-              filterInfo={filterInfo}
-              checked={checked}
-              onCheckAll={(all) => setChecked(all ? new Set(visible.map((c) => c.id)) : new Set())}
-              members={members}
-              meId={me.user.id}
-              tags={tags}
-              bulkBusy={bulkBusy}
-              onBulk={bulk}
-            />
+            {unansweredOpen ? (
+              <div className="flex min-h-12 items-center border-b border-line bg-white px-3 py-2">
+                <p className="m-0 min-w-0 flex-1 truncate text-[13px] text-muted">Enviados y todavía sin respuesta del cliente.</p>
+              </div>
+            ) : (
+              <ListToolbar
+                items={visible}
+                folder={folder}
+                controls={controls}
+                onControls={setControls}
+                filter={filter}
+                onFilter={setFilter}
+                filterInfo={filterInfo}
+                checked={checked}
+                onCheckAll={(all) => setChecked(all ? new Set(visible.map((c) => c.id)) : new Set())}
+                members={members}
+                meId={me.user.id}
+                tags={tags}
+                bulkBusy={bulkBusy}
+                onBulk={bulk}
+              />
+            )}
           </div>
           <div className={`grid min-h-0 flex-1 grid-cols-1 ${cols}`}>
             <div className={`min-h-0 flex-col desk:border-r desk:border-line [&>section]:flex-1 ${selectedId ? "hidden desk:flex" : "flex"}`}>
-              <ConversationList
-                items={visible}
-                selectedId={selectedId}
-                checked={checked}
-                onCheck={toggleChecked}
-                tagMeta={tagMeta}
-                loading={list.loading || filterInfo.loading}
-                loadingMore={list.loadingMore}
-                hasMore={list.nextCursor !== null}
-                error={listError}
-                onSelect={setSelectedId}
-                onLoadMore={() => void list.loadMore()}
-              />
+              {unansweredOpen ? (
+                <UnansweredQuotesList
+                  items={unanswered.items}
+                  counts={unanswered.counts}
+                  selectedId={selectedId}
+                  canReview={canReview}
+                  busyQuoteId={reviewBusyId}
+                  loading={unanswered.loading}
+                  loadingMore={unanswered.loadingMore}
+                  hasMore={unanswered.nextCursor !== null}
+                  error={unanswered.error ? errorMessage(unanswered.error) : undefined}
+                  listRef={attachUnansweredList}
+                  onSelect={openFromUnanswered}
+                  onReview={reviewQuote}
+                  onRetry={() => void unanswered.retry()}
+                  onLoadMore={() => void unanswered.loadMore()}
+                />
+              ) : (
+                <ConversationList
+                  items={visible}
+                  selectedId={selectedId}
+                  checked={checked}
+                  onCheck={toggleChecked}
+                  tagMeta={tagMeta}
+                  loading={list.loading || filterInfo.loading}
+                  loadingMore={list.loadingMore}
+                  hasMore={list.nextCursor !== null}
+                  error={listError}
+                  onSelect={setSelectedId}
+                  onLoadMore={() => void list.loadMore()}
+                />
+              )}
             </div>
             {selectedId ? (
               <>

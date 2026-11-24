@@ -98,6 +98,8 @@ export const inboxCountsSchema = z.object({
   reminders: z.number().int().nonnegative(),
   /** Open conversations per contact tag. */
   tags: z.array(z.object({ name: z.string(), count: z.number().int().nonnegative() })),
+  /** Folder "Presupuestos sin respuesta". Absent when the API version does not serve it yet. */
+  unanswered: z.number().int().nonnegative().optional(),
 });
 export type InboxCounts = z.infer<typeof inboxCountsSchema>;
 

@@ -8,10 +8,11 @@ import { DEFAULT_PUBLIC_QUOTE_RATE_LIMIT, PUBLIC_QUOTE_RATE_LIMIT, PublicQuotesC
 import { QuotesController } from "./quotes.controller.js";
 import { TasksController } from "./tasks.controller.js";
 import { OrderExtractionsController } from "../inbox/order-extractions.controller.js";
+import { UnansweredQuotesController } from "./unanswered-quotes.controller.js";
 
 @Module({
   imports: [AuthModule, BillingModule, EventsModule, InboxModule],
-  controllers: [PipelinesController, OpportunitiesController, TasksController, QuotesController, PublicQuotesController, OrderExtractionsController],
+  controllers: [PipelinesController, OpportunitiesController, TasksController, QuotesController, PublicQuotesController, OrderExtractionsController, UnansweredQuotesController],
   providers: [{ provide: PUBLIC_QUOTE_RATE_LIMIT, useValue: DEFAULT_PUBLIC_QUOTE_RATE_LIMIT }],
 })
 export class SalesModule {}

@@ -10,6 +10,7 @@ describe("folderParams", () => {
     expect(folderParams("closed", "open")).toEqual({ status: "closed" });
     expect(folderParams("mine", "open")).toEqual({ status: "open", assignedTo: "me" });
     expect(folderParams("unassigned", "closed")).toEqual({ status: "closed", assignedTo: "unassigned" });
+    expect(folderParams("unanswered", "all")).toEqual({ status: "all" });
     expect(folderParams("reminders", "open")).toEqual({ status: "all", reminders: true });
     expect(folderParams("tag:VIP: oro", "open")).toEqual({ status: "open", tag: "VIP: oro" });
   });
@@ -31,10 +32,12 @@ describe("compactRelative", () => {
 });
 
 describe("folderCount", () => {
-  const counts = { open: 4, closed: 9, unread: 2, mine: 1, unassigned: 3, remindersDue: 1, reminders: 2, tags: [{ name: "vip", count: 5 }] };
+  const counts = { open: 4, closed: 9, unread: 2, mine: 1, unassigned: 3, remindersDue: 1, reminders: 2, unanswered: 2, tags: [{ name: "vip", count: 5 }] };
   it("reads each badge", () => {
     expect(folderCount(counts, "all")).toBe(2);
     expect(folderCount(counts, "reminders")).toBe(1);
+    expect(folderCount(counts, "unanswered")).toBe(2);
+    expect(folderCount({ ...counts, unanswered: undefined }, "unanswered")).toBeNull();
     expect(folderCount(counts, "tag:vip")).toBe(5);
     expect(folderCount(counts, "tag:otra")).toBe(0);
     expect(folderCount(null, "all")).toBeNull();

@@ -17,6 +17,7 @@ export * from "./usage-ledger.js";
 export * from "./sales.js";
 export * from "./quotes.js";
 export * from "./engagement.js";
+export * from "./quote-sends.js";
 export * from "./commerce.js";
 export * from "./payments.js";
 export * from "./notifications.js";
