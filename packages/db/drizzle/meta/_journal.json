@@ -609,6 +609,13 @@
       "when": 1793020000000,
       "tag": "0102_stripe_subscription_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1793030000000,
+      "tag": "0103_coupons_owner_policy",
+      "breakpoints": true
     }
   ]
 }
