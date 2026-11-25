@@ -26,7 +26,7 @@
     "bullmq": "6.3.17",
     "drizzle-orm": "0.45.4",
     "ioredis": "6.0.0",
-    "undici": "7.30.1"
+    "undici": "8.13.1"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
