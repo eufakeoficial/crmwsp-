@@ -23,7 +23,7 @@
     "@crmwsp/mailer": "workspace:*",
     "@crmwsp/payments": "workspace:*",
     "@crmwsp/whatsapp": "workspace:*",
-    "bullmq": "6.3.17",
+    "bullmq": "6.7.8",
     "drizzle-orm": "0.45.4",
     "ioredis": "6.0.0",
     "undici": "7.30.1"
